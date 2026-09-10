@@ -123,7 +123,7 @@ Three behaviours the route list doesn't show on its own:
 
 - Username + password (bcrypt/BCrypt.Net hashing), JWT bearer tokens — same shape as subscription-tracker's `auth.py`, ported to C#.
 - Multiple users supported, no email verification.
-- Registration gated by a shared `INVITE_CODE` environment variable: unset/empty means registration is open, set means the code must match. `ASP.NET Core Identity` is intentionally skipped in favor of a lean, hand-rolled `User` table + JWT — it's simpler to fully understand and matches the subscription-tracker approach.
+- Registration gated by a shared `INVITE_CODE` environment variable: unset/empty means registration is open, set means the code must match. It reaches the app from `.env` locally and from a Container Apps secret in Azure — see Configuration. `ASP.NET Core Identity` is intentionally skipped in favor of a lean, hand-rolled `User` table + JWT — it's simpler to fully understand and matches the subscription-tracker approach.
 
 ### Token lifetime and revocation
 
@@ -194,6 +194,31 @@ Three things here that will bite otherwise:
 
 Local development before milestone 2 uses .NET user-secrets rather than a `.env` file, since there's no container to inject environment variables yet and `dotnet user-secrets` keeps the JWT signing key out of the repo by default.
 
+### Secrets, and how they differ per environment
+
+The variable *names* are identical everywhere — the app reads `INVITE_CODE` and knows nothing about where it came from. What changes is delivery:
+
+| | Local (Compose) | Azure |
+|---|---|---|
+| `INVITE_CODE` | `.env`, gitignored | Container Apps **secret**, via `secretref` |
+| `Jwt__Secret` | `.env` (user-secrets before milestone 2) | Container Apps **secret** |
+| `ConnectionStrings__Default` | `.env`, points at the `db` service | Container Apps **secret** — it embeds Neon's password |
+| `CORS_ORIGINS`, `Jwt__ExpiryMinutes` | `.env` | plain env value — not sensitive |
+
+Three rules that come with this:
+
+- **Secrets are `secretref`, never plain env values.** A Container Apps environment variable is readable by anyone with portal access to the app and shows up in `az containerapp show` output; a secret doesn't. This is exactly what subscription-tracker did for its own `SECRET_KEY` and `INVITE_CODE`, and it's the pattern being copied.
+- **Production values are generated fresh, never promoted from local dev.** The `.env` invite code and signing key are development conveniences that have been on a laptop, in a shell history, and possibly in a screenshot. The deployed ones should have existed nowhere else.
+- **`INVITE_CODE` empty means registration is open.** That's the right default locally and for the test suite, and the wrong one in Azure. Since it's the only thing standing between a public URL and open signup (email verification being out of scope), the deploy checklist has to include *actually setting it* — an unset secret fails open, silently, and looks exactly like a working deploy.
+
+`POSTGRES_DB` and `POSTGRES_PASSWORD` are local-only: Azure has no database container, Neon replaces it, and its credentials arrive inside the connection string.
+
+### The `VITE_API_URL` trap
+
+Worth knowing before milestone 6 builds the frontend image, because subscription-tracker hit it and had to redo the image: **Vite inlines `VITE_*` variables at build time**, so a built frontend image has its backend URL baked in and cannot be pointed at a different one. Setting `VITE_API_URL` on the Container App does nothing.
+
+The fix that project landed on is a runtime config: the production image's entrypoint renders a small `config.js` from an `API_URL` env var at container *startup*, `index.html` loads it before the app bundle, and the API client prefers `window.__API_URL__` before falling back to the build-time value for local Vite dev. One image then works against any backend, and changing the URL is an env var update rather than a rebuild.
+
 ## Testing and CI
 
 Tests exist from milestone 1, not as a later milestone. The plan's own rule — every change via a branch and PR, no direct commits to `main` — only means something if the PR has a check to pass, and branch protection with a required status check is what enforces it mechanically instead of by memory.
@@ -237,7 +262,7 @@ Worth covering specifically, because each is a rule written down in this plan th
 7. **Log a workout end-to-end** — page heading, add exercise via autocomplete, add sets, save. Includes "finish session" writing `ended_at`.
 8. **Progress view** — e1RM calculation + history endpoint + chart on the frontend.
 9. **Polish** — workout list/edit/delete, and the exercise rename/merge UI (dedup by `normalized_name` is in the schema from milestone 4; this is the escape hatch for names that were simply typed wrong).
-10. **Azure deployment** — Neon Postgres, pulling the images milestone 6 already publishes, OIDC continuous deploy (mirroring subscription-tracker's Azure deployment milestone).
+10. **Azure deployment** — Neon Postgres, pulling the images milestone 6 already publishes, freshly generated secrets wired in as Container Apps `secretref`s (invite code included, and set to a real value), OIDC continuous deploy (mirroring subscription-tracker's Azure deployment milestone).
 
 Containers come *second*, not first. This is the one lesson subscription-tracker wrote down explicitly about its own milestone 1: starting without Docker "avoids debugging Docker networking and SQL at the same time." That applies with more force here, since C# and EF Core are both new — a connection that won't open should have one candidate explanation, not three. Migrations are wired up in milestone 1 rather than alongside the domain model, for the other reason that project recorded: it started with `create_all()`, discovered that adding a non-null `user_id` to an existing table isn't something `create_all()` can do, and had to drop the database to move forward.
 
