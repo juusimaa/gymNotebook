@@ -10,7 +10,7 @@ A learning project to build a digital replacement for a paper gym log/notebook: 
 
 ## Stack
 
-- **Backend:** ASP.NET Core Web API (Minimal APIs, not MVC controllers) + Entity Framework Core + Npgsql
+- **Backend:** .NET 10 (LTS) — ASP.NET Core Web API (Minimal APIs, not MVC controllers) + Entity Framework Core + Npgsql. The version pins the SDK and runtime images the backend `Dockerfile` builds on, and CI runs the tests on the same one the app ships on rather than whatever the runner defaults to.
 - **Frontend:** React + TypeScript (Vite)
 - **Database:** PostgreSQL (Neon for the eventual Azure deploy, same as subscription-tracker)
 - **Containers:** a Dockerfile each for backend and frontend, tied together by Docker Compose for local dev — the subscription-tracker layout. Two containers rather than one combined image, for the more realistic multi-container practice.
@@ -150,11 +150,11 @@ Password *reset* and email verification are not in this plan, and neither is any
 ## Folder structure
 
 ```
-gymNotes/
+gymNotebook/
 ├── backend/
-│   ├── GymNotes.Api/         # Minimal API endpoints, EF Core models, DbContext, migrations
-│   ├── GymNotes.Tests/       # xUnit
-│   ├── GymNotes.sln
+│   ├── GymNotebook.Api/      # Minimal API endpoints, EF Core models, DbContext, migrations
+│   ├── GymNotebook.Tests/    # xUnit
+│   ├── GymNotebook.sln
 │   ├── Dockerfile
 │   └── entrypoint.sh         # applies migrations, then starts the app
 ├── frontend/
@@ -176,9 +176,9 @@ Two projects under `backend/` rather than one, because xUnit needs a separate as
 All configuration comes from environment variables, with a committed `.env.example` documenting every one of them and a gitignored `.env` holding the real values — the subscription-tracker pattern.
 
 ```
-POSTGRES_DB=gymnotes
+POSTGRES_DB=gymnotebook
 POSTGRES_PASSWORD=devpassword
-ConnectionStrings__Default=Host=db;Database=gymnotes;Username=postgres;Password=devpassword
+ConnectionStrings__Default=Host=db;Database=gymnotebook;Username=postgres;Password=devpassword
 Jwt__Secret=replace-me-with-a-generated-key
 Jwt__ExpiryMinutes=30
 INVITE_CODE=
@@ -222,9 +222,9 @@ Worth covering specifically, because each is a rule written down in this plan th
 
 ## Open items / decisions still to make
 
-- Repo name and GitHub visibility (public/private) — needed before scaffolding.
-- .NET version: the current LTS unless there's a reason otherwise. Blocks milestone 1, since it fixes the SDK image the backend `Dockerfile` builds on and the language features available.
-- How `is_bodyweight` gets set. Nothing in the log-a-workout flow asks for it, so today it can only be toggled through `PATCH /exercises/{id}`. Options: infer it on first use when a set is saved with no weight, ask once at the moment an exercise is created, or leave it as an edit-after-the-fact — worth settling before milestone 7 rather than after.
+- **GitHub visibility (public/private).** The repo is `juusimaa/gymNotebook`. Visibility is the piece still open, and it decides how load-bearing `INVITE_CODE` is: private means it's a formality, public means it's the only thing between a deployed URL and open signup, since email verification is deliberately out of scope.
+- **How `is_bodyweight` gets set.** Nothing in the log-a-workout flow asks for it, so today it can only be toggled through `PATCH /exercises/{id}`. Options: infer it on first use when a set is saved with no weight, ask once at the moment an exercise is created, or leave it as an edit-after-the-fact — worth settling before milestone 7 rather than after.
+- **UI design — deliberately deferred.** The Frontend section above describes what each screen must *do*, not what it looks like: no visual direction, component library, or styling approach is chosen yet. That's fine for milestones 1–6, which are backend and scaffolding, but milestone 7 is the first one that builds a screen a person actually uses, so the decision wants making before then rather than by accident during it. The one thing worth deciding early is whether a component library is used at all, since retrofitting one is more work than starting with it.
 
 ## Milestones
 
