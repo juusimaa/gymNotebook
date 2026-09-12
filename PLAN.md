@@ -142,6 +142,8 @@ Password *reset* and email verification are not in this plan, and neither is any
 
 ## Frontend
 
+The visual design lives in [`docs/ui/`](docs/ui/README.md): a written spec (`README.md`) plus a self-contained clickable prototype (`prototype.html`, no build step — open it in a browser) covering login, cover, session list, session page and new page. It records the design tokens, the phone-first layout, the component-library decision (none — hand-written CSS against the tokens) and the list of UI-visible rules that follow from this plan. Milestones 5, 7 and 9 build against it; the spec and prototype are updated in the same PR as any screen change so they can't drift. This section describes what each screen must *do*; the spec describes how it looks.
+
 - Login / register screen.
 - "New workout" page: a heading block (date, start time defaulting to now, optional title, bodyweight, location, notes) + a growable list of exercise blocks, each with an autocomplete input (backed by `GET /exercises?search=`) and a dynamic list of set rows (weight, reps, warm-up toggle, add/remove). The whole page saves as a single `PUT /workouts/{id}/exercises`. A block whose exercise is marked bodyweight hides the weight field unless the user opts into added weight.
 - Workout history list: a flat list of pages, newest first, each row showing date, start time and title. Two sessions on one date are two adjacent rows distinguished by their times — no date grouping, since flipping back page by page is what a notebook actually does.
@@ -161,6 +163,10 @@ gymNotebook/
 │   ├── src/
 │   ├── Dockerfile
 │   └── package.json
+├── docs/
+│   └── ui/
+│       ├── README.md         # UI specification
+│       └── prototype.html    # self-contained clickable prototype (reference only, not a build input)
 ├── docker-compose.yml        # local dev: frontend + backend + postgres
 ├── .github/workflows/
 │   ├── test.yml
@@ -248,8 +254,8 @@ Worth covering specifically, because each is a rule written down in this plan th
 ## Open items / decisions still to make
 
 - **GitHub visibility (public/private).** The repo is `juusimaa/gymNotebook`. Visibility is the piece still open, and it decides how load-bearing `INVITE_CODE` is: private means it's a formality, public means it's the only thing between a deployed URL and open signup, since email verification is deliberately out of scope.
-- **How `is_bodyweight` gets set.** Nothing in the log-a-workout flow asks for it, so today it can only be toggled through `PATCH /exercises/{id}`. Options: infer it on first use when a set is saved with no weight, ask once at the moment an exercise is created, or leave it as an edit-after-the-fact — worth settling before milestone 7 rather than after.
-- **UI design — deliberately deferred.** The Frontend section above describes what each screen must *do*, not what it looks like: no visual direction, component library, or styling approach is chosen yet. That's fine for milestones 1–6, which are backend and scaffolding, but milestone 7 is the first one that builds a screen a person actually uses, so the decision wants making before then rather than by accident during it. The one thing worth deciding early is whether a component library is used at all, since retrofitting one is more work than starting with it.
+- **How `is_bodyweight` gets set.** Nothing in the log-a-workout flow asks for it, so today it can only be toggled through `PATCH /exercises/{id}`. Options: infer it on first use when a set is saved with no weight, ask once at the moment an exercise is created, or leave it as an edit-after-the-fact — worth settling before milestone 7 rather than after. The UI spec in `docs/ui/` leans towards ask-once-on-create as the option that fits its screens; the prototype currently shows the marker read-only.
+- **UI design — proposed, see [`docs/ui/`](docs/ui/README.md).** The spec and prototype settle the visual direction, the tokens and the component-library question (none) for the screens in milestones 5, 7 and 9. Still undesigned there: the progress view (milestone 8), the exercise rename/merge screen (milestone 9), and empty/error/offline states — each wants drawing before its milestone starts rather than during it.
 
 ## Milestones
 
