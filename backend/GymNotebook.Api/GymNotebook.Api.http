@@ -1,0 +1,6 @@
+@GymNotebook.Api_HostAddress = http://localhost:5217
+
+GET {{GymNotebook.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
