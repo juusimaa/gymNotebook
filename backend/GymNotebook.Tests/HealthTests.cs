@@ -1,9 +1,11 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
+using GymNotebook.Api.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GymNotebook.Tests;
 
-public class HealthTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class HealthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 
@@ -13,5 +15,14 @@ public class HealthTests(WebApplicationFactory<Program> factory) : IClassFixture
         var response = await _client.GetAsync("/health");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Migrations_are_applied()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
     }
 }
