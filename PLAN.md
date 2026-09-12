@@ -126,8 +126,9 @@ The API documents itself. `Microsoft.AspNetCore.OpenApi` — what the .NET 9+ We
 
 Three rules so the document is worth reading rather than a list of bare paths:
 
-- **Every endpoint is annotated** — `.WithName()`, `.WithSummary()`, and `.Produces<T>()` / `.ProducesProblem()` for each status it returns — and takes typed request/response records, never anonymous objects. The generator can only describe what the code declares.
-- **JWT is wired in** via a document transformer that adds the Bearer security scheme, so the workflow during milestones 3–4 is: call `POST /auth/login` in the page, paste the token into its auth field, and exercise every protected route from the browser. That's the main reason to have this before the frontend exists.
+- **Every endpoint is annotated** — `.WithName()`, `.WithTags()`, `.WithSummary()`, `.WithDescription()`, and `.Produces<T>()` / `.ProducesProblem()` for *each* status it can return — and takes typed request/response records, never anonymous objects. The generator can only describe what the code declares: it infers the 200 from a simple handler but never an alternative status, and an anonymous object comes out as an empty schema. `GET /health` with its `HealthResponse` record is the reference example.
+- **The document's title and description come from a document transformer** (`AddOpenApi(options => options.AddDocumentTransformer(...))`), registered in milestone 1 so the mechanism is already in place for the JWT Bearer security scheme, which milestone 3 adds through the same hook. Once that's in, the workflow during milestones 3–4 is: call `POST /auth/login` in the page, paste the token into its auth field, and exercise every protected route from the browser. That's the main reason to have this before the frontend exists.
+- **The document is tested.** One test fetches `/openapi/v1.json` and asserts it contains `/health` and the title — cheap, and it catches the two ways this breaks silently: the mapping being moved out of the pipeline, and a handler returning something the generator can't serialize.
 - **Development only.** Both the document and the UI are mapped inside `if (app.Environment.IsDevelopment())`. The deployed Azure app has no business publishing its own surface to whoever finds the URL, for the same reason `INVITE_CODE` and rate limiting exist.
 
 ## Auth
@@ -165,8 +166,10 @@ The visual design lives in [`docs/ui/`](docs/ui/README.md): a written spec (`REA
 ```
 gymNotebook/
 ├── backend/
-│   ├── GymNotebook.Api/      # Minimal API endpoints, EF Core models, DbContext, migrations
-│   ├── GymNotebook.Tests/    # xUnit
+│   ├── .config/
+│   │   └── dotnet-tools.json # local tool manifest: pins dotnet-ef, restored with `dotnet tool restore`
+│   ├── GymNotebook.Api/      # Minimal API endpoints, EF Core models, Data/AppDbContext, Migrations/
+│   ├── GymNotebook.Tests/    # xUnit; GymNotebookFactory = WebApplicationFactory + Testcontainers Postgres
 │   ├── GymNotebook.sln
 │   ├── Dockerfile
 │   └── entrypoint.sh         # applies migrations, then starts the app
@@ -209,7 +212,9 @@ Three things here that will bite otherwise:
 - **`Host=db`, not `localhost`.** Inside Compose the database is reachable by service name. `VITE_API_URL` and `CORS_ORIGINS` go the other way and use `localhost`, because those addresses are resolved by the *browser*, which is not on the Compose network.
 - **`CORS_ORIGINS` is required from the moment the frontend exists.** Vite on `:5173` calling the API on `:8080` is cross-origin, so without the middleware configured, every request fails in the browser while working perfectly from `curl`. Both the local origin and the eventual deployed one live here, comma-separated.
 
-Local development before milestone 2 uses .NET user-secrets rather than a `.env` file, since there's no container to inject environment variables yet and `dotnet user-secrets` keeps the JWT signing key out of the repo by default.
+Local development before milestone 2 uses .NET user-secrets rather than a `.env` file, since there's no container to inject environment variables yet and `dotnet user-secrets` keeps the JWT signing key out of the repo by default. Note the separator flips with the medium: `dotnet user-secrets set "ConnectionStrings:Default" ...` (colon) is the same key as `ConnectionStrings__Default` (double underscore) in the environment.
+
+Because a missing connection string would otherwise produce an app that starts cleanly and fails on first query, `Program.cs` reads it with `?? throw new InvalidOperationException("ConnectionStrings:Default is not configured.")` — boot fails with the key named. The same guard applies to every required setting added later (`Jwt__Secret` first among them).
 
 ### Secrets, and how they differ per environment
 
@@ -240,7 +245,9 @@ The fix that project landed on is a runtime config: the production image's entry
 
 Tests exist from milestone 1, not as a later milestone. The plan's own rule — every change via a branch and PR, no direct commits to `main` — only means something if the PR has a check to pass, and branch protection with a required status check is what enforces it mechanically instead of by memory.
 
-**Backend: xUnit, against real Postgres only.** Tests drive the API through `WebApplicationFactory` (in-process, no network) with the database supplied by [Testcontainers](https://dotnet.testcontainers.org/) locally and a GitHub Actions service container in CI, both pinned to the same Postgres major version as `docker-compose.yml`.
+**Backend: xUnit, against real Postgres only.** Tests drive the API through `WebApplicationFactory` (in-process, no network) with the database supplied by [Testcontainers](https://dotnet.testcontainers.org/) — the same way locally and in CI, since GitHub's Ubuntu runners have Docker and `test.yml` needs no service-container block. The `postgres:17` tag in `GymNotebookFactory` is the one `docker-compose.yml` must match when milestone 2 adds it. The factory starts the container, points the app at it by overriding `ConnectionStrings:Default`, and runs `MigrateAsync()` before the first test, so a second test asserting `GetPendingMigrationsAsync()` is empty doubles as a check that the migrations compile and apply.
+
+**EF Core packages move together.** `Microsoft.EntityFrameworkCore.Design` is `PrivateAssets="all"` and does not flow to the test project, so if it's on a newer patch than what `Npgsql.EntityFrameworkCore.PostgreSQL` transitively brings in, the API compiles against one EF Core version and the tests against another — `CS1705` / `MSB3277`. `Microsoft.EntityFrameworkCore.Relational` is referenced explicitly in the API at the same version as `Design` to pin it for everything downstream. When bumping any of the three, bump all three.
 
 Notably this does *not* copy subscription-tracker's two-database matrix. That project runs its suite against both SQLite and Postgres because a bare `pytest` with zero setup is the experience it wants contributors to have. The EF Core equivalent — the InMemory provider — is a worse deal: it enforces no foreign keys, no unique indexes and no real transactions, so the `(user_id, normalized_name)` uniqueness constraint and the cascade rules would all silently "pass" while testing nothing. Those constraints are among the most valuable things in the schema to have covered, so the suite tests the database it actually ships on.
 
@@ -264,14 +271,14 @@ Worth covering specifically, because each is a rule written down in this plan th
 
 ## Open items / decisions still to make
 
-- **GitHub visibility (public/private).** The repo is `juusimaa/gymNotebook`. Visibility is the piece still open, and it decides how load-bearing `INVITE_CODE` is: private means it's a formality, public means it's the only thing between a deployed URL and open signup, since email verification is deliberately out of scope.
+- **GitHub visibility — resolved: public.** The repo is `juusimaa/gymNotebook` and it's public, which makes `INVITE_CODE` the only thing between a deployed URL and open signup (email verification being out of scope). So the deploy checklist item about actually setting it is not optional.
 - **How `is_bodyweight` gets set.** Nothing in the log-a-workout flow asks for it, so today it can only be toggled through `PATCH /exercises/{id}`. Options: infer it on first use when a set is saved with no weight, ask once at the moment an exercise is created, or leave it as an edit-after-the-fact — worth settling before milestone 7 rather than after. The UI spec in `docs/ui/` leans towards ask-once-on-create as the option that fits its screens; the prototype currently shows the marker read-only.
 - **UI design — proposed, see [`docs/ui/`](docs/ui/README.md).** The spec and prototype settle the visual direction, the tokens and the component-library question (none) for the screens in milestones 5, 7 and 9. Still undesigned there: the progress view (milestone 8), the exercise rename/merge screen (milestone 9), and empty/error/offline states — each wants drawing before its milestone starts rather than during it.
 
 ## Milestones
 
-1. **Backend first, no Docker** — ASP.NET Core Minimal API skeleton talking to a locally installed Postgres, EF Core + Npgsql wired up and the migration workflow proven end to end (generate, apply, verify) before there's a schema worth losing, plus a health endpoint and the OpenAPI document + Scalar UI (so every later endpoint is documented from the moment it's added, not retrofitted). The xUnit project and `test.yml` land here too, along with branch protection — so the PR-only rule is enforced from the first PR rather than adopted later.
-2. **Containerize the backend** — backend `Dockerfile`, Docker Compose running backend + Postgres, a named volume so data survives restarts, `.env.example`, and pending migrations applied on container start via `entrypoint.sh`.
+1. **Backend first, no Docker** — ✅ done, as three PRs. (a) Skeleton + `GET /health` + xUnit smoke test via `WebApplicationFactory` + `test.yml`; branch protection switched on right after it merged, because GitHub only offers a status check as "required" once it has run. (b) EF Core + Npgsql, `AppDbContext`, `dotnet-ef` as a local tool, first migration generated, applied and verified (`\dt` shows `__EFMigrationsHistory`; `/health` reports 503 with the database stopped and 200 with it back), Testcontainers in the test project. (c) OpenAPI document with a title transformer, Scalar UI, `/health` fully annotated as the pattern, document covered by a test. "No Docker" turned out to mean *the app* isn't containerized — the dev database is a throwaway `docker run -d -p 5432:5432 postgres:17` rather than a Homebrew install, which adds none of the networking surface the rule exists to avoid. Splitting into three was right: each PR had exactly one thing that could go wrong, and (a) merging first is what unlocked branch protection for the rest.
+2. **Containerize the backend** — backend `Dockerfile`, Docker Compose running backend + Postgres, a named volume so data survives restarts, `.env.example`, and pending migrations applied on container start via `entrypoint.sh`. Also drops the template's `UseHttpsRedirection()`: the container only ever speaks HTTP behind Azure's TLS termination, and on the local `http` launch profile it does nothing but log a warning.
 3. **Auth** — register/login/change-password + JWT middleware, `token_version` checking, rate limiting, invite code.
 4. **Core domain** — `Workout`/`WorkoutExercise`/`Exercise`/`SetEntry` EF Core models + migrations, CRUD endpoints including the bulk session write.
 5. **Frontend skeleton** — Vite + React + TS, its own `Dockerfile`, added to Compose, CORS configured; login/register UI against milestone 3's endpoints.
