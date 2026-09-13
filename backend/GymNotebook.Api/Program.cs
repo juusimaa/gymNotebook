@@ -22,6 +22,11 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured.");
 
+var jwtSecret = builder.Configuration["Jwt:Secret"]
+    ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
+var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
+var inviteCode = builder.Configuration["INVITE_CODE"];
+
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
 // for it and disposed when the response is done. EF Core itself is database-agnostic;
@@ -94,5 +99,82 @@ app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
    .Produces<HealthResponse>()
    .Produces<HealthResponse>(StatusCodes.Status503ServiceUnavailable);
 
+var auth = app.MapGroup("/auth");
+
+auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, CancellationToken ct) =>
+{
+    // Empty/whitespace credentials would otherwise sail through to a BCrypt hash of "" or
+    // a username no one could ever type again to log back in.
+    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.BadRequest();
+    }
+
+    // inviteCode is the server's configured value (empty/unset = registration open); the
+    // request carries what the caller supplied. A mismatch when a code IS required is a
+    // 403, not a 401 — this isn't "who are you", it's "you're not allowed to sign up".
+    if (!string.IsNullOrEmpty(inviteCode) && request.InviteCode != inviteCode)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    // Checked up front rather than relying solely on the DB's unique index, so a
+    // duplicate username comes back as a clean 409 instead of an unhandled
+    // DbUpdateException surfacing as a 500. (Two near-simultaneous registrations with the
+    // same username could still both pass this check and race to the index — acceptable
+    // here; the index is still what guarantees the row-level correctness.)
+    if (await db.Users.AnyAsync(u => u.Username == request.Username, ct))
+    {
+        return Results.Conflict();
+    }
+
+    var user = new User
+    {
+        Username = request.Username,
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+        TokenVersion = 0,
+    };
+
+    // CreatedAt is deliberately left unset: EF Core recognizes the CLR default value on a
+    // DateTimeOffset property and omits the column from the INSERT, letting the "now()"
+    // column default configured in AppDbContext fill it in.
+    db.Users.Add(user);
+    await db.SaveChangesAsync(ct);
+
+    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
+    return Results.Ok(new AuthResponse(token));
+}).WithName("RegisterUser")
+   .WithSummary("Registers a new user")
+   .WithDescription("Creates a new user account with the given username and password. Returns a JWT token for authentication.")
+   .Produces<AuthResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status400BadRequest)
+   .Produces(StatusCodes.Status403Forbidden)
+   .Produces(StatusCodes.Status409Conflict);
+
+auth.MapPost("/login", async (LoginRequest request, AppDbContext db, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.BadRequest();
+    }
+
+    var user = await db.Users.SingleOrDefaultAsync(u => u.Username == request.Username, ct);
+
+    // Same 401 whether the username doesn't exist or the password is wrong — a different
+    // response for each would let a caller enumerate valid usernames by trying them
+    // one at a time and watching which error comes back.
+    if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+    {
+        return Results.Unauthorized();
+    }
+
+    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
+    return Results.Ok(new AuthResponse(token));
+}).WithName("LoginUser")
+   .WithSummary("Logs in a user")
+   .WithDescription("Authenticates a user with the given username and password. Returns a JWT token for authentication.")
+   .Produces<AuthResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status400BadRequest)
+   .Produces(StatusCodes.Status401Unauthorized);
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
