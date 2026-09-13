@@ -65,11 +65,6 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-// Template leftover. On the local `http` launch profile there is no HTTPS port to
-// redirect to, so this only logs a warning; in Azure the container sits behind TLS
-// termination and never sees HTTPS itself. Removed in milestone 2 with the Dockerfile.
-app.UseHttpsRedirection();
-
 // The one endpoint so far, and the annotation pattern every later endpoint follows.
 //
 // Handler parameters are resolved by Minimal APIs: AppDbContext comes from DI (the
