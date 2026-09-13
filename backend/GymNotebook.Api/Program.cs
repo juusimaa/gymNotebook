@@ -49,6 +49,13 @@ builder.Services.AddOpenApi(options =>
 // ---------------------------------------------------------------------------------------
 var app = builder.Build();
 
+if (args.Contains("--migrate"))
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    return;
+}
+
 // Dev-only: /openapi/v1.json (the document) and /scalar (the interactive UI that reads
 // it). The deployed app has no business publishing its own surface to whoever finds the
 // URL. WebApplicationFactory in the tests runs as Development, so the tests see these too.
@@ -57,11 +64,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
-
-// Template leftover. On the local `http` launch profile there is no HTTPS port to
-// redirect to, so this only logs a warning; in Azure the container sits behind TLS
-// termination and never sees HTTPS itself. Removed in milestone 2 with the Dockerfile.
-app.UseHttpsRedirection();
 
 // The one endpoint so far, and the annotation pattern every later endpoint follows.
 //
