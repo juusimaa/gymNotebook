@@ -49,6 +49,13 @@ builder.Services.AddOpenApi(options =>
 // ---------------------------------------------------------------------------------------
 var app = builder.Build();
 
+if (args.Contains("--migrate"))
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    return;
+}
+
 // Dev-only: /openapi/v1.json (the document) and /scalar (the interactive UI that reads
 // it). The deployed app has no business publishing its own surface to whoever finds the
 // URL. WebApplicationFactory in the tests runs as Development, so the tests see these too.
