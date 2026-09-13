@@ -25,8 +25,12 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
 // for it and disposed when the response is done. EF Core itself is database-agnostic;
-// UseNpgsql is what makes it speak Postgres SQL and types.
-builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+// UseNpgsql is what makes it speak Postgres SQL and types. UseSnakeCaseNamingConvention
+// translates the PascalCase C# properties (e.g. TokenVersion) into the snake_case
+// columns PLAN.md's data model is written in (token_version) — Postgres's own idiom,
+// and the only way to get unquoted, case-insensitive column names out of EF Core.
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
 
 // Microsoft.AspNetCore.OpenApi inspects the mapped endpoints and their metadata
 // (.WithSummary, .Produces<T> etc. below) and builds the OpenAPI document from them.
