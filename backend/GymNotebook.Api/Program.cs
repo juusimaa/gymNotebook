@@ -1,6 +1,13 @@
 using GymNotebook.Api;
 using GymNotebook.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using Scalar.AspNetCore;
 
 // This file uses "top-level statements": no Program class, no Main method. The compiler
@@ -37,6 +44,61 @@ var inviteCode = builder.Configuration["INVITE_CODE"];
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
 
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        };
+
+        // Without this, the handler silently renames short claim names to long legacy URIs
+        // on the way in ("sub" becomes ClaimTypes.NameIdentifier) — a well-known gotcha that
+        // makes FindFirst("sub") return null even though the claim is right there in the
+        // token. Turning it off keeps claim names exactly as JwtTokenFactory wrote them.
+        options.MapInboundClaims = false;
+
+        options.Events = new JwtBearerEvents
+        {
+            // Runs only after the token's signature and expiry already checked out. This is
+            // where token_version — the one thing about a token that can change after it's
+            // issued (see PLAN.md, Auth section) — gets enforced, since that's inherently a
+            // database lookup and standard JWT validation has no way to do that on its own.
+            OnTokenValidated = async context =>
+            {
+                var subClaim = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                var tvClaim = context.Principal?.FindFirst("tv")?.Value;
+
+                if (!int.TryParse(subClaim, out var userId) || tvClaim is null)
+                {
+                    context.Fail("Invalid token claims.");
+                    return;
+                }
+
+                // AddJwtBearer's options are configured once at startup, so AppDbContext
+                // (scoped per request) can't be injected here directly — it has to be
+                // resolved from this request's own service provider instead.
+                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var user = await db.Users.FindAsync([userId], context.HttpContext.RequestAborted);
+
+                // A missing user or a version mismatch both mean the same thing: this token
+                // should no longer work, even though it hasn't expired. Fail() overrides the
+                // otherwise-successful validation, which is what turns this into the normal
+                // 401 anything requiring authorization already returns for bad credentials.
+                if (user is null || user.TokenVersion.ToString() != tvClaim)
+                {
+                    context.Fail("Token has been revoked.");
+                }
+            },
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 // Microsoft.AspNetCore.OpenApi inspects the mapped endpoints and their metadata
 // (.WithSummary, .Produces<T> etc. below) and builds the OpenAPI document from them.
 // A document transformer is a hook that edits the finished document before it's served.
@@ -48,6 +110,48 @@ builder.Services.AddOpenApi(options =>
     {
         document.Info.Title = "Gym Notebook API";
         document.Info.Description = "Digital replacement for a paper gym log.";
+        return Task.CompletedTask;
+    });
+
+    // Registers the JWT Bearer scheme on the document so Scalar renders an "Authorize"
+    // button. This only describes the scheme — it doesn't mark any operation as needing
+    // it; the operation transformer below does that per-endpoint.
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        // Both collections are null until something populates them — Microsoft.OpenApi
+        // doesn't pre-initialize its optional properties the way you might expect.
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+        };
+        return Task.CompletedTask;
+    });
+
+    // Only endpoints actually behind .RequireAuthorization() (like /auth/me) get marked
+    // as requiring the Bearer scheme — checking EndpointMetadata for IAuthorizeData is
+    // how the generator knows which those are, since Minimal APIs has no attribute to
+    // reflect on the way MVC controllers would. Without this, Scalar would either lock
+    // every endpoint (including /health and /auth/login, which take no token at all) or
+    // none of them, both of which are wrong documentation.
+    options.AddOperationTransformer((operation, context, _) =>
+    {
+        var requiresAuth = context.Description.ActionDescriptor.EndpointMetadata
+            .OfType<IAuthorizeData>()
+            .Any();
+
+        if (requiresAuth)
+        {
+            operation.Security ??= new List<OpenApiSecurityRequirement>();
+            operation.Security.Add(new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("Bearer", context.Document)] = new List<string>(),
+            });
+        }
+
         return Task.CompletedTask;
     });
 });
@@ -73,6 +177,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // The one endpoint so far, and the annotation pattern every later endpoint follows.
 //
@@ -176,5 +283,19 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
    .Produces<AuthResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status401Unauthorized);
+
+auth.MapGet("/me", (ClaimsPrincipal user) =>
+{
+    var userId = int.Parse(user.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+    return Results.Ok(new MeResponse(userId));
+})
+   .RequireAuthorization()
+   .WithName("GetCurrentUser")
+   .WithSummary("Returns the authenticated user's id")
+   .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked.")
+   .Produces<MeResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status401Unauthorized);
+
+
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
