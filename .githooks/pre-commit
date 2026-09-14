@@ -1,0 +1,22 @@
+#!/bin/sh
+# Formats staged C# files with `dotnet format` so every commit has the same look.
+# Rules live in .editorconfig. Enable once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# Note: the reformatted files are re-staged whole, so if a file was only
+# partially staged (`git add -p`), its unstaged hunks get committed too.
+
+set -e
+
+files=$(git diff --cached --name-only --diff-filter=ACMR -- 'backend/*.cs' 'backend/**/*.cs')
+[ -z "$files" ] && exit 0
+
+# dotnet format resolves --include paths relative to the solution folder.
+cd backend
+# shellcheck disable=SC2046  # word splitting is intended; paths have no spaces
+dotnet format GymNotebook.sln --verbosity quiet --include $(echo "$files" | sed 's|^backend/||')
+cd ..
+
+# shellcheck disable=SC2086
+git add $files

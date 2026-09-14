@@ -1,15 +1,15 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using System.Threading.RateLimiting;
 using GymNotebook.Api;
 using GymNotebook.Api.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Threading.RateLimiting;
-using System.Text;
 using Scalar.AspNetCore;
 
 // This file uses "top-level statements": no Program class, no Main method. The compiler
