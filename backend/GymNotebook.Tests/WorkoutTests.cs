@@ -65,7 +65,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
         return workout;
     }
 
-    private async Task<Exercise> SeedExerciseAsync(int userId, string name)
+    private async Task<Exercise> SeedExerciseAsync(int userId, string name, bool isBodyweight = false)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -74,6 +74,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
             UserId = userId,
             Name = name,
             NormalizedName = ExerciseNameNormalizer.Normalize(name),
+            IsBodyweight = isBodyweight,
         };
         db.Exercises.Add(exercise);
         await db.SaveChangesAsync();
@@ -192,6 +193,44 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
     }
 
     [Fact]
+    public async Task List_summaries_carry_end_time_counts_and_exercise_names_in_position_order()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var workout = await SeedWorkoutAsync(userId, new DateOnly(2026, 1, 1), new DateTimeOffset(2026, 1, 1, 8, 0, 0, TimeSpan.Zero), "Leg day");
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+        var calfRaise = await SeedExerciseAsync(userId, "Standing Calf Raise");
+        // Seeded out of position order, as in the GET test, so the names have to be
+        // sorted by position rather than by insertion.
+        await SeedBlockWithSetsAsync(workout.Id, calfRaise.Id, position: 1,
+            (SetNumber: 1, Reps: 12, Weight: 60m, IsWarmup: false));
+        await SeedBlockWithSetsAsync(workout.Id, backSquat.Id, position: 0,
+            (SetNumber: 1, Reps: 5, Weight: 60m, IsWarmup: true),
+            (SetNumber: 2, Reps: 5, Weight: 80m, IsWarmup: false));
+        // An empty page alongside it: zero blocks must come back as zeros and an empty
+        // list, not as a missing row or a null.
+        var empty = await SeedWorkoutAsync(userId, new DateOnly(2026, 1, 2), new DateTimeOffset(2026, 1, 2, 7, 0, 0, TimeSpan.Zero));
+        var endedAt = new DateTimeOffset(2026, 1, 1, 9, 25, 0, TimeSpan.Zero);
+        await _client.SendAsync(AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", token,
+            new UpdateWorkoutRequest(null, null, endedAt, null, null, null, null)));
+
+        var response = await _client.SendAsync(AuthenticatedRequest(HttpMethod.Get, "/workouts", token));
+        var body = await response.Content.ReadFromJsonAsync<List<WorkoutSummaryResponse>>();
+
+        var legDay = Assert.Single(body!, w => w.Id == workout.Id);
+        Assert.Equal("Leg day", legDay.Title);
+        Assert.Equal(endedAt, legDay.EndedAt);
+        Assert.Equal(2, legDay.ExerciseCount);
+        Assert.Equal(3, legDay.SetCount);
+        Assert.Equal(new[] { "Back Squat", "Standing Calf Raise" }, legDay.ExerciseNames);
+
+        var emptyPage = Assert.Single(body!, w => w.Id == empty.Id);
+        Assert.Null(emptyPage.EndedAt);
+        Assert.Equal(0, emptyPage.ExerciseCount);
+        Assert.Equal(0, emptyPage.SetCount);
+        Assert.Empty(emptyPage.ExerciseNames);
+    }
+
+    [Fact]
     public async Task List_with_before_cursor_returns_the_next_older_page()
     {
         var (token, userId) = await RegisterAndGetUserAsync();
@@ -272,6 +311,26 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
 
         Assert.Equal(new[] { "Bench Press", "Back Squat" }, body!.Exercises.Select(e => e.ExerciseName));
         Assert.Equal(new[] { 1, 2 }, body.Exercises[1].Sets.Select(s => s.SetNumber));
+    }
+
+    [Fact]
+    public async Task Get_marks_each_block_with_its_exercises_bodyweight_flag()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var workout = await SeedWorkoutAsync(userId, new DateOnly(2026, 1, 1), new DateTimeOffset(2026, 1, 1, 8, 0, 0, TimeSpan.Zero));
+        var pullUp = await SeedExerciseAsync(userId, "Pull-up", isBodyweight: true);
+        var barbellRow = await SeedExerciseAsync(userId, "Barbell Row");
+        await SeedBlockWithSetsAsync(workout.Id, pullUp.Id, position: 0, (SetNumber: 1, Reps: 8, Weight: null, IsWarmup: false));
+        await SeedBlockWithSetsAsync(workout.Id, barbellRow.Id, position: 1, (SetNumber: 1, Reps: 8, Weight: 50m, IsWarmup: false));
+
+        var response = await _client.SendAsync(
+            AuthenticatedRequest(HttpMethod.Get, $"/workouts/{workout.Id}", token));
+
+        // The session page branches on this to show "best N reps" instead of an e1RM
+        // (docs/ui rule 3), so it has to ride on the block rather than need a second
+        // lookup against /exercises.
+        var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
+        Assert.Equal(new[] { true, false }, body!.Exercises.Select(e => e.IsBodyweight));
     }
 
     [Fact]
