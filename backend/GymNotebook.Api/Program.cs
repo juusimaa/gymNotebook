@@ -488,6 +488,8 @@ exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, Cl
    .Produces<ExerciseResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status404NotFound);
 
+var workouts = app.MapGroup("/workouts").RequireAuthorization();
+
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
 
