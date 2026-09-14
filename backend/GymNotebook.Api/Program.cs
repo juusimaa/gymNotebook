@@ -399,6 +399,95 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
    .Produces(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status401Unauthorized);
 
+var exercises = app.MapGroup("/exercises").RequireAuthorization();
+
+exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var query = db.Exercises.Where(e => e.UserId == userId);
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var normalizedSearch = ExerciseNameNormalizer.Normalize(search);
+        query = query.Where(e => e.NormalizedName.Contains(normalizedSearch));
+    }
+
+    var results = await query
+        .OrderBy(e => e.Name)
+        .Select(e => new ExerciseResponse(e.Id, e.Name, e.IsBodyweight))
+        .ToListAsync(ct);
+
+    return Results.Ok(results);
+})
+   .WithName("SearchExercises")
+   .WithSummary("Searches the caller's exercises")
+   .WithDescription("Autocomplete lookup, scoped to the authenticated user. Returns every exercise when search is omitted.")
+   .Produces<List<ExerciseResponse>>(StatusCodes.Status200OK);
+
+exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var exercise = await db.Exercises.SingleOrDefaultAsync(e => e.Id == id && e.UserId == userId, ct);
+
+    if (exercise is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (!string.IsNullOrWhiteSpace(request.Name))
+    {
+        var normalizedName = ExerciseNameNormalizer.Normalize(request.Name);
+
+        // Only a display-text change (casing/whitespace) when the normalized form
+        // is unchanged — nothing else can be colliding with a normalized name this
+        // row already owns, so there's nothing to merge.
+        if (normalizedName != exercise.NormalizedName)
+        {
+            // Renaming onto a name that already belongs to another of this user's
+            // exercises merges them (see PLAN.md) instead of failing on the unique
+            // (user_id, normalized_name) index: the exercise being PATCHed survives,
+            // the other one's blocks are re-pointed onto it, and its row is deleted.
+            var collision = await db.Exercises.SingleOrDefaultAsync(
+                e => e.UserId == userId && e.NormalizedName == normalizedName && e.Id != id, ct);
+
+            if (collision is not null)
+            {
+                // Re-pointed as tracked entities rather than a bulk ExecuteUpdateAsync,
+                // so this reassignment and the delete below land in the same
+                // SaveChangesAsync transaction below — a failure partway through
+                // rolls back both instead of leaving the merge half-applied.
+                var collisionBlocks = await db.WorkoutExercises
+                    .Where(we => we.ExerciseId == collision.Id)
+                    .ToListAsync(ct);
+
+                foreach (var block in collisionBlocks)
+                {
+                    block.ExerciseId = exercise.Id;
+                }
+
+                db.Exercises.Remove(collision);
+            }
+
+            exercise.NormalizedName = normalizedName;
+        }
+
+        exercise.Name = request.Name;
+    }
+
+    if (request.IsBodyweight.HasValue)
+    {
+        exercise.IsBodyweight = request.IsBodyweight.Value;
+    }
+
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new ExerciseResponse(exercise.Id, exercise.Name, exercise.IsBodyweight));
+})
+   .WithName("UpdateExercise")
+   .WithSummary("Updates an existing exercise")
+   .WithDescription("Modifies the name and/or bodyweight status of an existing exercise. Only the owner can update their exercises.")
+   .Produces<ExerciseResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status404NotFound);
+
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
 
