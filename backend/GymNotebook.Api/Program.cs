@@ -122,8 +122,8 @@ builder.Services.AddRateLimiter(options =>
 // Microsoft.AspNetCore.OpenApi inspects the mapped endpoints and their metadata
 // (.WithSummary, .Produces<T> etc. below) and builds the OpenAPI document from them.
 // A document transformer is a hook that edits the finished document before it's served.
-// Here it only sets the title; in milestone 3 a second one adds the JWT Bearer security
-// scheme so protected routes can be called from the Scalar page.
+// The first one sets the title; the second registers the JWT Bearer security scheme so
+// protected routes can be called from the Scalar page.
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, _, _) =>
@@ -202,7 +202,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
-// The one endpoint so far, and the annotation pattern every later endpoint follows.
+// The first endpoint, and the annotation pattern every later endpoint follows.
 //
 // Handler parameters are resolved by Minimal APIs: AppDbContext comes from DI (the
 // scoped instance for this request), CancellationToken is the request's — it fires if
