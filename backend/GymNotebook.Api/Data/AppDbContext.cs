@@ -37,6 +37,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.Property(w => w.BodyweightKg).HasPrecision(5, 2);
             entity.Property(w => w.CreatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(w => w.UserId);
         });
 
         modelBuilder.Entity<WorkoutExercise>(entity =>
@@ -68,6 +72,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasIndex(e => new { e.UserId, e.NormalizedName }).IsUnique();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(e => e.UserId);
         });
     }
 }
