@@ -15,14 +15,10 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
     // no port, no network, but the full middleware pipeline.
     private readonly HttpClient _client = factory.CreateClient();
 
-    // Every test in the class shares one database, and xUnit may run them in any order,
-    // so each registers its own throwaway user rather than relying on a fixed name.
-    private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
-
     [Fact]
     public async Task Register_creates_user_and_returns_token()
     {
-        var request = new RegisterRequest(UniqueUsername(), "correct-horse-battery-staple", null);
+        var request = new RegisterRequest(TestUsers.UniqueUsername(), TestUsers.DefaultPassword, null);
 
         var response = await _client.PostAsJsonAsync("/auth/register", request);
 
@@ -34,7 +30,7 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
     [Fact]
     public async Task Register_with_duplicate_username_returns_conflict()
     {
-        var request = new RegisterRequest(UniqueUsername(), "correct-horse-battery-staple", null);
+        var request = new RegisterRequest(TestUsers.UniqueUsername(), TestUsers.DefaultPassword, null);
         await _client.PostAsJsonAsync("/auth/register", request);
 
         var response = await _client.PostAsJsonAsync("/auth/register", request);
@@ -45,7 +41,7 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
     [Fact]
     public async Task Register_with_blank_username_returns_bad_request()
     {
-        var request = new RegisterRequest("   ", "correct-horse-battery-staple", null);
+        var request = new RegisterRequest("   ", TestUsers.DefaultPassword, null);
 
         var response = await _client.PostAsJsonAsync("/auth/register", request);
 
@@ -55,11 +51,10 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
     [Fact]
     public async Task Login_with_correct_credentials_returns_token_with_expected_claims()
     {
-        var username = UniqueUsername();
-        const string password = "correct-horse-battery-staple";
-        await _client.PostAsJsonAsync("/auth/register", new RegisterRequest(username, password, null));
+        var username = TestUsers.UniqueUsername();
+        await _client.RegisterAsync(username);
 
-        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(username, password));
+        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(username, TestUsers.DefaultPassword));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<AuthResponse>();
@@ -74,8 +69,8 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
     [Fact]
     public async Task Login_with_wrong_password_returns_unauthorized()
     {
-        var username = UniqueUsername();
-        await _client.PostAsJsonAsync("/auth/register", new RegisterRequest(username, "correct-horse-battery-staple", null));
+        var username = TestUsers.UniqueUsername();
+        await _client.RegisterAsync(username);
 
         var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(username, "wrong-password"));
 
@@ -85,7 +80,7 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
     [Fact]
     public async Task Login_with_unknown_username_returns_unauthorized()
     {
-        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(UniqueUsername(), "whatever"));
+        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(TestUsers.UniqueUsername(), "whatever"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -98,12 +93,10 @@ public class InviteCodeGatedRegisterTests(InviteCodeGymNotebookFactory factory) 
 {
     private readonly HttpClient _client = factory.CreateClient();
 
-    private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
-
     [Fact]
     public async Task Register_without_invite_code_is_forbidden()
     {
-        var request = new RegisterRequest(UniqueUsername(), "correct-horse-battery-staple", null);
+        var request = new RegisterRequest(TestUsers.UniqueUsername(), TestUsers.DefaultPassword, null);
 
         var response = await _client.PostAsJsonAsync("/auth/register", request);
 
@@ -113,7 +106,7 @@ public class InviteCodeGatedRegisterTests(InviteCodeGymNotebookFactory factory) 
     [Fact]
     public async Task Register_with_wrong_invite_code_is_forbidden()
     {
-        var request = new RegisterRequest(UniqueUsername(), "correct-horse-battery-staple", "not-the-code");
+        var request = new RegisterRequest(TestUsers.UniqueUsername(), TestUsers.DefaultPassword, "not-the-code");
 
         var response = await _client.PostAsJsonAsync("/auth/register", request);
 
@@ -124,8 +117,8 @@ public class InviteCodeGatedRegisterTests(InviteCodeGymNotebookFactory factory) 
     public async Task Register_with_correct_invite_code_succeeds()
     {
         var request = new RegisterRequest(
-            UniqueUsername(),
-            "correct-horse-battery-staple",
+            TestUsers.UniqueUsername(),
+            TestUsers.DefaultPassword,
             InviteCodeGymNotebookFactory.RequiredInviteCode);
 
         var response = await _client.PostAsJsonAsync("/auth/register", request);

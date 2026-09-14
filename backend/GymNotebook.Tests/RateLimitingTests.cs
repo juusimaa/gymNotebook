@@ -44,7 +44,7 @@ public class RegisterRateLimitingTests(RateLimitedGymNotebookFactory factory) : 
         // the test should exceed the limit with requests that would otherwise succeed.
         Task<HttpResponseMessage> Register() => _client.PostAsJsonAsync(
             "/auth/register",
-            new RegisterRequest($"user-{Guid.NewGuid():N}", "correct-horse-battery-staple", null));
+            new RegisterRequest(TestUsers.UniqueUsername(), TestUsers.DefaultPassword, null));
 
         await Register();
         await Register();
