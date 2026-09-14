@@ -5,10 +5,18 @@ using GymNotebook.Api;
 
 namespace GymNotebook.Tests;
 
+// /auth/register and /auth/login, driven through the real pipeline against a real
+// Postgres. IClassFixture<T> makes xUnit build one GymNotebookFactory (one container,
+// one host) for the whole class and pass it to every test's constructor, instead of
+// starting a fresh container per test.
 public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFactory>
 {
+    // CreateClient() returns an HttpClient wired straight into the in-process TestServer:
+    // no port, no network, but the full middleware pipeline.
     private readonly HttpClient _client = factory.CreateClient();
 
+    // Every test in the class shares one database, and xUnit may run them in any order,
+    // so each registers its own throwaway user rather than relying on a fixed name.
     private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
 
     [Fact]
@@ -57,6 +65,8 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
         var body = await response.Content.ReadFromJsonAsync<AuthResponse>();
         Assert.NotNull(body);
 
+        // ReadJwtToken decodes without validating: this checks what JwtTokenFactory wrote
+        // into the token, not the signature — the middleware tests in MeTests cover that.
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(body!.Token);
         Assert.Equal("0", jwt.Claims.Single(c => c.Type == "tv").Value);
     }
@@ -81,6 +91,9 @@ public class AuthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
     }
 }
 
+// The gated-registration cases. A separate class because they need a different fixture
+// (INVITE_CODE set) — see InviteCodeGymNotebookFactory for why that can't be a runtime
+// toggle on the shared one.
 public class InviteCodeGatedRegisterTests(InviteCodeGymNotebookFactory factory) : IClassFixture<InviteCodeGymNotebookFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();

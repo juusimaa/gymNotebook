@@ -39,6 +39,9 @@ public class RegisterRateLimitingTests(RateLimitedGymNotebookFactory factory) : 
     [Fact]
     public async Task Exceeding_the_register_rate_limit_returns_too_many_requests()
     {
+        // A local function rather than a shared request object because each attempt needs
+        // a fresh username — a repeat would 409, which the limiter would still count, but
+        // the test should exceed the limit with requests that would otherwise succeed.
         Task<HttpResponseMessage> Register() => _client.PostAsJsonAsync(
             "/auth/register",
             new RegisterRequest($"user-{Guid.NewGuid():N}", "correct-horse-battery-staple", null));

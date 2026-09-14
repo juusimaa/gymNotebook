@@ -5,6 +5,8 @@ using GymNotebook.Api;
 
 namespace GymNotebook.Tests;
 
+// /auth/change-password end to end, including the part MeTests could only simulate:
+// that the endpoint's token_version bump really does revoke the old token.
 public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFactory>
 {
     private const string OriginalPassword = "correct-horse-battery-staple";
@@ -14,6 +16,8 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
 
     private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
 
+    // Every test wants a fresh user with a known password and a token for them; this is
+    // the registration step each would otherwise repeat.
     private async Task<string> RegisterAndGetTokenAsync(string username, string password)
     {
         var response = await _client.PostAsJsonAsync("/auth/register", new RegisterRequest(username, password, null));
@@ -21,6 +25,8 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
         return body!.Token;
     }
 
+    // PostAsJsonAsync has no overload that takes headers, so the bearer token has to go on
+    // a hand-built HttpRequestMessage.
     private async Task<HttpResponseMessage> ChangePasswordAsync(string token, ChangePasswordRequest request)
     {
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/auth/change-password")
@@ -31,6 +37,8 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
         return await _client.SendAsync(httpRequest);
     }
 
+    // /auth/me as the oracle: "is this token still accepted" is exactly the question the
+    // revocation tests need answered, and that endpoint exists to answer it.
     private async Task<HttpStatusCode> MeStatusAsync(string token)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/auth/me");

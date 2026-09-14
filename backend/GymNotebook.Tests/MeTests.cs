@@ -8,12 +8,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GymNotebook.Tests;
 
+// The bearer middleware, tested through /auth/me — the smallest route that sits behind
+// it. Covers the two ways a request fails there (no token, revoked token) and the one
+// way it succeeds.
 public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 
     private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
 
+    // Returns the username too, since the tests below need it to find the user's row
+    // directly in the database.
     private async Task<(string Token, string Username)> RegisterAndGetTokenAsync()
     {
         var username = UniqueUsername();
@@ -24,6 +29,8 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
         return (body!.Token, username);
     }
 
+    // GetAsync can't take per-request headers, so an authenticated call needs a
+    // hand-built request with the bearer token attached.
     private static HttpRequestMessage AuthenticatedGet(string url, string token)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -60,9 +67,10 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
     {
         var (token, username) = await RegisterAndGetTokenAsync();
 
-        // /auth/change-password (PR 4) is what normally bumps this; simulated directly
-        // here since that endpoint doesn't exist yet. Proves OnTokenValidated actually
-        // rejects a cryptographically valid, unexpired token once token_version moves on.
+        // /auth/change-password is what normally bumps this, and ChangePasswordTests
+        // covers that path end to end. Bumping the row directly here isolates the
+        // middleware: it proves OnTokenValidated rejects a cryptographically valid,
+        // unexpired token once token_version moves on, independent of any endpoint.
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
