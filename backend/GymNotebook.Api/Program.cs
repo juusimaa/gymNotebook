@@ -3,10 +3,12 @@ using GymNotebook.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 using System.Text;
 using Scalar.AspNetCore;
 
@@ -33,6 +35,9 @@ var jwtSecret = builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
 var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
 var inviteCode = builder.Configuration["INVITE_CODE"];
+
+var rateLimitPermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit", 10);
+var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSeconds", 60);
 
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
@@ -98,6 +103,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("auth", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimitPermitLimit,
+                Window = TimeSpan.FromSeconds(rateLimitWindowSeconds),
+                QueueLimit = 0,
+            }));
+});
 
 // Microsoft.AspNetCore.OpenApi inspects the mapped endpoints and their metadata
 // (.WithSummary, .Produces<T> etc. below) and builds the OpenAPI document from them.
@@ -180,6 +200,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // The one endpoint so far, and the annotation pattern every later endpoint follows.
 //
@@ -256,7 +277,8 @@ auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, Cance
    .Produces<AuthResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status403Forbidden)
-   .Produces(StatusCodes.Status409Conflict);
+   .Produces(StatusCodes.Status409Conflict)
+   .RequireRateLimiting("auth");
 
 auth.MapPost("/login", async (LoginRequest request, AppDbContext db, CancellationToken ct) =>
 {
@@ -282,7 +304,8 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
    .WithDescription("Authenticates a user with the given username and password. Returns a JWT token for authentication.")
    .Produces<AuthResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
-   .Produces(StatusCodes.Status401Unauthorized);
+   .Produces(StatusCodes.Status401Unauthorized)
+   .RequireRateLimiting("auth");
 
 auth.MapGet("/me", (ClaimsPrincipal user) =>
 {
