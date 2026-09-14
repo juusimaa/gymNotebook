@@ -20,21 +20,27 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
 
     private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
 
-    // Registers a user and returns both their token and their database id, since every
-    // test here needs the id to seed exercises (and blocks) owned by that user.
+    // Seeds a User directly and mints its token with JwtTokenFactory rather than calling
+    // /auth/register: every test in this class shares one host and therefore one
+    // in-process rate-limit bucket, and this class makes enough of these calls to sit
+    // right at the "auth" policy's default 10-per-60s limit if it went through the real
+    // endpoint. Nothing here is testing registration, so there's no reason to pay for it.
     private async Task<(string Token, int UserId)> RegisterAndGetUserAsync()
     {
-        var username = UniqueUsername();
-        var response = await _client.PostAsJsonAsync(
-            "/auth/register",
-            new RegisterRequest(username, "correct-horse-battery-staple", null));
-        var body = await response.Content.ReadFromJsonAsync<AuthResponse>();
-
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var user = await db.Users.SingleAsync(u => u.Username == username);
 
-        return (body!.Token, user.Id);
+        var user = new User
+        {
+            Username = UniqueUsername(),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-horse-battery-staple"),
+            TokenVersion = 0,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var token = JwtTokenFactory.CreateToken(user, GymNotebookFactory.JwtSecret, GymNotebookFactory.JwtExpiryMinutes);
+        return (token, user.Id);
     }
 
     private async Task<Exercise> SeedExerciseAsync(int userId, string name, bool isBodyweight = false)

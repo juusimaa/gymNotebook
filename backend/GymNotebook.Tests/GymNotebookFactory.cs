@@ -14,6 +14,13 @@ namespace GymNotebook.Tests;
 // class, DisposeAsync once after the last.
 public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    // Exposed so tests that need a valid token without going through the rate-limited
+    // /auth/register endpoint (every test in a class shares this one host, and so shares
+    // one in-process rate-limit bucket) can seed a User directly and mint its token with
+    // JwtTokenFactory instead, using the exact secret and expiry configured below.
+    public const string JwtSecret = "test-signing-key-do-not-use-outside-tests-1234567890";
+    public const int JwtExpiryMinutes = 30;
+
     // One throwaway Postgres in Docker per factory instance. The tag must match
     // docker-compose.yml so tests and the local stack run the same server version.
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
@@ -34,8 +41,8 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // committed default in appsettings.Development.json, but pinning it here too
         // keeps the fixture self-contained instead of depending on which environment
         // WebApplicationFactory happens to boot into.
-        builder.UseSetting("Jwt:Secret", "test-signing-key-do-not-use-outside-tests-1234567890");
-        builder.UseSetting("Jwt:ExpiryMinutes", "30");
+        builder.UseSetting("Jwt:Secret", JwtSecret);
+        builder.UseSetting("Jwt:ExpiryMinutes", JwtExpiryMinutes.ToString());
 
         // Explicit rather than left to whatever's in the test runner's environment, so
         // "registration is open" is a guarantee for every test using this factory, not
