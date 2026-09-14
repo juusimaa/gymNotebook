@@ -47,7 +47,7 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
     }
 
     [Fact]
-    public async Task Me_with_a_valid_token_returns_the_users_id()
+    public async Task Me_with_a_valid_token_returns_the_users_id_and_username()
     {
         var (token, username) = await RegisterAndGetTokenAsync();
 
@@ -60,6 +60,7 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = await db.Users.SingleAsync(u => u.Username == username);
         Assert.Equal(user.Id, body?.UserId);
+        Assert.Equal(username, body?.Username);
     }
 
     [Fact]

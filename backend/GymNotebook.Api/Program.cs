@@ -347,16 +347,28 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
 // The smallest possible protected route. ClaimsPrincipal is another parameter Minimal
 // APIs knows how to supply: it's HttpContext.User, already populated by the bearer
 // handler — and already past the token_version check in OnTokenValidated — by the time
-// the handler runs. No AppDbContext needed: everything here comes from the token.
-auth.MapGet("/me", (ClaimsPrincipal user) =>
+// the handler runs.
+//
+// The username comes from the row, not the token: the JWT carries only "sub" (the id)
+// and "tv", and adding a name claim would mean a token outliving a rename. One indexed
+// lookup by primary key is cheap, and the cover page needs the name to greet its owner.
+auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>
 {
     var userId = ParseUserId(user);
-    return Results.Ok(new MeResponse(userId));
+
+    // SingleAsync, not SingleOrDefaultAsync: OnTokenValidated has just loaded this row to
+    // compare token_version, so a miss here is a bug, not a 404 — same reasoning as ParseUserId.
+    var username = await db.Users
+        .Where(u => u.Id == userId)
+        .Select(u => u.Username)
+        .SingleAsync(ct);
+
+    return Results.Ok(new MeResponse(userId, username));
 })
    .RequireAuthorization()
    .WithName("GetCurrentUser")
-   .WithSummary("Returns the authenticated user's id")
-   .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked.")
+   .WithSummary("Returns the authenticated user's id and username")
+   .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked. The username is what the frontend shows on the cover page.")
    .Produces<MeResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status401Unauthorized);
 
@@ -412,16 +424,13 @@ exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContex
         query = query.Where(e => e.NormalizedName.Contains(normalizedSearch));
     }
 
-    var results = await query
-        .OrderBy(e => e.Name)
-        .Select(e => new ExerciseResponse(e.Id, e.Name, e.IsBodyweight))
-        .ToListAsync(ct);
+    var results = await ProjectExerciseResponses(db, query.OrderBy(e => e.Name)).ToListAsync(ct);
 
     return Results.Ok(results);
 })
    .WithName("SearchExercises")
    .WithSummary("Searches the caller's exercises")
-   .WithDescription("Autocomplete lookup, scoped to the authenticated user. Returns every exercise when search is omitted.")
+   .WithDescription("Autocomplete lookup, scoped to the authenticated user. Returns every exercise when search is omitted. Each result carries the most recently logged set for that exercise (null if none): the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else.")
    .Produces<List<ExerciseResponse>>(StatusCodes.Status200OK);
 
 exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
@@ -480,7 +489,12 @@ exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, Cl
     }
 
     await db.SaveChangesAsync(ct);
-    return Results.Ok(new ExerciseResponse(exercise.Id, exercise.Name, exercise.IsBodyweight));
+
+    // Re-read through the shared projection rather than building the response by hand, so
+    // LastSet comes back the same way it does from GET — including the sets a merge has
+    // just re-pointed onto this exercise.
+    var response = await ProjectExerciseResponses(db, db.Exercises.Where(e => e.Id == exercise.Id)).SingleAsync(ct);
+    return Results.Ok(response);
 })
    .WithName("UpdateExercise")
    .WithSummary("Updates an existing exercise")
@@ -548,18 +562,33 @@ workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, App
             (w.Date == anchor.Date && w.StartedAt < anchor.StartedAt));
     }
 
+    // The counts and names are projected inside the same query rather than loaded per
+    // row: EF Core translates the nested collections into one SQL statement, so a page of
+    // twenty summaries is still one round trip. ExerciseNames needs a subquery because
+    // WorkoutExercise has no Exercise navigation property (only the raw ExerciseId).
     var results = await query
         .OrderByDescending(w => w.Date)
         .ThenByDescending(w => w.StartedAt)
         .Take(take)
-        .Select(w => new WorkoutSummaryResponse(w.Id, w.Date, w.StartedAt, w.Title))
+        .Select(w => new WorkoutSummaryResponse(
+            w.Id,
+            w.Date,
+            w.StartedAt,
+            w.EndedAt,
+            w.Title,
+            w.WorkoutExercises.Count,
+            w.WorkoutExercises.Sum(we => we.SetEntries.Count),
+            w.WorkoutExercises
+                .OrderBy(we => we.Position)
+                .Select(we => db.Exercises.Where(e => e.Id == we.ExerciseId).Select(e => e.Name).Single())
+                .ToList()))
         .ToListAsync(ct);
 
     return Results.Ok(results);
 })
    .WithName("ListWorkouts")
    .WithSummary("Lists the caller's workouts")
-   .WithDescription("Pages newest first (date desc, then started_at desc). `before` is the id of the last workout from the previous page.")
+   .WithDescription("Pages newest first (date desc, then started_at desc). `before` is the id of the last workout from the previous page. Each row carries the exercise names (in position order), exercise and set counts and the end time, so the list can render without fetching each workout.")
    .Produces<List<WorkoutSummaryResponse>>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest);
 
@@ -915,6 +944,34 @@ static int ParseUserId(ClaimsPrincipal user)
     return userId;
 }
 
+// The one definition of what an ExerciseResponse looks like, shared by GET /exercises and
+// PATCH /exercises/{id} so the two can't disagree about LastSet. Takes the already-filtered
+// and ordered query and only adds the projection.
+//
+// "Last" means: the most recent workout containing this exercise (date desc, then
+// started_at desc — the same ordering the sessions list uses), then within it the last
+// block by position, then the highest set number — with non-warm-up sets ranked ahead of
+// warm-ups. So the hint is the final working set of the last session, and only degrades to
+// a warm-up when that session logged nothing else for the exercise. A working set from an
+// older session is deliberately not preferred over a warm-up from the latest one: the hint
+// answers "what did I do last time", not "what is my best".
+//
+// It walks SetEntry -> WorkoutExercise -> Workout by explicit joins because neither of
+// the lower two has a navigation property upward. EF Core folds the correlated subquery
+// into the outer SELECT, so a full autocomplete list is still one round trip.
+static IQueryable<ExerciseResponse> ProjectExerciseResponses(AppDbContext db, IQueryable<Exercise> exercises) =>
+    exercises.Select(e => new ExerciseResponse(
+        e.Id,
+        e.Name,
+        e.IsBodyweight,
+        (from se in db.SetEntries
+         join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
+         join w in db.Workouts on we.WorkoutId equals w.Id
+         where we.ExerciseId == e.Id
+         orderby w.Date descending, w.StartedAt descending, se.IsWarmup, we.Position descending, se.SetNumber descending
+         select new LastSetResponse(se.Weight, se.Reps))
+            .FirstOrDefault()));
+
 // A local function to fetch a workout's exercises and their sets in one query. The
 // handler for GET /workouts/{id} needs this, and the handler for PATCH /workouts/{id} needs 
 // it too because the response includes the exercises even though the PATCH request 
@@ -931,6 +988,7 @@ static async Task<List<WorkoutExerciseResponse>> GetWorkoutExercisesAsync(AppDbC
             we.Id,
             we.ExerciseId,
             exercise.Name,
+            exercise.IsBodyweight,
             we.SetEntries
                 .OrderBy(se => se.SetNumber)
                 .Select(se => new SetEntryResponse(se.Id, se.SetNumber, se.Reps, se.Weight, se.IsWarmup))

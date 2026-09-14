@@ -59,29 +59,38 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         return exercise;
     }
 
-    // A block needs a workout to hang off, even though this PR has no /workouts
-    // endpoint yet — the merge test needs a real block to prove the reassignment
-    // actually happens, not just that the losing exercise row disappears.
-    private async Task<WorkoutExercise> SeedWorkoutExerciseBlockAsync(int userId, int exerciseId)
+    // A dated session with one block for the exercise and the given sets — what the
+    // LastSet tests need, since "last" is decided by the workout's date and start time.
+    private async Task<WorkoutExercise> SeedSessionAsync(
+        int userId,
+        int exerciseId,
+        DateOnly date,
+        DateTimeOffset startedAt,
+        params (int SetNumber, int Reps, decimal? Weight, bool IsWarmup)[] sets)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var workout = new Workout
-        {
-            UserId = userId,
-            Date = DateOnly.FromDateTime(DateTime.UtcNow),
-            StartedAt = DateTimeOffset.UtcNow,
-        };
+
+        var workout = new Workout { UserId = userId, Date = date, StartedAt = startedAt };
         db.Workouts.Add(workout);
         await db.SaveChangesAsync();
 
-        var block = new WorkoutExercise
-        {
-            WorkoutId = workout.Id,
-            ExerciseId = exerciseId,
-            Position = 0,
-        };
+        var block = new WorkoutExercise { WorkoutId = workout.Id, ExerciseId = exerciseId, Position = 0 };
         db.WorkoutExercises.Add(block);
+        await db.SaveChangesAsync();
+
+        foreach (var (setNumber, reps, weight, isWarmup) in sets)
+        {
+            db.SetEntries.Add(new SetEntry
+            {
+                WorkoutExerciseId = block.Id,
+                SetNumber = setNumber,
+                Reps = reps,
+                Weight = weight,
+                IsWarmup = isWarmup,
+            });
+        }
+
         await db.SaveChangesAsync();
         return block;
     }
@@ -138,6 +147,51 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
         Assert.Single(body!);
         Assert.Equal("Back Squat", body![0].Name);
+    }
+
+    [Fact]
+    public async Task Search_returns_the_last_working_set_of_the_latest_session_and_null_when_never_logged()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+        await SeedExerciseAsync(userId, "Bench Press");
+
+        // The older session has the heavier set; the hint must still come from the newer
+        // one, and from its last working set (set 3), not its heaviest or its warm-up.
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 3, Weight: 100m, IsWarmup: false));
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 10), new DateTimeOffset(2026, 1, 10, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 60m, IsWarmup: true),
+            (SetNumber: 2, Reps: 5, Weight: 95m, IsWarmup: false),
+            (SetNumber: 3, Reps: 5, Weight: 90m, IsWarmup: false));
+
+        var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        var squat = Assert.Single(body!, e => e.Name == "Back Squat");
+        Assert.Equal(new LastSetResponse(90m, 5), squat.LastSet);
+
+        var bench = Assert.Single(body!, e => e.Name == "Bench Press");
+        Assert.Null(bench.LastSet);
+    }
+
+    [Fact]
+    public async Task Search_falls_back_to_a_warm_up_when_the_latest_session_logged_nothing_else()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 90m, IsWarmup: false));
+        // Two sessions on the same date: the later start is "latest", and it only has a
+        // warm-up — which is still what "last time" was.
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 18, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 8, Weight: 40m, IsWarmup: true));
+
+        var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        Assert.Equal(new LastSetResponse(40m, 8), Assert.Single(body!).LastSet);
     }
 
     [Fact]
@@ -221,7 +275,8 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         var (token, userId) = await RegisterAndGetUserAsync();
         var typo = await SeedExerciseAsync(userId, "Bnech Press");
         var existing = await SeedExerciseAsync(userId, "Bench Press");
-        var block = await SeedWorkoutExerciseBlockAsync(userId, existing.Id);
+        var block = await SeedSessionAsync(userId, existing.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 65m, IsWarmup: false));
 
         var response = await _client.SendAsync(
             AuthenticatedPatch($"/exercises/{typo.Id}", token, new UpdateExerciseRequest("Bench Press", null)));
@@ -229,9 +284,11 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<ExerciseResponse>();
 
-        // The exercise being PATCHed survives, under its own id, with the new name.
+        // The exercise being PATCHed survives, under its own id, with the new name — and
+        // the response already reflects the sets the merge re-pointed onto it.
         Assert.Equal(typo.Id, body!.Id);
         Assert.Equal("Bench Press", body.Name);
+        Assert.Equal(new LastSetResponse(65m, 5), body.LastSet);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
