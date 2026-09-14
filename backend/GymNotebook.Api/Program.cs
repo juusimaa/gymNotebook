@@ -490,6 +490,183 @@ exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, Cl
 
 var workouts = app.MapGroup("/workouts").RequireAuthorization();
 
+workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    var workout = new Workout
+    {
+        UserId = userId,
+        Date = request.Date,
+        StartedAt = request.StartedAt,
+        Title = request.Title,
+        BodyweightKg = request.BodyweightKg,
+        Location = request.Location,
+        Notes = request.Notes,
+    };
+
+    db.Workouts.Add(workout);
+    await db.SaveChangesAsync(ct);
+
+    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+        workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, Exercises: []);
+
+    return Results.Created($"/workouts/{workout.Id}", response);
+})
+   .WithName("CreateWorkout")
+   .WithSummary("Creates a new workout")
+   .WithDescription("Starts a new session page for the authenticated user.")
+   .Produces<WorkoutDetailResponse>(StatusCodes.Status201Created);
+
+workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    // Bounds the page size: unset falls back to a sane default, and nothing lets a
+    // caller request an unbounded page by passing an absurd limit.
+    const int DefaultLimit = 20;
+    const int MaxLimit = 100;
+    var take = Math.Clamp(limit ?? DefaultLimit, 1, MaxLimit);
+
+    var query = db.Workouts.Where(w => w.UserId == userId);
+
+    if (before.HasValue)
+    {
+        var anchor = await db.Workouts.SingleOrDefaultAsync(w => w.Id == before && w.UserId == userId, ct);
+        if (anchor is null)
+        {
+            // A cursor that doesn't exist or isn't the caller's own workout is a bad
+            // request, not "no results" — silently starting over from page one would
+            // hide the real problem from the client.
+            return Results.BadRequest();
+        }
+
+        // Keyset pagination: "everything earlier than the anchor" under the same
+        // (date desc, started_at desc) ordering the page itself uses.
+        query = query.Where(w =>
+            w.Date < anchor.Date ||
+            (w.Date == anchor.Date && w.StartedAt < anchor.StartedAt));
+    }
+
+    var results = await query
+        .OrderByDescending(w => w.Date)
+        .ThenByDescending(w => w.StartedAt)
+        .Take(take)
+        .Select(w => new WorkoutSummaryResponse(w.Id, w.Date, w.StartedAt, w.Title))
+        .ToListAsync(ct);
+
+    return Results.Ok(results);
+})
+   .WithName("ListWorkouts")
+   .WithSummary("Lists the caller's workouts")
+   .WithDescription("Pages newest first (date desc, then started_at desc). `before` is the id of the last workout from the previous page.")
+   .Produces<List<WorkoutSummaryResponse>>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status400BadRequest);
+
+workouts.MapGet("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
+
+    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+        workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, workoutExercises);
+
+    return Results.Ok(response);
+})
+   .WithName("GetWorkout")
+   .WithSummary("Retrieves a specific workout")
+   .WithDescription("Returns the details of a single workout belonging to the authenticated user.")
+   .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status404NotFound);
+
+workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (request.Date.HasValue)
+    {
+        workout.Date = request.Date.Value;
+    }
+
+    if (request.StartedAt.HasValue)
+    {
+        workout.StartedAt = request.StartedAt.Value;
+    }
+
+    if (request.EndedAt.HasValue)
+    {
+        workout.EndedAt = request.EndedAt.Value;
+    }
+
+    if (request.Title is not null)
+    {
+        workout.Title = request.Title;
+    }
+
+    if (request.BodyweightKg.HasValue)
+    {
+        workout.BodyweightKg = request.BodyweightKg.Value;
+    }
+
+    if (request.Location is not null)
+    {
+        workout.Location = request.Location;
+    }
+
+    if (request.Notes is not null)
+    {
+        workout.Notes = request.Notes;
+    }
+
+    await db.SaveChangesAsync(ct);
+
+    var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
+
+    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+        workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, workoutExercises);
+    return Results.Ok(response);
+})
+    .WithName("UpdateWorkout")
+    .WithSummary("Updates an existing workout")
+    .WithDescription("Modifies the details of an existing workout. Only the owner can update their workouts.")
+    .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status404NotFound);
+
+workouts.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    db.Workouts.Remove(workout);
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+   .WithName("DeleteWorkout")
+   .WithSummary("Deletes a workout")
+   .WithDescription("Deletes a workout and all of its exercises and sets.")
+   .Produces(StatusCodes.Status204NoContent)
+   .Produces(StatusCodes.Status404NotFound);
+
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
 
@@ -507,3 +684,26 @@ static int ParseUserId(ClaimsPrincipal user)
     }
     return userId;
 }
+
+// A local function to fetch a workout's exercises and their sets in one query. The
+// handler for GET /workouts/{id} needs this, and the handler for PATCH /workouts/{id} needs 
+// it too because the response includes the exercises even though the PATCH request 
+// doesn't change them. The query is a join of three tables (WorkoutExercises, Exercises, SetEntries)
+//  and a projection into the response records, so it's easier to keep it in one place than
+//  to duplicate the LINQ in two handlers.
+static async Task<List<WorkoutExerciseResponse>> GetWorkoutExercisesAsync(AppDbContext db, int workoutId, CancellationToken ct) =>
+    await (
+        from we in db.WorkoutExercises
+        join exercise in db.Exercises on we.ExerciseId equals exercise.Id
+        where we.WorkoutId == workoutId
+        orderby we.Position
+        select new WorkoutExerciseResponse(
+            we.Id,
+            we.ExerciseId,
+            exercise.Name,
+            we.SetEntries
+                .OrderBy(se => se.SetNumber)
+                .Select(se => new SetEntryResponse(se.Id, se.SetNumber, se.Reps, se.Weight, se.IsWarmup))
+                .ToList()))
+        .ToListAsync(ct);
+
