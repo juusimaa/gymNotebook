@@ -12,4 +12,5 @@ public class Workout
     public string? Notes { get; set; }
     public decimal? BodyweightKg { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public ICollection<WorkoutExercise> WorkoutExercises { get; set; } = [];
 }
