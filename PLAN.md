@@ -183,6 +183,9 @@ gymNotebook/
 │       ├── README.md         # UI specification
 │       └── prototype.html    # self-contained clickable prototype (reference only, not a build input)
 ├── docker-compose.yml        # local dev: frontend + backend + postgres
+├── .editorconfig             # code style; read by dotnet format and the IDE
+├── .githooks/
+│   └── pre-commit            # runs dotnet format on staged .cs files (enable: git config core.hooksPath .githooks)
 ├── .github/workflows/
 │   ├── test.yml
 │   └── build-and-push.yml
@@ -265,9 +268,17 @@ Worth covering specifically, because each is a rule written down in this plan th
 
 **Frontend:** Vitest for the e1RM/formatting helpers that are shared with the chart. End-to-end coverage is deferred; subscription-tracker's Playwright visual suite is the model if it's ever wanted.
 
+**Code formatting.** C# style is defined once, in the root `.editorconfig`, and applied by `dotnet format` (ships with the SDK, nothing to install). It runs in two places: a pre-commit hook (`.githooks/pre-commit`) formats the staged `.cs` files and re-stages them, so the commit is already tidy; and `test.yml` runs `dotnet format --verify-no-changes` so a commit that skipped the hook still can't merge unformatted. The hook lives in a versioned folder rather than `.git/hooks/` (which git doesn't track), which means enabling it is a one-time step per clone:
+
+```
+git config core.hooksPath .githooks
+```
+
+`Migrations/` is marked `generated_code` in `.editorconfig` — EF regenerates those files, so formatting them only creates churn on the next migration.
+
 **Workflows:**
 
-- `test.yml` — runs on every push and every PR, and is the required status check on `main`. No `paths:` filter on the trigger: a required check that a path filter prevents from running is one GitHub waits on forever, blocking the merge instead of passing. Skipping the *work* when nothing relevant changed is done with a paths-filter step inside the job, which still reports success. (Learned the hard way in subscription-tracker's `test.yml`, which carries the comment.)
+- `test.yml` — runs on every push and every PR, and is the required status check on `main`. Formatting is verified before the tests run, since it's the faster check and the fix is a mechanical `dotnet format`. No `paths:` filter on the trigger: a required check that a path filter prevents from running is one GitHub waits on forever, blocking the merge instead of passing. Skipping the *work* when nothing relevant changed is done with a paths-filter step inside the job, which still reports success. (Learned the hard way in subscription-tracker's `test.yml`, which carries the comment.)
 - `build-and-push.yml` — on push to `main`, builds both images and publishes them to GHCR, the registry that comes with the repo and needs no external account. Milestone 6, well before the Azure deploy, so that publishing images and deploying them fail separately and are debugged separately.
 
 ## Open items / decisions still to make
