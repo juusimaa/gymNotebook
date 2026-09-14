@@ -21,6 +21,10 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string JwtSecret = "test-signing-key-do-not-use-outside-tests-1234567890";
     public const int JwtExpiryMinutes = 30;
 
+    // The origins the fixture allows through CORS, for CorsTests to send as Origin headers.
+    public const string AllowedOrigin = "http://localhost:5173";
+    public const string SecondAllowedOrigin = "http://localhost:4173";
+
     // One throwaway Postgres in Docker per factory instance. The tag must match
     // docker-compose.yml so tests and the local stack run the same server version.
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
@@ -48,6 +52,12 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // "registration is open" is a guarantee for every test using this factory, not
         // an accident of what's unset on a given machine.
         builder.UseSetting("INVITE_CODE", "");
+
+        // Program.cs throws at startup if this is missing, so it has to be here for the
+        // same reason Jwt:Secret is. Two origins with a space after the comma, so every
+        // test in CorsTests exercises the split-and-trim in Program.cs rather than only
+        // the single-origin case appsettings.Development.json would give.
+        builder.UseSetting("CORS_ORIGINS", $"{AllowedOrigin}, {SecondAllowedOrigin}");
     }
 
     // Start Postgres first: touching `Services` is what lazily builds the host, which runs
