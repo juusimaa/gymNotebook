@@ -667,6 +667,236 @@ workouts.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbCont
    .Produces(StatusCodes.Status204NoContent)
    .Produces(StatusCodes.Status404NotFound);
 
+// The bulk session write: what the "new workout" page's single save button sends (see
+// PLAN.md, REST API). Replace rather than diff — the client owns the whole block list,
+// and a diff would need block ids the client deliberately never sees.
+workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    // A body of `{}` deserializes to a null list, which would be an NRE (a 500) in the
+    // loop below. Nullable reference types can't help here: the JSON deserializer writes
+    // the property regardless of what the declaration promises.
+    if (request.Exercises is null)
+    {
+        return Results.BadRequest();
+    }
+
+    // An explicit transaction rather than the usual one-SaveChangesAsync-is-one-transaction
+    // trick, because this handler genuinely needs several saves: WorkoutExercise has no
+    // Exercise *navigation property* (just the raw ExerciseId), so EF Core has no way to
+    // fix up the foreign key of a block whose exercise was created in this same request —
+    // the new Exercise has to reach the database and get its id before the block can point
+    // at it. Saving as we go inside one transaction keeps PLAN.md's rule (the bulk write
+    // rolls back whole, never half-applies) while still letting each new exercise be
+    // visible to the next block's lookup, which is what makes the same new name appearing
+    // twice in one payload resolve to one Exercise row instead of two.
+    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+    // Replace means the old blocks go, all of them. Their SetEntry rows go with them
+    // through the database-level cascade configured in AppDbContext, so there's no reason
+    // to load the sets first. Flushed before the inserts so the delete can't be reordered
+    // after rows that reuse the same (workout_id, exercise_id) pairing.
+    var existingBlocks = await db.WorkoutExercises
+        .Where(we => we.WorkoutId == workout.Id)
+        .ToListAsync(ct);
+
+    db.WorkoutExercises.RemoveRange(existingBlocks);
+    await db.SaveChangesAsync(ct);
+
+    var position = 0;
+
+    foreach (var input in request.Exercises)
+    {
+        if (string.IsNullOrWhiteSpace(input.ExerciseName))
+        {
+            return Results.BadRequest();
+        }
+
+        var exercise = await GetOrCreateExerciseAsync(db, userId, input.ExerciseName, ct);
+
+        // Always a brand-new block, never a reused one — including when the same exercise
+        // name appears twice in the payload. Two blocks for one exercise is the "came back
+        // to squats later in the session" case PLAN.md's data model exists to record, and
+        // collapsing them into one block would silently destroy it.
+        var block = new WorkoutExercise
+        {
+            WorkoutId = workout.Id,
+            ExerciseId = exercise.Id,
+            Position = position++,
+        };
+
+        var setNumber = 1;
+
+        foreach (var set in input.Sets ?? [])
+        {
+            // Added through the navigation property rather than with an explicit
+            // WorkoutExerciseId: the block has no id yet, and this is the one relationship
+            // that *does* have a nav property for EF Core to fix up on save.
+            block.SetEntries.Add(new SetEntry
+            {
+                SetNumber = setNumber++,
+                Weight = set.Weight,
+                Reps = set.Reps,
+                IsWarmup = set.IsWarmup,
+            });
+        }
+
+        db.WorkoutExercises.Add(block);
+    }
+
+    await db.SaveChangesAsync(ct);
+    await transaction.CommitAsync(ct);
+
+    var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
+
+    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+        workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, workoutExercises);
+
+    return Results.Ok(response);
+})
+   .WithName("ReplaceWorkoutExercises")
+   .WithSummary("Replaces a workout's exercises and sets")
+   .WithDescription("Atomically replaces every exercise block and set in the workout with the ones supplied. Exercise names are get-or-create; position and set number come from array order, never from the client.")
+   .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status400BadRequest)
+   .Produces(StatusCodes.Status404NotFound);
+
+// The incremental counterpart to the bulk write: one set appended from the history view,
+// without the client having to resend the whole session.
+workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    // A blank name isn't a range check — it normalizes to "" and would claim this user's
+    // one and only "" slot in the unique (user_id, normalized_name) index with a row no
+    // autocomplete could ever offer back. Same reasoning as register's blank-username guard.
+    if (string.IsNullOrWhiteSpace(request.ExerciseName))
+    {
+        return Results.BadRequest();
+    }
+
+    // Same reasoning as the PUT above: the exercise and the block each need to exist in
+    // the database before the next step can reference them by id, and a failure partway
+    // through should not leave an empty block behind.
+    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+    var exercise = await GetOrCreateExerciseAsync(db, userId, request.ExerciseName, ct);
+    var block = await GetOrCreateBlockAsync(db, workout.Id, exercise.Id, ct);
+
+    // Assigned server-side as the next number in this block, never trusted from the
+    // client (PLAN.md, REST API). MaxAsync over a nullable projection so an empty block
+    // yields null rather than throwing.
+    var maxSetNumber = await db.SetEntries
+        .Where(se => se.WorkoutExerciseId == block.Id)
+        .MaxAsync(se => (int?)se.SetNumber, ct);
+
+    var set = new SetEntry
+    {
+        WorkoutExerciseId = block.Id,
+        SetNumber = (maxSetNumber ?? 0) + 1,
+        Weight = request.Weight,
+        Reps = request.Reps,
+        IsWarmup = request.IsWarmup,
+    };
+
+    db.SetEntries.Add(set);
+    await db.SaveChangesAsync(ct);
+    await transaction.CommitAsync(ct);
+
+    // 201 with no Location header, deliberately: there is no GET /workouts/{id}/sets/{setId}
+    // for one to point at, and inventing a URL that 404s is worse than omitting the header.
+    // Results.Json rather than Results.Created for exactly that reason. The body is only
+    // the new set, not the whole WorkoutDetailResponse — the caller already has the rest
+    // of the page and this is an incremental add.
+    return Results.Json(
+        new SetEntryResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup),
+        statusCode: StatusCodes.Status201Created);
+})
+   .WithName("AddWorkoutSet")
+   .WithSummary("Appends a set to a workout")
+   .WithDescription("Get-or-creates the exercise and its block in this workout, then appends the set at the next set number. Returns 201 with the new set; no Location header, since single sets have no GET route.")
+   .Produces<SetEntryResponse>(StatusCodes.Status201Created)
+   .Produces(StatusCodes.Status400BadRequest)
+   .Produces(StatusCodes.Status404NotFound);
+
+workouts.MapPatch("/{id:int}/sets/{setId:int}", async (int id, int setId, UpdateSetRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    var set = await FindSetInWorkoutAsync(db, workout.Id, setId, ct);
+
+    if (set is null)
+    {
+        return Results.NotFound();
+    }
+
+    // All three applied unconditionally — see UpdateSetRequest for why this one isn't the
+    // sparse shape the other PATCH endpoints use. SetNumber and WorkoutExerciseId stay put:
+    // moving a set between blocks or renumbering it is not what this route is for.
+    set.Weight = request.Weight;
+    set.Reps = request.Reps;
+    set.IsWarmup = request.IsWarmup;
+
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new SetEntryResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup));
+})
+   .WithName("UpdateWorkoutSet")
+   .WithSummary("Updates a set")
+   .WithDescription("Replaces the weight, reps and warm-up flag of one set. All three are applied, so weight can be cleared by sending null.")
+   .Produces<SetEntryResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status404NotFound);
+
+workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    var set = await FindSetInWorkoutAsync(db, workout.Id, setId, ct);
+
+    if (set is null)
+    {
+        return Results.NotFound();
+    }
+
+    // Nothing hangs off a SetEntry, so there's no cascade to think about — and the
+    // surviving sets in the block keep their numbers rather than being renumbered, which
+    // would change the ids the client is holding for rows it didn't touch.
+    db.SetEntries.Remove(set);
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+   .WithName("DeleteWorkoutSet")
+   .WithSummary("Deletes a set")
+   .WithDescription("Removes one set from a workout. The remaining sets in the block keep their set numbers.")
+   .Produces(StatusCodes.Status204NoContent)
+   .Produces(StatusCodes.Status404NotFound);
+
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
 
@@ -706,4 +936,104 @@ static async Task<List<WorkoutExerciseResponse>> GetWorkoutExercisesAsync(AppDbC
                 .Select(se => new SetEntryResponse(se.Id, se.SetNumber, se.Reps, se.Weight, se.IsWarmup))
                 .ToList()))
         .ToListAsync(ct);
+
+// The first half of "exerciseName is get-or-create, twice over" (PLAN.md, REST API):
+// find this user's exercise by its normalized name, or bring one into being. This is the
+// hinge the autocomplete design turns on — there is no POST /exercises, so exercises
+// exist only because they were used. Shared by the bulk write and POST /sets.
+//
+// The lookup is by normalized name but the row stores the name as typed: normalization
+// is what dedupes "Back Squat" / "back squat" / "  Back  squat ", and PLAN.md is explicit
+// that display text keeps the user's own casing and spacing.
+//
+// Saving here rather than leaving the new row for the caller's SaveChangesAsync is
+// deliberate, and the reason both callers open a transaction first: WorkoutExercise
+// references its exercise by a bare ExerciseId with no navigation property, so the id has
+// to be real before a block can be built around it. The save also makes a name created
+// earlier in the same request visible to this lookup, which is what stops one payload
+// mentioning a new name twice from inserting two rows and tripping the unique index.
+static async Task<Exercise> GetOrCreateExerciseAsync(AppDbContext db, int userId, string name, CancellationToken ct)
+{
+    var normalizedName = ExerciseNameNormalizer.Normalize(name);
+
+    var exercise = await db.Exercises.SingleOrDefaultAsync(
+        e => e.UserId == userId && e.NormalizedName == normalizedName, ct);
+
+    if (exercise is not null)
+    {
+        return exercise;
+    }
+
+    exercise = new Exercise
+    {
+        UserId = userId,
+        Name = name,
+        NormalizedName = normalizedName,
+    };
+
+    // CreatedAt is left unset so the now() column default fills it in, same as User.
+    db.Exercises.Add(exercise);
+    await db.SaveChangesAsync(ct);
+
+    return exercise;
+}
+
+// The second half of "get-or-create, twice over": the block for an exercise within one
+// workout. Only POST /sets uses this — the bulk write always creates fresh blocks, since
+// "replace" means the client's array is the whole truth.
+//
+// FirstOrDefault over the highest position, not SingleOrDefault: one exercise can
+// legitimately have two blocks in a session (PLAN.md's "came back to squats later"), and
+// Single would throw on exactly the data the schema exists to make representable.
+// Appending to the latest block is the right reading of "that exercise's block" for
+// someone logging as they go — the earlier block is finished work.
+static async Task<WorkoutExercise> GetOrCreateBlockAsync(AppDbContext db, int workoutId, int exerciseId, CancellationToken ct)
+{
+    var block = await db.WorkoutExercises
+        .Where(we => we.WorkoutId == workoutId && we.ExerciseId == exerciseId)
+        .OrderByDescending(we => we.Position)
+        .FirstOrDefaultAsync(ct);
+
+    if (block is not null)
+    {
+        return block;
+    }
+
+    // Nullable projection so a workout with no blocks yet comes back null instead of
+    // throwing; (null ?? -1) + 1 then starts the first block at position 0, which is
+    // where the existing seeded data starts too.
+    var maxPosition = await db.WorkoutExercises
+        .Where(we => we.WorkoutId == workoutId)
+        .MaxAsync(we => (int?)we.Position, ct);
+
+    block = new WorkoutExercise
+    {
+        WorkoutId = workoutId,
+        ExerciseId = exerciseId,
+        Position = (maxPosition ?? -1) + 1,
+    };
+
+    db.WorkoutExercises.Add(block);
+    await db.SaveChangesAsync(ct);
+
+    return block;
+}
+
+// The second level of the ownership check for the two /sets/{setId} routes, shared
+// because PATCH and DELETE need it identically.
+//
+// The workout-level check has already happened by the time this runs; this answers the
+// separate question of whether this particular set is actually *in* that workout, which
+// matters because set ids are global — without it, any authenticated caller could edit
+// any set in the database by pairing its id with a workout they do own.
+//
+// It has to be a subquery rather than a dotted path because SetEntry carries only a raw
+// WorkoutExerciseId, with no navigation property back up to its block. A miss is a 404
+// like every other ownership failure in this codebase, never a 403: "no such set here" is
+// the honest answer, and confirming that someone else's set exists is not this API's job.
+static async Task<SetEntry?> FindSetInWorkoutAsync(AppDbContext db, int workoutId, int setId, CancellationToken ct) =>
+    await db.SetEntries
+        .Where(se => se.Id == setId)
+        .Where(se => db.WorkoutExercises.Any(we => we.Id == se.WorkoutExerciseId && we.WorkoutId == workoutId))
+        .SingleOrDefaultAsync(ct);
 
