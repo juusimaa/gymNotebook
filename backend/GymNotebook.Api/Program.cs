@@ -6,7 +6,6 @@ using GymNotebook.Api;
 using GymNotebook.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -31,11 +30,21 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured.");
 
+// Jwt:Secret signs every token, so it's as sensitive as the database password and
+// lives in the same places (user-secrets locally, a Container Apps secret in Azure).
+// Jwt:ExpiryMinutes isn't sensitive and has a committed default in
+// appsettings.Development.json, so no `?? throw` for it.
 var jwtSecret = builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
 var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
+// Unset or empty means registration is open (see PLAN.md, Configuration), so absence is
+// a valid state and there's no `?? throw` — the deploy checklist, not the code, is what
+// makes sure it's set in Azure.
 var inviteCode = builder.Configuration["INVITE_CODE"];
 
+// The two-argument GetValue returns the fallback when the key is absent, so these
+// defaults are what production runs with. Tests shrink them (RateLimitedGymNotebookFactory)
+// to hit the limit in three requests.
 var rateLimitPermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit", 10);
 var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSeconds", 60);
 
@@ -49,9 +58,15 @@ var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSec
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
 
+// Registers the JWT bearer handler as the default scheme: every endpoint behind
+// .RequireAuthorization() expects an `Authorization: Bearer <token>` header, and a
+// missing or invalid token becomes a 401 with no handler code involved.
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Issuer and audience are never written into the token (see JwtTokenFactory), so
+        // validating them would reject every token. Signature and lifetime are the two
+        // checks that matter: the same secret that signed the token verifies it here.
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = false,
@@ -102,12 +117,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// The services behind .RequireAuthorization(). No named policies: "any authenticated
+// user" is the only rule this API has.
 builder.Services.AddAuthorization();
 
+// One named "auth" policy, applied only to the endpoints that opt in with
+// .RequireRateLimiting("auth") — login and register (see PLAN.md, Rate limiting).
 builder.Services.AddRateLimiter(options =>
 {
+    // The default rejection status is 503, which reads as "server broken"; 429 tells the
+    // caller the problem is them.
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
+    // A fixed window per client IP: each address gets PermitLimit requests per Window,
+    // then is rejected until the window resets. QueueLimit = 0 refuses excess requests
+    // immediately instead of parking them until a permit frees up. Counters live in
+    // process — correct with one replica, and the thing that needs shared state if this
+    // ever scales out.
     options.AddPolicy("auth", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -182,6 +208,9 @@ builder.Services.AddOpenApi(options =>
 // ---------------------------------------------------------------------------------------
 var app = builder.Build();
 
+// `dotnet GymNotebook.Api.dll --migrate`: apply pending migrations and exit without
+// starting the server. entrypoint.sh runs this before the real app, because the runtime
+// image has no SDK for `dotnet ef`. Same MigrateAsync the test fixture calls.
 if (args.Contains("--migrate"))
 {
     using var scope = app.Services.CreateScope();
@@ -198,6 +227,10 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+// Order matters: authentication reads the bearer token into HttpContext.User, then
+// authorization checks that user against each endpoint's requirements. The rate limiter
+// is endpoint-aware (RequireRateLimiting is endpoint metadata), so it must come after
+// routing — which WebApplication adds implicitly ahead of all three of these.
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -227,6 +260,8 @@ app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
    .Produces<HealthResponse>()
    .Produces<HealthResponse>(StatusCodes.Status503ServiceUnavailable);
 
+// Every route mapped on `auth` gets the /auth prefix. A group is also the one place to
+// hang metadata every auth endpoint shares, should any ever be needed.
 var auth = app.MapGroup("/auth");
 
 auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, CancellationToken ct) =>
@@ -282,6 +317,8 @@ auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, Cance
 
 auth.MapPost("/login", async (LoginRequest request, AppDbContext db, CancellationToken ct) =>
 {
+    // Same guard as register. A blank password can never match a hash, so rejecting it
+    // early just saves the DB lookup and the BCrypt round trip.
     if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
     {
         return Results.BadRequest();
@@ -307,6 +344,10 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
    .Produces(StatusCodes.Status401Unauthorized)
    .RequireRateLimiting("auth");
 
+// The smallest possible protected route. ClaimsPrincipal is another parameter Minimal
+// APIs knows how to supply: it's HttpContext.User, already populated by the bearer
+// handler — and already past the token_version check in OnTokenValidated — by the time
+// the handler runs. No AppDbContext needed: everything here comes from the token.
 auth.MapGet("/me", (ClaimsPrincipal user) =>
 {
     var userId = ParseUserId(user);
@@ -319,6 +360,8 @@ auth.MapGet("/me", (ClaimsPrincipal user) =>
    .Produces<MeResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status401Unauthorized);
 
+// Requires a valid token *and* the current password: a stolen token alone shouldn't be
+// enough to change the password and lock the real owner out.
 auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
@@ -329,11 +372,18 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
     var userId = ParseUserId(caller);
     var user = await db.Users.FindAsync([userId], ct);
 
+    // Same 401 as login for a wrong current password. The `user is null` branch is
+    // defensive — OnTokenValidated already rejects tokens for users that no longer exist —
+    // but FindAsync returns a nullable, so the compiler wants it handled either way.
     if (user is null || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
     {
         return Results.Unauthorized();
     }
 
+    // Both changes go out in the one SaveChangesAsync, so either the new hash and the
+    // version bump both land or neither does. The bump is what revokes every token
+    // issued so far (see PLAN.md, Auth section); the fresh token minted below carries the
+    // new version, so the caller who made the change isn't logged out by it.
     user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
     user.TokenVersion++; // invalidate all existing tokens
     await db.SaveChangesAsync(ct);
@@ -352,7 +402,12 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
 
-int ParseUserId(ClaimsPrincipal user)
+// A local function (it can sit after app.Run() because C# hoists local functions) so
+// the protected endpoints share one reading of the "sub" claim. Throwing rather than
+// returning 401 is deliberate: by the time a handler runs, OnTokenValidated has already
+// confirmed "sub" parses, so a failure here is a bug in the pipeline, not a bad request —
+// and a 500 is the right way for a bug to surface rather than being masked as "who are you".
+static int ParseUserId(ClaimsPrincipal user)
 {
     var subClaim = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
     if (!int.TryParse(subClaim, out var userId))

@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GymNotebook.Tests;
 
+// Smoke tests for the fixture itself as much as for /health: a container that starts, a
+// host that boots, a schema that applied. If these fail, nothing else in the suite means much.
 public class HealthTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
@@ -17,6 +19,9 @@ public class HealthTests(GymNotebookFactory factory) : IClassFixture<GymNotebook
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // GetPendingMigrationsAsync compares the migrations compiled into the API assembly
+    // with the __EFMigrationsHistory table. Empty means every one of them applied cleanly
+    // against an empty database — so they all compile and their SQL is valid Postgres.
     [Fact]
     public async Task Migrations_are_applied()
     {
