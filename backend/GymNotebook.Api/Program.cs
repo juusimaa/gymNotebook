@@ -158,6 +158,26 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// One policy for every endpoint, so it's the *default* policy and app.UseCors() below
+// needs no name to keep in sync with this one. WithOrigins is the allow-list from
+// CORS_ORIGINS; the browser compares its Origin header against it exactly, scheme, host
+// and port. AllowAnyHeader and AllowAnyMethod are both needed for the real traffic, not
+// out of laziness: Authorization and Content-Type: application/json are "non-simple"
+// headers, and PATCH/PUT/DELETE are non-simple methods, and each one makes the browser
+// send a preflight OPTIONS that this policy has to answer yes to. No AllowCredentials —
+// that flag is about cookies, and the token travels in the Authorization header, which
+// is just a header as far as CORS is concerned. Adding it would also rule out a wildcard
+// origin later, for nothing.
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins(corsOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Microsoft.AspNetCore.OpenApi inspects the mapped endpoints and their metadata
 // (.WithSummary, .Produces<T> etc. below) and builds the OpenAPI document from them.
 // A document transformer is a hook that edits the finished document before it's served.
