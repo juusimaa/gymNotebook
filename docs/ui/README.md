@@ -16,19 +16,23 @@ Tokens live in the prototype's stylesheet as CSS custom properties: `--color-bg 
 ## Screens
 
 ### 1. Login — `/login`
-Email, password, invite code (labelled optional for existing accounts), one primary action, plus "Create account" and "Change password" links. Backs onto `POST /auth/login` and `POST /auth/register`; the invite code field is only sent on register. A 401 returns here with the email preserved. Rate-limit rejections (429) show an inline message under the button, not a toast.
+Username, password, invite code (labelled optional for existing accounts), one primary action, plus a "Create account" link. Backs onto `POST /auth/login` and `POST /auth/register`; the invite code field is only sent on register. A 401 returns here with the username preserved. Rate-limit rejections (429) show an inline message under the button, not a toast.
+
+It is a *username*, not an email: the API has no email field anywhere (PLAN.md, Auth — no verification, no reset), so the input is plain text with autocapitalisation off. "Change password" is not on this screen — `POST /auth/change-password` needs a bearer token, so it lives on the cover.
 
 ### 2. Cover — `/`
-The page you land on after login. Owner name, volume, year, one "Open the notebook" action, "Sign out" below it. Deliberately carries no data — it is the closed cover of the book, and its job is to make opening the log a decision rather than a dashboard. Sign-out drops the token client-side (per PLAN.md).
+The page you land on after login. Owner name, volume, year, one "Open the notebook" action, "Change password" and "Sign out" below it. Deliberately carries no data — it is the closed cover of the book, and its job is to make opening the log a decision rather than a dashboard. The owner name is `username` from `GET /auth/me`; the year is the current year; the volume numeral is decorative until something backs it. Sign-out drops the token client-side (per PLAN.md).
 
 ### 3. Sessions — `/workouts`
-`GET /workouts?limit=&before=`, newest first, flat — **no date grouping**. Each row: day + month numeral on the left, title, start time, an exercise-name summary and a meta line (`3 exercises · 9 sets · 07:15–08:40`). Two sessions on one date are two adjacent rows distinguished only by their times; the prototype's sample data contains such a pair (8 Sep) and it must survive any list refactor. Sticky primary action at the bottom: "Start a new page".
+`GET /workouts?limit=&before=`, newest first, flat — **no date grouping**. Each row: day + month numeral on the left, title, start time, an exercise-name summary and a meta line (`3 exercises · 9 sets · 07:15–08:40`). Everything on the row comes from the summary itself — `exerciseNames`, `exerciseCount`, `setCount`, `endedAt` — so the list never fetches a page in full to draw it; an unfinished session has a null `endedAt` and the meta line shows the start time alone. "Earlier pages" at the bottom is the `before` cursor. Two sessions on one date are two adjacent rows distinguished only by their times; the prototype's sample data contains such a pair (8 Sep) and it must survive any list refactor. Sticky primary action at the bottom: "Start a new page".
 
 ### 4. Session page — `/workouts/{id}`
-`GET /workouts/{id}`. Heading block: long date kicker, title, then start–end, bodyweight and gym on one meta line; absent optional fields degrade to plain text ("bodyweight not logged"), never to an empty slot. Then one block per `WorkoutExercise` in `position` order, each with its computed best on the right — `e1RM 99 kg`, or `best 8 reps` for `is_bodyweight` exercises. Set rows are `n / load / tag`; warm-up sets are set in `--color-neutral-600` with a "warm-up" tag and are excluded from the best figure. Notes justified at the bottom.
+`GET /workouts/{id}`. Heading block: long date kicker, title, then start–end, bodyweight and gym on one meta line; absent optional fields degrade to plain text ("bodyweight not logged"), never to an empty slot. Then one block per `WorkoutExercise` in `position` order, each with its computed best on the right — `e1RM 99 kg`, or `best 8 reps` when the block's `isBodyweight` is set (it rides on each block in the response; no second lookup against `/exercises`). Set rows are `n / load / tag`; warm-up sets are set in `--color-neutral-600` with a "warm-up" tag and are excluded from the best figure. Notes justified at the bottom.
 
 ### 5. New page — `/workouts/new`
-Heading fields first (date, started, title, bodyweight, gym), then exercise blocks. Each block: name, a kg/bodyweight marker, and set rows of `weight / reps / warm-up toggle`; a bodyweight block hides the weight field unless added weight is entered. "Add set" appends a row; `setNumber` is never sent — the server assigns it. Below the blocks, an autocomplete field backed by `GET /exercises?search=` whose suggestions show the last logged load; picking one appends a block. The whole page commits with one `PUT /workouts/{id}/exercises`. "Finish session" writes `ended_at`.
+Heading fields first (date, started, title, bodyweight, gym), then exercise blocks. Each block: name, a kg/bodyweight marker, and set rows of `weight / reps / warm-up toggle`; a bodyweight block hides the weight field unless added weight is entered. "Add set" appends a row; `setNumber` is never sent — the server assigns it. Below the blocks, an autocomplete field backed by `GET /exercises?search=` whose suggestions show the last logged load (`lastSet` on each result — the last working set of the most recent session, `null` if never logged, rendered as `60 kg × 12` or `9 reps`); picking one appends a block, and its `isBodyweight` sets the block's marker. "Finish session" writes `ended_at`.
+
+How it saves, in API terms: "Start a new page" is `POST /workouts` with `startedAt` = now and the date the user sees, so the page has an id from the first moment; the blocks commit with one `PUT /workouts/{id}/exercises`; heading edits after creation are `PATCH /workouts/{id}`, and "Finish session" is the same PATCH with `endedAt`. Editing an existing session is this same screen prefilled — the PUT replaces the whole block list, so nothing on the client needs block or set ids. `date` is sent as the calendar date the user picked (`2026-09-10`), never derived from `startedAt` — PLAN.md's late-night-session rule.
 
 ## Rules the UI must not break
 
@@ -44,7 +48,7 @@ These are UI-visible consequences of decisions in PLAN.md; each one is a thing a
 
 ## Still open
 
-- Where `is_bodyweight` gets set: the prototype infers it from the exercise and shows the marker read-only. Ask-once-on-create is the option that fits these screens best.
+- Where `is_bodyweight` gets set: the flag now arrives on each block and each autocomplete result, so *showing* it is solved; the prototype still shows the marker read-only. Ask-once-on-create is the option that fits these screens best, and needs no new endpoint — a typed name with no match in `GET /exercises?search=` is new, and `PATCH /exercises/{id}` after the first save sets the flag.
 - Progress view (milestone 8) and the exercise rename/merge screen (milestone 9) are not designed yet.
 - Empty states (no sessions yet, no exercises for autocomplete) and error/offline states are not drawn.
 

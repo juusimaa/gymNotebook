@@ -69,10 +69,21 @@ Current endpoints:
 | `GET` | `/health` | – | 200 when the database answers, 503 otherwise |
 | `POST` | `/auth/register` | – | Needs `inviteCode` when `INVITE_CODE` is set; rate limited |
 | `POST` | `/auth/login` | – | Returns a JWT; rate limited |
-| `GET` | `/auth/me` | Bearer | Smallest protected route |
+| `GET` | `/auth/me` | Bearer | The caller's id and username; proves a token is valid and not revoked |
 | `POST` | `/auth/change-password` | Bearer | Invalidates all previously issued tokens, returns a fresh one |
+| `GET` | `/exercises?search=` | Bearer | Autocomplete, scoped to the caller; each result carries its `lastSet` |
+| `PATCH` | `/exercises/{id}` | Bearer | Rename (merges onto an existing name) and set/clear `isBodyweight` |
+| `GET` | `/workouts?limit=&before=` | Bearer | Pages newest first; rows carry exercise names, counts and end time |
+| `POST` | `/workouts` | Bearer | Creates a page from its heading fields |
+| `GET` | `/workouts/{id}` | Bearer | One page: heading + blocks (with `isBodyweight`) + sets, in order |
+| `PATCH` | `/workouts/{id}` | Bearer | Heading fields, including `endedAt` to finish a session |
+| `DELETE` | `/workouts/{id}` | Bearer | Cascades to blocks and sets |
+| `PUT` | `/workouts/{id}/exercises` | Bearer | Replaces the whole session atomically — the "new page" save |
+| `POST` | `/workouts/{id}/sets` | Bearer | Appends one set; exercise and block are get-or-create by name |
+| `PATCH` | `/workouts/{id}/sets/{setId}` | Bearer | Replaces weight, reps and warm-up flag |
+| `DELETE` | `/workouts/{id}/sets/{setId}` | Bearer | Removes one set |
 
-The workout/exercise/progress endpoints are specified in [PLAN.md → REST API](PLAN.md#rest-api) and arrive with milestone 4.
+Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history`) is specified in [PLAN.md → REST API](PLAN.md#rest-api) and arrives with milestone 8.
 
 ## Configuration
 
