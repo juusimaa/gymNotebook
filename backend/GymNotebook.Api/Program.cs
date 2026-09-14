@@ -42,6 +42,19 @@ var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
 // makes sure it's set in Azure.
 var inviteCode = builder.Configuration["INVITE_CODE"];
 
+// Comma-separated origins the browser may call this API from — the Vite dev server now, the
+// deployed frontend URL later. An origin is scheme + host + port with no trailing slash
+// (http://localhost:5173/ silently matches nothing), and it's localhost even inside Compose:
+// the value is compared against what the browser sends, so Host=db-style service names
+// don't apply. Empty is never a valid state — unlike INVITE_CODE — and Compose turns a missing
+// .env entry into "" rather than absent, so the guard check the split result, not just null.
+var corsOrigins = builder.Configuration["CORS_ORIGINS"]?
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+if (corsOrigins is not { Length: > 0 })
+{
+    throw new InvalidOperationException("CORS_ORIGINS is not configured.");
+}
+
 // The two-argument GetValue returns the fallback when the key is absent, so these
 // defaults are what production runs with. Tests shrink them (RateLimitedGymNotebookFactory)
 // to hit the limit in three requests.
