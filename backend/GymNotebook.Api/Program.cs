@@ -286,7 +286,7 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
 
 auth.MapGet("/me", (ClaimsPrincipal user) =>
 {
-    var userId = int.Parse(user.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+    var userId = ParseUserId(user);
     return Results.Ok(new MeResponse(userId));
 })
    .RequireAuthorization()
@@ -296,6 +296,45 @@ auth.MapGet("/me", (ClaimsPrincipal user) =>
    .Produces<MeResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status401Unauthorized);
 
+auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
+    {
+        return Results.BadRequest();
+    }
+
+    var userId = ParseUserId(caller);
+    var user = await db.Users.FindAsync([userId], ct);
+
+    if (user is null || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+    {
+        return Results.Unauthorized();
+    }
+
+    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+    user.TokenVersion++; // invalidate all existing tokens
+    await db.SaveChangesAsync(ct);
+
+    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
+    return Results.Ok(new AuthResponse(token));
+})
+   .RequireAuthorization()
+   .WithName("ChangePassword")
+   .WithSummary("Changes the authenticated user's password")
+   .WithDescription("Updates the authenticated user's password after verifying the current password.")
+   .Produces<AuthResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status400BadRequest)
+   .Produces(StatusCodes.Status401Unauthorized);
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
+
+int ParseUserId(ClaimsPrincipal user)
+{
+    var subClaim = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+    if (!int.TryParse(subClaim, out var userId))
+    {
+        throw new InvalidOperationException("Authenticated user has no valid sub claim.");
+    }
+    return userId;
+}
