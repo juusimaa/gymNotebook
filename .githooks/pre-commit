@@ -1,6 +1,8 @@
 #!/bin/sh
-# Formats staged C# files with `dotnet format` so every commit has the same look.
-# Rules live in .editorconfig. Enable once per clone:
+# Formats staged files so every commit has the same look: C# with `dotnet format`
+# (rules in .editorconfig), frontend files with Prettier (rules in
+# frontend/.prettierrc; frontend/.prettierignore is why a staged package-lock.json
+# is left alone). Enable once per clone:
 #
 #     git config core.hooksPath .githooks
 #
@@ -9,14 +11,25 @@
 
 set -e
 
-files=$(git diff --cached --name-only --diff-filter=ACMR -- 'backend/*.cs' 'backend/**/*.cs')
-[ -z "$files" ] && exit 0
+cs_files=$(git diff --cached --name-only --diff-filter=ACMR -- 'backend/*.cs' 'backend/**/*.cs')
+if [ -n "$cs_files" ]; then
+  # dotnet format resolves --include paths relative to the solution folder.
+  cd backend
+  # shellcheck disable=SC2046  # word splitting is intended; paths have no spaces
+  dotnet format GymNotebook.sln --verbosity quiet --include $(echo "$cs_files" | sed 's|^backend/||')
+  cd ..
+  # shellcheck disable=SC2086
+  git add $cs_files
+fi
 
-# dotnet format resolves --include paths relative to the solution folder.
-cd backend
-# shellcheck disable=SC2046  # word splitting is intended; paths have no spaces
-dotnet format GymNotebook.sln --verbosity quiet --include $(echo "$files" | sed 's|^backend/||')
-cd ..
-
-# shellcheck disable=SC2086
-git add $files
+# A single 'frontend/*' pathspec matches recursively in git; no '**' needed.
+fe_files=$(git diff --cached --name-only --diff-filter=ACMR -- 'frontend/*')
+if [ -n "$fe_files" ]; then
+  # npx, because outside `npm run` node_modules/.bin isn't on the PATH.
+  # --ignore-unknown: don't fail the commit on a file Prettier has no parser for (an .svg).
+  cd frontend
+    npx prettier --write --ignore-unknown --log-level warn $(echo "$fe_files" | sed 's|^frontend/||')
+  cd ..
+  # shellcheck disable=SC2086
+  git add $fe_files
+fi
