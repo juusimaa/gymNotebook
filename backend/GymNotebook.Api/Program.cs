@@ -260,10 +260,16 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-// Order matters: authentication reads the bearer token into HttpContext.User, then
-// authorization checks that user against each endpoint's requirements. The rate limiter
-// is endpoint-aware (RequireRateLimiting is endpoint metadata), so it must come after
-// routing — which WebApplication adds implicitly ahead of all three of these.
+// Order matters. CORS goes first: a preflight OPTIONS carries no bearer token, and the
+// CORS middleware answers it itself (204) and short-circuits — if authentication ran
+// first, /auth/me's preflight would 401 and the browser would never send the real
+// request. Being ahead of the rate limiter also means preflights to /auth/login don't
+// spend the auth budget. Then authentication reads the bearer token into
+// HttpContext.User, and authorization checks that user against each endpoint's
+// requirements. The rate limiter is endpoint-aware (RequireRateLimiting is endpoint
+// metadata), so it must come after routing — which WebApplication adds implicitly ahead
+// of all four of these.
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
