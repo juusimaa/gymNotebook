@@ -42,6 +42,19 @@ var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
 // makes sure it's set in Azure.
 var inviteCode = builder.Configuration["INVITE_CODE"];
 
+// Comma-separated origins the browser may call this API from — the Vite dev server now, the
+// deployed frontend URL later. An origin is scheme + host + port with no trailing slash
+// (http://localhost:5173/ silently matches nothing), and it's localhost even inside Compose:
+// the value is compared against what the browser sends, so Host=db-style service names
+// don't apply. Empty is never a valid state — unlike INVITE_CODE — and Compose turns a missing
+// .env entry into "" rather than absent, so the guard check the split result, not just null.
+var corsOrigins = builder.Configuration["CORS_ORIGINS"]?
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+if (corsOrigins is not { Length: > 0 })
+{
+    throw new InvalidOperationException("CORS_ORIGINS is not configured.");
+}
+
 // The two-argument GetValue returns the fallback when the key is absent, so these
 // defaults are what production runs with. Tests shrink them (RateLimitedGymNotebookFactory)
 // to hit the limit in three requests.
@@ -145,6 +158,26 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// One policy for every endpoint, so it's the *default* policy and app.UseCors() below
+// needs no name to keep in sync with this one. WithOrigins is the allow-list from
+// CORS_ORIGINS; the browser compares its Origin header against it exactly, scheme, host
+// and port. AllowAnyHeader and AllowAnyMethod are both needed for the real traffic, not
+// out of laziness: Authorization and Content-Type: application/json are "non-simple"
+// headers, and PATCH/PUT/DELETE are non-simple methods, and each one makes the browser
+// send a preflight OPTIONS that this policy has to answer yes to. No AllowCredentials —
+// that flag is about cookies, and the token travels in the Authorization header, which
+// is just a header as far as CORS is concerned. Adding it would also rule out a wildcard
+// origin later, for nothing.
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins(corsOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Microsoft.AspNetCore.OpenApi inspects the mapped endpoints and their metadata
 // (.WithSummary, .Produces<T> etc. below) and builds the OpenAPI document from them.
 // A document transformer is a hook that edits the finished document before it's served.
@@ -227,10 +260,16 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-// Order matters: authentication reads the bearer token into HttpContext.User, then
-// authorization checks that user against each endpoint's requirements. The rate limiter
-// is endpoint-aware (RequireRateLimiting is endpoint metadata), so it must come after
-// routing — which WebApplication adds implicitly ahead of all three of these.
+// Order matters. CORS goes first: a preflight OPTIONS carries no bearer token, and the
+// CORS middleware answers it itself (204) and short-circuits — if authentication ran
+// first, /auth/me's preflight would 401 and the browser would never send the real
+// request. Being ahead of the rate limiter also means preflights to /auth/login don't
+// spend the auth budget. Then authentication reads the bearer token into
+// HttpContext.User, and authorization checks that user against each endpoint's
+// requirements. The rate limiter is endpoint-aware (RequireRateLimiting is endpoint
+// metadata), so it must come after routing — which WebApplication adds implicitly ahead
+// of all four of these.
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
