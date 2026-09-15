@@ -29,7 +29,9 @@ export function formatWorkoutTime(
   timestamp: string,
   timeZone?: string,
 ): string {
-  return new Intl.DateTimeFormat('en-GB', {
+  // English UI copy with Finland's local time convention: a 24-hour clock and
+  // a full stop separator (for example, 07.15).
+  return new Intl.DateTimeFormat('en-FI', {
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
