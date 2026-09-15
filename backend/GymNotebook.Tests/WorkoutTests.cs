@@ -47,7 +47,9 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
         DateTimeOffset startedAt,
         string? title = null,
         string? location = null,
-        decimal? bodyweightKg = null)
+        decimal? bodyweightKg = null,
+        string? notes = null,
+        DateTimeOffset? endedAt = null)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -59,6 +61,8 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
             Title = title,
             Location = location,
             BodyweightKg = bodyweightKg,
+            Notes = notes,
+            EndedAt = endedAt,
         };
         db.Workouts.Add(workout);
         await db.SaveChangesAsync();
@@ -211,7 +215,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
         var empty = await SeedWorkoutAsync(userId, new DateOnly(2026, 1, 2), new DateTimeOffset(2026, 1, 2, 7, 0, 0, TimeSpan.Zero));
         var endedAt = new DateTimeOffset(2026, 1, 1, 9, 25, 0, TimeSpan.Zero);
         await _client.SendAsync(AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", token,
-            new UpdateWorkoutRequest(null, null, endedAt, null, null, null, null)));
+            new { endedAt }));
 
         var response = await _client.SendAsync(AuthenticatedRequest(HttpMethod.Get, "/workouts", token));
         var body = await response.Content.ReadFromJsonAsync<List<WorkoutSummaryResponse>>();
@@ -338,7 +342,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
     {
         var response = await _client.PatchAsync(
             "/workouts/1",
-            JsonContent.Create(new UpdateWorkoutRequest(null, null, null, "Whatever", null, null, null)));
+            JsonContent.Create(new { title = "Whatever" }));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -352,7 +356,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
 
         var response = await _client.SendAsync(
             AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", tokenB,
-                new UpdateWorkoutRequest(null, null, null, "Hijacked", null, null, null)));
+                new { title = "Hijacked" }));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -365,7 +369,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
 
         var response = await _client.SendAsync(
             AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", token,
-                new UpdateWorkoutRequest(null, null, null, "Updated", null, null, null)));
+                new { title = "Updated" }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
@@ -382,11 +386,65 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
 
         var response = await _client.SendAsync(
             AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", token,
-                new UpdateWorkoutRequest(null, null, endedAt, null, null, null, null)));
+                new { endedAt }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
         Assert.Equal(endedAt, body!.EndedAt);
+    }
+
+    [Fact]
+    public async Task Update_with_explicit_null_clears_nullable_fields()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var originalDate = new DateOnly(2026, 1, 1);
+        var originalStartedAt = new DateTimeOffset(2026, 1, 1, 8, 0, 0, TimeSpan.Zero);
+        var workout = await SeedWorkoutAsync(
+            userId,
+            originalDate,
+            originalStartedAt,
+            title: "Leg day",
+            location: "Gym A",
+            bodyweightKg: 78.4m,
+            notes: "Heavy session",
+            endedAt: new DateTimeOffset(2026, 1, 1, 9, 15, 0, TimeSpan.Zero));
+
+        var response = await _client.SendAsync(
+            AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", token,
+                new
+                {
+                    endedAt = (DateTimeOffset?)null,
+                    title = (string?)null,
+                    bodyweightKg = (decimal?)null,
+                    location = (string?)null,
+                    notes = (string?)null,
+                }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
+        Assert.Equal(originalDate, body!.Date);
+        Assert.Equal(originalStartedAt, body.StartedAt);
+        Assert.Null(body.EndedAt);
+        Assert.Null(body.Title);
+        Assert.Null(body.BodyweightKg);
+        Assert.Null(body.Location);
+        Assert.Null(body.Notes);
+    }
+
+    [Fact]
+    public async Task Update_with_null_required_field_returns_bad_request()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var workout = await SeedWorkoutAsync(
+            userId,
+            new DateOnly(2026, 1, 1),
+            new DateTimeOffset(2026, 1, 1, 8, 0, 0, TimeSpan.Zero));
+
+        var response = await _client.SendAsync(
+            AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", token,
+                new { date = (DateOnly?)null }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

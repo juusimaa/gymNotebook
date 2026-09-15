@@ -665,37 +665,46 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
         return Results.NotFound();
     }
 
-    if (request.Date.HasValue)
+    // Date and StartedAt are required on a Workout, so an explicit JSON null is a
+    // malformed update. Omitted properties remain unchanged; nullable properties
+    // below deliberately accept explicit null so the client can clear them.
+    if ((request.HasDate && !request.Date.HasValue) ||
+        (request.HasStartedAt && !request.StartedAt.HasValue))
     {
-        workout.Date = request.Date.Value;
+        return Results.BadRequest();
     }
 
-    if (request.StartedAt.HasValue)
+    if (request.HasDate)
     {
-        workout.StartedAt = request.StartedAt.Value;
+        workout.Date = request.Date!.Value;
     }
 
-    if (request.EndedAt.HasValue)
+    if (request.HasStartedAt)
     {
-        workout.EndedAt = request.EndedAt.Value;
+        workout.StartedAt = request.StartedAt!.Value;
     }
 
-    if (request.Title is not null)
+    if (request.HasEndedAt)
+    {
+        workout.EndedAt = request.EndedAt;
+    }
+
+    if (request.HasTitle)
     {
         workout.Title = request.Title;
     }
 
-    if (request.BodyweightKg.HasValue)
+    if (request.HasBodyweightKg)
     {
-        workout.BodyweightKg = request.BodyweightKg.Value;
+        workout.BodyweightKg = request.BodyweightKg;
     }
 
-    if (request.Location is not null)
+    if (request.HasLocation)
     {
         workout.Location = request.Location;
     }
 
-    if (request.Notes is not null)
+    if (request.HasNotes)
     {
         workout.Notes = request.Notes;
     }
@@ -710,8 +719,9 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 })
     .WithName("UpdateWorkout")
     .WithSummary("Updates an existing workout")
-    .WithDescription("Modifies the details of an existing workout. Only the owner can update their workouts.")
+    .WithDescription("Modifies only the supplied workout fields. Explicit null clears nullable fields; date and startedAt cannot be null. Only the owner can update their workouts.")
     .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status400BadRequest)
     .Produces(StatusCodes.Status404NotFound);
 
 workouts.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
@@ -1133,4 +1143,3 @@ static async Task<SetEntry?> FindSetInWorkoutAsync(AppDbContext db, int workoutI
         .Where(se => se.Id == setId)
         .Where(se => db.WorkoutExercises.Any(we => we.Id == se.WorkoutExerciseId && we.WorkoutId == workoutId))
         .SingleOrDefaultAsync(ct);
-
