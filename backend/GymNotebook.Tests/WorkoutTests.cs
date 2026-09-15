@@ -161,6 +161,26 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
     }
 
     [Fact]
+    public async Task Create_with_non_utc_started_at_normalizes_the_instant_and_preserves_the_local_date()
+    {
+        var (token, _) = await RegisterAndGetUserAsync();
+        var localDate = new DateOnly(2026, 9, 15);
+        // 00.30 in Helsinki falls on the previous UTC calendar day. The separate
+        // workout date must remain the date the lifter chose for the notebook page.
+        var localStartedAt = new DateTimeOffset(2026, 9, 15, 0, 30, 0, TimeSpan.FromHours(3));
+        var expectedUtc = new DateTimeOffset(2026, 9, 14, 21, 30, 0, TimeSpan.Zero);
+        var request = new CreateWorkoutRequest(localDate, localStartedAt, null, null, null, null);
+
+        var response = await _client.SendAsync(AuthenticatedRequest(HttpMethod.Post, "/workouts", token, request));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
+        Assert.Equal(localDate, body!.Date);
+        Assert.Equal(expectedUtc, body.StartedAt);
+        Assert.Equal(TimeSpan.Zero, body.StartedAt.Offset);
+    }
+
+    [Fact]
     public async Task List_without_a_token_returns_unauthorized()
     {
         var response = await _client.GetAsync("/workouts");
@@ -391,6 +411,31 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
         Assert.Equal(endedAt, body!.EndedAt);
+    }
+
+    [Fact]
+    public async Task Update_with_non_utc_timestamps_normalizes_both_instants()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var localDate = new DateOnly(2026, 9, 15);
+        var workout = await SeedWorkoutAsync(
+            userId,
+            localDate,
+            new DateTimeOffset(2026, 9, 15, 8, 0, 0, TimeSpan.Zero));
+        var localStartedAt = new DateTimeOffset(2026, 9, 15, 0, 30, 0, TimeSpan.FromHours(3));
+        var localEndedAt = new DateTimeOffset(2026, 9, 15, 1, 45, 0, TimeSpan.FromHours(3));
+
+        var response = await _client.SendAsync(
+            AuthenticatedRequest(HttpMethod.Patch, $"/workouts/{workout.Id}", token,
+                new { startedAt = localStartedAt, endedAt = localEndedAt }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
+        Assert.Equal(localDate, body!.Date);
+        Assert.Equal(new DateTimeOffset(2026, 9, 14, 21, 30, 0, TimeSpan.Zero), body.StartedAt);
+        Assert.Equal(TimeSpan.Zero, body.StartedAt.Offset);
+        Assert.Equal(new DateTimeOffset(2026, 9, 14, 22, 45, 0, TimeSpan.Zero), body.EndedAt);
+        Assert.Equal(TimeSpan.Zero, body.EndedAt!.Value.Offset);
     }
 
     [Fact]
