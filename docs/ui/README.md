@@ -22,7 +22,7 @@ Email, password, invite code (labelled optional for existing accounts), one prim
 The page you land on after login; the owner name comes from `GET /auth/me`. Volume, year, one "Open the notebook" action, "Sign out" below it. Deliberately carries no data — it is the closed cover of the book, and its job is to make opening the log a decision rather than a dashboard. Sign-out drops the token client-side.
 
 ### 3. Sessions — `/workouts`
-`GET /workouts?limit=&before=`, newest first, flat — **no date grouping**. Each row: day + month numeral on the left, title, start time, an exercise-name summary and a meta line (`3 exercises · 9 sets · 07:15–08:40`) — all of it from `exerciseNames`, `exerciseCount`, `setCount` and `endedAt` on the row, so the list is one request. Two sessions on one date are two adjacent rows distinguished only by their times; the prototype's sample data contains such a pair (8 Sep) and it must survive any list refactor. Header links to Progress, Exercises and the cover; sticky primary action at the bottom: "Start a new page".
+`GET /workouts?limit=&before=`, newest first, flat — **no date grouping**. Each row: day + month numeral on the left, title, start time, an exercise-name summary and a meta line (`3 exercises · 9 sets · 07.15–08.40`) — all of it from `exerciseNames`, `exerciseCount`, `setCount` and `endedAt` on the row, so the list is one request. Two sessions on one date are two adjacent rows distinguished only by their times; the prototype's sample data contains such a pair (8 Sep) and it must survive any list refactor. Header links to Progress, Exercises and the cover; sticky primary action at the bottom: "Start a new page".
 
 ### 4. Session page — `/workouts/{id}`
 `GET /workouts/{id}`. Heading block: long date kicker, title, then start–end, bodyweight and gym on one meta line; absent optional fields degrade to plain text ("bodyweight not logged"), never to an empty slot. Then one block per `WorkoutExercise` in `position` order, each with its computed best on the right — `e1RM 99 kg`, or `best 8 reps` when the block's `isBodyweight` is set. Set rows are `n / load / tag`; warm-up sets are set in `--color-neutral-600` with a "warm-up" tag and are excluded from the best figure. Notes justified at the bottom.
@@ -72,6 +72,7 @@ These are UI-visible consequences of decisions in PLAN.md; each one is a thing a
 8. Destructive actions name what they destroy: a page delete says the sets go with it, a merge says how many sessions move.
 9. There is no "create exercise" action — names arrive by being typed into autocomplete.
 10. Hit targets ≥ 44px — this is used standing at a rack, one-handed.
+11. Times use Finland's 24-hour `HH.mm` convention (`07.15`), even though the interface language is English.
 
 ## Implementation notes
 

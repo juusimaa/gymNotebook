@@ -26,7 +26,7 @@ A paper training log is organized by session, then by exercise, then by set:
 
 ```
 Date: 2026-09-10        Leg day
-Started 07:15, finished 08:40
+Started 07.15, finished 08.40
 Bodyweight 78.4 kg      Gym: Liikuntamylly
 
 Back Squat
@@ -66,7 +66,7 @@ SetEntry        (id, workout_exercise_id, set_number, weight?, reps, is_warmup)
 - `weight` is `numeric(6, 2)` kilograms — nullable, per the point above. No unit column: kg is what the author trains in, and plate math runs in 1.25 kg steps. If lb support is ever wanted, it arrives as a display-layer preference on `User` over a canonical kg column, which is a cheap migration precisely because every existing row is already kg.
 - `is_warmup` flags sets that shouldn't count toward the progress metric (see below).
 - **A `Workout` row is one page, so `date` is deliberately not unique per user.** Two sessions on the same Tuesday are two rows, ordered by `started_at`. The progress chart's "per session" therefore means "per workout row", and a hard morning session isn't averaged into an easy evening one.
-- **`date` is kept as its own column even though `started_at` contains it**, which looks redundant and isn't. `started_at` is a `timestamptz` — an instant — and the page's date is a *local calendar date*, the one the lifter would write at the top. Those come apart at the edges of the day: a session started 00:30 in Helsinki is 21:30 the previous day in UTC, so deriving the date from the instant would file late-night training on the wrong page and quietly shift points on the progress chart. Storing the date the user means, alongside the instant the session began, keeps both honest.
+- **`date` is kept as its own column even though `started_at` contains it**, which looks redundant and isn't. `started_at` is a `timestamptz` — an instant — and the page's date is a *local calendar date*, the one the lifter would write at the top. Those come apart at the edges of the day: a session started 00.30 in Helsinki is 21.30 the previous day in UTC, so deriving the date from the instant would file late-night training on the wrong page and quietly shift points on the progress chart. Storing the date the user means, alongside the instant the session began, keeps both honest.
 - **`ended_at` is nullable and duration is derived, not stored.** You will regularly forget to close a session out; a required field that can't be filled is worse than an absent one, and a stored duration would be a second source of truth to keep in sync with the two timestamps that already imply it.
 - **`title`, `location` and `bodyweight_kg` are all optional page-heading fields.** `title` is the session label ("Push A", "Week 3 Day 2") and is what makes a history list scannable — a column of bare dates is not. `bodyweight_kg` is `numeric(5, 2)`, same kg-only reasoning as set weight, and earns its place beyond habit: bodyweight exercises chart by reps, and a logged bodyweight is what would later let an unloaded pull-up and a +10kg one be compared honestly. `location` is free text for now rather than its own table — if it ever wants autocomplete, `Exercise` is the pattern to copy.
 - Deletes cascade **workout → blocks → sets**: a workout is the unit the user thinks in, and its sets are meaningless without it. Deleting an `Exercise` that still has sets is **refused** rather than cascaded — a stray autocomplete entry is a rename, not a reason to silently destroy training history. Renaming onto an existing name merges the two instead (see the API below).
@@ -158,6 +158,8 @@ Password *reset* and email verification are not in this plan, and neither is any
 ## Frontend
 
 The visual design lives in [`docs/ui/`](docs/ui/README.md): a written spec (`README.md`) plus a self-contained clickable prototype (`prototype.html`, no build step — open it in a browser) covering login, cover, session list, session page and new page. It records the design tokens, the phone-first layout, the component-library decision (none — hand-written CSS against the tokens) and the list of UI-visible rules that follow from this plan. Milestones 5, 7 and 9 build against it; the spec and prototype are updated in the same PR as any screen change so they can't drift. This section describes what each screen must *do*; the spec describes how it looks.
+
+The interface copy is English, but displayed times follow the app's Finnish context: a 24-hour clock with the `HH.mm` convention (for example, `07.15`). The browser's local timezone determines the hour; the locale fixes its presentation.
 
 - Login / register screen.
 - "New workout" page: a heading block (date, start time defaulting to now, optional title, bodyweight, location, notes) + a growable list of exercise blocks, each with an autocomplete input (backed by `GET /exercises?search=`) and a dynamic list of set rows (weight, reps, warm-up toggle, add/remove). The whole page saves as a single `PUT /workouts/{id}/exercises`. A block whose exercise is marked bodyweight hides the weight field unless the user opts into added weight.
