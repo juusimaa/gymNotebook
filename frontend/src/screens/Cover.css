@@ -1,0 +1,74 @@
+.cover {
+  position: relative;
+  text-align: center;
+}
+
+/* The two nested hairlines that make the page read as a closed cover. */
+.cover-frame {
+  position: absolute;
+  inset: 16px;
+  border: 1px solid var(--color-divider);
+  border-radius: 22px;
+  pointer-events: none;
+}
+.cover-frame-inner {
+  inset: 23px;
+  border-color: var(--color-accent);
+  border-radius: 18px;
+  opacity: 0.45;
+}
+
+.cover-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Display weight, not the 600 base.css gives interface headings. */
+.cover-title {
+  font-weight: 400;
+  font-size: 52px;
+  line-height: 1.04;
+  margin: var(--space-4) 0 0;
+}
+
+.cover-ornament {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 20px;
+}
+.cover-ornament-rule {
+  width: 34px;
+  height: 1px;
+  background: var(--color-accent);
+}
+.cover-ornament-diamond {
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--color-accent);
+  transform: rotate(45deg);
+}
+
+.cover-owner {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  margin: 0;
+}
+.cover-volume {
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  margin: var(--space-2) 0 0;
+}
+
+.cover-actions {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: var(--space-4);
+  font-size: 13px;
+}

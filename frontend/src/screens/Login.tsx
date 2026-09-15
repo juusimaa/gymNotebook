@@ -68,7 +68,7 @@ export default function Login() {
           no-floating-promises lint rule the promise is deliberately not awaited:
           the handler can't be async itself, React ignores what it returns. */}
       <form
-        className="login-form"
+        className="form-stack"
         onSubmit={(e) => {
           e.preventDefault()
           void submit('login')
