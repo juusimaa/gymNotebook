@@ -25,6 +25,16 @@ export interface AuthResponse {
   token: string
 }
 
+export interface MeResponse {
+  userId: number
+  username: string
+}
+
+interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
 // Both resolve to the token or throw: ApiError for 400/401/403/409/429 (mapped to
 // prose by describeAuthError), fetch's own TypeError when the API is unreachable.
 // Storing the token is the caller's job — these are transport only, so a test or
@@ -36,4 +46,23 @@ export function login(body: LoginRequest): Promise<AuthResponse> {
 
 export function register(body: RegisterRequest): Promise<AuthResponse> {
   return request<AuthResponse>('/auth/register', { method: 'POST', body })
+}
+
+// No options: GET, no body, so no Content-Type — the cheapest authenticated
+// request there is, which is what the route guard wants since it runs on every
+// navigation.
+export function me(): Promise<MeResponse> {
+  return request<MeResponse>('/auth/me')
+}
+
+// The backend bumps token_version and returns a fresh token; the caller must
+// store it before navigating anywhere, or the guard's next /auth/me is a 401.
+
+export function changePassword(
+  body: ChangePasswordRequest,
+): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/change-password', {
+    method: 'POST',
+    body,
+  })
 }

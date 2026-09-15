@@ -211,6 +211,14 @@ textarea.input {
   resize: vertical;
 }
 
+/* A form's fields and buttons as one vertical stack. Shared by every screen
+   with a form, which is why it's here and not in a screen's own stylesheet. */
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 /* Inline message under a form — errors, rate-limit notices. Prose, not a
    toast (spec, Login: "Rate-limit rejections show an inline message under the
    button, not a toast"). */

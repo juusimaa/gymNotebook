@@ -150,7 +150,7 @@ PLAN.md                design, decisions and milestone log
 
 ## Status
 
-Milestones 1–4 (backend skeleton, containerization, auth, core domain) are done; the API is complete for everything the first screens need. Milestone 5, the frontend skeleton, is in progress: the Vite project, design tokens, CORS and the login screen are in, with the cover and the frontend container to follow. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestones 1–4 (backend skeleton, containerization, auth, core domain) are done; the API is complete for everything the first screens need. Milestone 5, the frontend skeleton, is in progress: the Vite project, design tokens, CORS, the login screen and the cover (with the route guard, sign-out and change-password) are in, with only the frontend container to follow. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 
