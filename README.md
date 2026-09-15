@@ -62,7 +62,7 @@ npm install
 npm run dev
 ```
 
-Vite serves the app on <http://localhost:5173> with hot reload. The frontend is not in the Compose stack yet and does not call the API yet — both arrive with the rest of milestone 5 (see [PLAN.md → Milestones](PLAN.md#milestones)).
+Vite serves the app on <http://localhost:5173> with hot reload. It reads `VITE_API_URL` from the root `.env` (the same file Compose uses — `vite.config.ts` points `envDir` there) and calls the backend at that address, so start the backend first, by either route above. The frontend is not in the Compose stack yet — that arrives with the rest of milestone 5 (see [PLAN.md → Milestones](PLAN.md#milestones)).
 
 ## API documentation
 
@@ -150,7 +150,7 @@ PLAN.md                design, decisions and milestone log
 
 ## Status
 
-Milestones 1–4 (backend skeleton, containerization, auth, core domain) are done; the API is complete for everything the first screens need. Milestone 5, the frontend skeleton, is in progress: the Vite project, design tokens and CORS are in, with the login screen, the cover and the frontend container to follow. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestones 1–4 (backend skeleton, containerization, auth, core domain) are done; the API is complete for everything the first screens need. Milestone 5, the frontend skeleton, is in progress: the Vite project, design tokens, CORS and the login screen are in, with the cover and the frontend container to follow. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 
