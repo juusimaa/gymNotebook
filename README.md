@@ -155,7 +155,7 @@ PLAN.md                design, decisions and milestone log
 
 ## Status
 
-Milestones 1–4 (backend skeleton, containerization, auth, core domain) are done; the API is complete for everything the first screens need. Milestone 5, the frontend skeleton, is done: Vite + React + TypeScript with the design tokens, CORS, login/register, the cover with a route guard, sign-out and change-password, and the frontend in Compose. Next is milestone 6, publishing both images to GHCR. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestones 1–6 are done. The backend and frontend are containerized and the CI/CD pipeline publishes images to GHCR on every push to `main`. Next is milestone 7: log a workout end-to-end — the "new workout" page with exercise autocomplete, sets, and session save. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 
