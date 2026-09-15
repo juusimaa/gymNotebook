@@ -127,6 +127,17 @@
   font-size: 12px;
 }
 
+.sessions-earlier {
+  width: 100%;
+  margin-top: var(--space-4);
+  font-size: 13px;
+}
+
+.sessions-earlier-message {
+  margin: var(--space-2) 0 0;
+  text-align: center;
+}
+
 .sessions-empty {
   max-width: 28ch;
   margin: var(--space-8) auto 0;

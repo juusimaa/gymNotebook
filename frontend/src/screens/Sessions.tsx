@@ -8,6 +8,8 @@ import {
 } from './workoutFormat'
 import './Sessions.css'
 
+const PAGE_SIZE = 20
+
 export default function Sessions() {
   // `null` is the loading sentinel. Once the request succeeds this becomes an
   // array, including an empty array when the user has not logged a session yet.
@@ -20,6 +22,9 @@ export default function Sessions() {
   // Incrementing this value retries the first-page request. Keeping the retry
   // trigger as state lets the effect retain ownership of its cancellation flag.
   const [loadAttempt, setLoadAttempt] = useState(0)
+  const [hasEarlierPages, setHasEarlierPages] = useState(false)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const [earlierMessage, setEarlierMessage] = useState<string | null>(null)
 
   // Effects cannot themselves be async because their return value is reserved
   // for cleanup, so the request lives in an inner function and is launched below.
@@ -30,13 +35,14 @@ export default function Sessions() {
       setMessage(null)
 
       try {
-        const response = await listWorkouts(20)
+        const response = await listWorkouts(PAGE_SIZE)
 
         // React Strict Mode mounts effects twice in development, and navigation
         // may unmount this screen while fetch is pending. Ignore either stale
         // response rather than updating a component that is no longer current.
         if (!cancelled) {
           setWorkouts(response)
+          setHasEarlierPages(response.length === PAGE_SIZE)
         }
       } catch {
         if (!cancelled) {
@@ -58,6 +64,40 @@ export default function Sessions() {
     setWorkouts(null)
     setMessage(null)
     setLoadAttempt((attempt) => attempt + 1)
+  }
+
+  async function loadEarlier() {
+    // Do not start another request while the current page is already loading.
+    if (workouts === null || loadingEarlier) {
+      return
+    }
+
+    const lastWorkout = workouts.at(-1)
+
+    if (lastWorkout === undefined) {
+      return
+    }
+
+    setLoadingEarlier(true)
+    setEarlierMessage(null)
+
+    try {
+      // The final displayed id is the keyset cursor: the API returns workouts
+      // ordered immediately before that row rather than using a page number.
+      const response = await listWorkouts(PAGE_SIZE, lastWorkout.id)
+
+      // Never mutate the existing array with push. A new array reference tells
+      // React that state changed and preserves all pages already on screen.
+      setWorkouts((current) =>
+        current === null ? response : [...current, ...response],
+      )
+      setHasEarlierPages(response.length === PAGE_SIZE)
+    } catch {
+      // Keep the workouts already loaded; only the request for older rows failed.
+      setEarlierMessage('Earlier pages could not be loaded. Please try again.')
+    } finally {
+      setLoadingEarlier(false)
+    }
   }
 
   // Failures are announced by assistive technology when they appear. Keeping
@@ -146,6 +186,23 @@ export default function Sessions() {
               </Link>
             )
           })
+        )}
+        {hasEarlierPages && workouts.length > 0 && (
+          <button
+            className="btn btn-ghost sessions-earlier"
+            type="button"
+            disabled={loadingEarlier}
+            aria-busy={loadingEarlier}
+            onClick={() => void loadEarlier()}
+          >
+            {loadingEarlier ? 'Opening earlier pages…' : 'Earlier pages'}
+          </button>
+        )}
+
+        {earlierMessage !== null && (
+          <p className="form-message sessions-earlier-message" role="alert">
+            {earlierMessage}
+          </p>
         )}
       </div>
 
