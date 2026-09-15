@@ -6,6 +6,7 @@ import {
   formatWorkoutDate,
   formatWorkoutTime,
 } from './workoutFormat'
+import './Sessions.css'
 
 export default function Sessions() {
   // `null` is the loading sentinel. Once the request succeeds this becomes an

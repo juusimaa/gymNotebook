@@ -1,0 +1,163 @@
+/* Sessions is the open-notebook view, so its header and rows run to the edge
+   of the page column while retaining the prototype's 22px inner gutter. */
+.sessions {
+  position: relative;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.sessions-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 20px 22px 12px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.sessions-header .kicker {
+  margin: 0;
+}
+
+.sessions-header h1 {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.1;
+}
+
+.sessions-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 14px;
+  font-size: 13px;
+}
+
+.sessions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 22px 96px;
+}
+
+/* The date remains a separate fixed-width column so titles and metadata align
+   even when adjacent sessions share the same calendar date. */
+.session-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 14px;
+  min-height: var(--hit-target);
+  padding: 16px 0;
+  color: var(--color-text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.session-row:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.session-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.session-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.session-day {
+  font-family: var(--font-heading);
+  font-size: 23px;
+  line-height: 1;
+}
+
+.session-month {
+  margin-top: 4px;
+  color: var(--color-neutral-600);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.session-content {
+  min-width: 0;
+}
+
+.session-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.session-heading h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 19px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-time {
+  flex: none;
+  color: var(--color-neutral-600);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.session-exercises {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--color-neutral-700);
+  font-size: 13px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-meta {
+  margin: 5px 0 0;
+  color: var(--color-neutral-600);
+  font-size: 12px;
+}
+
+.sessions-empty {
+  max-width: 28ch;
+  margin: var(--space-8) auto 0;
+  color: var(--color-neutral-700);
+  text-align: center;
+}
+
+/* The rows scroll inside the page above, so this action stays aligned to the
+   centred column and remains reachable without covering the final row. */
+.sessions-action {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 14px 22px 22px;
+  background: linear-gradient(to top, var(--color-bg) 62%, transparent);
+}
+
+.sessions-action .btn {
+  min-height: 48px;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 360px) {
+  .sessions-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sessions-nav {
+    justify-content: flex-start;
+  }
+}
