@@ -551,7 +551,10 @@ workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal calle
     {
         UserId = userId,
         Date = request.Date,
-        StartedAt = request.StartedAt,
+        // PostgreSQL timestamptz stores an instant rather than its original offset,
+        // and Npgsql requires DateTimeOffset values to have offset zero. Accept any
+        // valid offset at the HTTP boundary, then normalize it before persistence.
+        StartedAt = request.StartedAt.ToUniversalTime(),
         Title = request.Title,
         BodyweightKg = request.BodyweightKg,
         Location = request.Location,
@@ -681,12 +684,14 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 
     if (request.HasStartedAt)
     {
-        workout.StartedAt = request.StartedAt!.Value;
+        workout.StartedAt = request.StartedAt!.Value.ToUniversalTime();
     }
 
     if (request.HasEndedAt)
     {
-        workout.EndedAt = request.EndedAt;
+        // Preserve explicit null (clear the end time), but normalize a supplied
+        // instant for the same PostgreSQL timestamptz requirement as StartedAt.
+        workout.EndedAt = request.EndedAt?.ToUniversalTime();
     }
 
     if (request.HasTitle)
