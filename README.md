@@ -26,15 +26,16 @@ This is a learning project — the goal is to write a full-stack app in C# by ha
 
 ## Running it
 
-### With Docker Compose (backend + Postgres)
+### With Docker Compose (frontend + backend + Postgres)
 
 ```sh
 cp .env.example .env        # then set Jwt__Secret to something generated, e.g. `openssl rand -base64 48`
 docker compose up --build
 curl http://localhost:8080/health
+open http://localhost:3000
 ```
 
-The backend container applies pending migrations on start (`entrypoint.sh`), so a fresh database is ready without any manual step. Data lives in the `db_data` named volume and survives `docker compose down`.
+The backend container applies pending migrations on start (`entrypoint.sh`), so a fresh database is ready without any manual step. Data lives in the `db_data` named volume and survives `docker compose down`. The frontend container is the production build served by nginx on <http://localhost:3000>, with `try_files` sending every route to `index.html` so a direct load of `/login` works; `VITE_API_URL` is baked in at image build time (Compose passes it as a build arg from `.env`), which is why `--build` is needed after changing it — milestone 6 replaces that with a runtime setting.
 
 ### From the SDK (for development and the API docs)
 
@@ -62,7 +63,7 @@ npm install
 npm run dev
 ```
 
-Vite serves the app on <http://localhost:5173> with hot reload. It reads `VITE_API_URL` from the root `.env` (the same file Compose uses — `vite.config.ts` points `envDir` there) and calls the backend at that address, so start the backend first, by either route above. The frontend is not in the Compose stack yet — that arrives with the rest of milestone 5 (see [PLAN.md → Milestones](PLAN.md#milestones)).
+Vite serves the app on <http://localhost:5173> with hot reload. It reads `VITE_API_URL` from the root `.env` (the same file Compose uses — `vite.config.ts` points `envDir` there) and calls the backend at that address, so start the backend first, by either route above. Both origins — `:5173` for this and `:3000` for the container — are in `CORS_ORIGINS`, so the two can run side by side.
 
 ## API documentation
 
@@ -138,19 +139,23 @@ backend/
   Dockerfile           multi-stage: SDK image publishes, slim aspnet image runs
   entrypoint.sh        applies migrations, then starts the app
 frontend/
+  src/api/             client.ts (the one fetch wrapper) + auth.ts (wire types and calls)
+  src/auth/            token.ts (where the JWT lives) + requireAuth.ts (route-guard loader)
+  src/screens/         Login, Cover, ChangePassword — one .tsx (+ .css) per screen
   src/styles/          tokens.css (design tokens lifted from the prototype) + base.css
-  src/                 React app — main.tsx, App.tsx, screens to come
+  src/routes.tsx       route table; main.tsx mounts the RouterProvider
+  Dockerfile           multi-stage: node builds, nginx serves dist/ (nginx.conf: SPA fallback)
   eslint.config.js     typescript-eslint (type-checked) + react-hooks + prettier
 docs/ui/               UI specification and a clickable HTML prototype
 .github/workflows/     test.yml — backend and frontend jobs: format checks + tests
 .githooks/             pre-commit formatter (dotnet format + prettier)
-docker-compose.yml     backend + postgres for local dev
+docker-compose.yml     frontend + backend + postgres for local dev
 PLAN.md                design, decisions and milestone log
 ```
 
 ## Status
 
-Milestones 1–4 (backend skeleton, containerization, auth, core domain) are done; the API is complete for everything the first screens need. Milestone 5, the frontend skeleton, is in progress: the Vite project, design tokens, CORS, the login screen and the cover (with the route guard, sign-out and change-password) are in, with only the frontend container to follow. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestones 1–4 (backend skeleton, containerization, auth, core domain) are done; the API is complete for everything the first screens need. Milestone 5, the frontend skeleton, is done: Vite + React + TypeScript with the design tokens, CORS, login/register, the cover with a route guard, sign-out and change-password, and the frontend in Compose. Next is milestone 6, publishing both images to GHCR. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 
