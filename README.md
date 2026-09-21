@@ -84,6 +84,7 @@ Current endpoints:
 | `GET` | `/auth/me` | Bearer | The caller's id and username; proves a token is valid and not revoked |
 | `POST` | `/auth/change-password` | Bearer | Invalidates all previously issued tokens, returns a fresh one |
 | `GET` | `/exercises?search=` | Bearer | Autocomplete, scoped to the caller; each result carries its `lastSet` |
+| `GET` | `/exercises/{id}/history?from=&to=` | Bearer | Best loaded e1RM or bodyweight reps per session, oldest first |
 | `PATCH` | `/exercises/{id}` | Bearer | Rename (merges onto an existing name) and set/clear `isBodyweight` |
 | `GET` | `/workouts?limit=&before=` | Bearer | Pages newest first; rows carry exercise names, counts and end time |
 | `POST` | `/workouts` | Bearer | Creates a page from its heading fields |
@@ -95,7 +96,7 @@ Current endpoints:
 | `PATCH` | `/workouts/{id}/sets/{setId}` | Bearer | Replaces weight, reps and warm-up flag |
 | `DELETE` | `/workouts/{id}/sets/{setId}` | Bearer | Removes one set |
 
-Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history`) is specified in [PLAN.md → REST API](PLAN.md#rest-api) and arrives with milestone 8.
+Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history?from=&to=`) returns the best qualifying working set per session for the chart: Epley e1RM for loaded exercises (with tested singles unchanged), or reps for unloaded bodyweight sets. Its optional calendar-date bounds are inclusive.
 
 ## Configuration
 
@@ -155,7 +156,7 @@ PLAN.md                design, decisions and milestone log
 
 ## Status
 
-Milestones 1–7 are done. The backend and frontend are containerized, the CI/CD pipeline publishes images to GHCR on every push to `main`, and a workout can be logged end-to-end from the new-page editor through the saved session page. Next is milestone 8: the e1RM progress view. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestones 1–8 are done. The backend and frontend are containerized, the CI/CD pipeline publishes images to GHCR on every push to `main`, a workout can be logged end-to-end, and each exercise has an e1RM/reps progress chart. Next is milestone 9: workout editing/deletion and the exercise rename/merge UI. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 
