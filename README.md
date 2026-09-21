@@ -155,7 +155,7 @@ PLAN.md                design, decisions and milestone log
 
 ## Status
 
-Milestones 1–6 are done. The backend and frontend are containerized and the CI/CD pipeline publishes images to GHCR on every push to `main`. Next is milestone 7: log a workout end-to-end — the "new workout" page with exercise autocomplete, sets, and session save. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestones 1–7 are done. The backend and frontend are containerized, the CI/CD pipeline publishes images to GHCR on every push to `main`, and a workout can be logged end-to-end from the new-page editor through the saved session page. Next is milestone 8: the e1RM progress view. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 

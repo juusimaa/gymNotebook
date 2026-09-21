@@ -30,7 +30,7 @@ The page you land on after login; the owner name comes from `GET /auth/me`. Volu
 Edit and Delete sit in the header. Delete opens an inline confirm in place ("Tear out this page? Its exercises and sets go with it.") rather than a modal — it names the cascade, since that is what `DELETE /workouts/{id}` does.
 
 ### 5. New page — `/workouts/new`
-Heading fields first (date, started, title, bodyweight, gym), then exercise blocks. Each block: name, a kg/bodyweight marker, and set rows of `weight / reps / warm-up toggle`; a bodyweight block hides the weight field unless added weight is entered. "Add set" appends a row; `setNumber` is never sent — the server assigns it. Below the blocks, an autocomplete field backed by `GET /exercises?search=` whose suggestions show `lastSet`; picking one appends a block. The whole page commits with one `PUT /workouts/{id}/exercises`. "Finish session" writes `ended_at`.
+Heading fields first (date, started, title, bodyweight, gym), then exercise blocks. Each block: name, a kg/bodyweight marker, and set rows of `weight / reps / warm-up toggle`; a bodyweight block hides the weight field unless added weight is enabled. "Add set" appends a row; `setNumber` is never sent — the server assigns it. Below the blocks, an autocomplete field backed by `GET /exercises?search=` whose suggestions show `lastSet`; picking one appends a block. When no exact name matches, the user adds the typed name as either Loaded (kg) or Bodyweight; the bulk save creates it and a follow-up `PATCH /exercises/{id}` persists a new bodyweight choice. The whole exercise list commits with one `PUT /workouts/{id}/exercises`. "Save page" leaves the session in progress; "Finish session" also writes `ended_at`.
 
 ### 6. Progress — `/progress`
 `GET /exercises/{id}/history?from=&to=`. A horizontally scrolling exercise picker (selected one carries the accent stroke), then the exercise name and a metric line that states what is plotted and in what unit — **"Best e1RM per session · kg"**, or **"Best reps per session · reps"** for a bodyweight exercise. The y-axis label changes with it; nothing else about the screen does.
@@ -82,7 +82,6 @@ These are UI-visible consequences of decisions in PLAN.md; each one is a thing a
 
 ## Still open
 
-- Where `is_bodyweight` gets set on *first* use: this spec's screens lean towards ask-once-on-create (an autocomplete search with no match is the "this name is new" signal), with the Edit exercise screen as the after-the-fact fix. The prototype shows the fix, not the ask.
 - Empty states (no sessions yet, no exercises to search, an exercise with one session and so no chart to draw) and error/offline states are not drawn.
 - Date range filtering on the progress view: the endpoint takes `from`/`to`, the screen currently plots everything.
 
