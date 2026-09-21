@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createInitialHeadingDraft } from './newWorkoutDraft'
+import {
+  createEmptySetDraft,
+  createInitialHeadingDraft,
+} from './newWorkoutDraft'
 
 describe('createInitialHeadingDraft', () => {
   // The draft represents the user's local calendar values, so constructing a
@@ -21,6 +24,19 @@ describe('createInitialHeadingDraft', () => {
       bodyweightKg: '',
       location: '',
       notes: '',
+    })
+  })
+})
+
+describe('createEmptySetDraft', () => {
+  it('returns an empty editable set with the supplied client id', () => {
+    const draft = createEmptySetDraft('set-1')
+
+    expect(draft).toEqual({
+      clientId: 'set-1',
+      weight: '',
+      reps: '',
+      isWarmup: false,
     })
   })
 })

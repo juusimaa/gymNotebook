@@ -31,3 +31,22 @@ export function createInitialHeadingDraft(now: Date): WorkoutHeadingDraft {
     notes: '',
   }
 }
+
+// Set input values stay as strings while editing so empty and partial values
+// remain representable. clientId is only a stable React key and is never sent
+// to the API.
+export interface WorkoutSetDraft {
+  clientId: string
+  weight: string
+  reps: string
+  isWarmup: boolean
+}
+
+export function createEmptySetDraft(clientId: string): WorkoutSetDraft {
+  return {
+    clientId,
+    weight: '',
+    reps: '',
+    isWarmup: false,
+  }
+}
