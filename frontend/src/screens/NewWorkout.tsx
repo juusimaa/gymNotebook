@@ -204,15 +204,22 @@ export default function NewWorkout() {
             />
           </div>
         </section>
-        <section className="form-stack" aria-labelledby="exercise-picker-title">
+        <section
+          className="form-stack new-workout-exercises"
+          aria-labelledby="exercise-picker-title"
+        >
           <h2 id="exercise-picker-title">Exercises</h2>
           {exercises.map((exercise) => (
-            <article key={exercise.clientId}>
-              <h3>{exercise.exerciseName}</h3>
-              <span>{exercise.isBodyweight ? 'bodyweight' : 'kg'}</span>
+            <article className="new-workout-exercise" key={exercise.clientId}>
+              <div className="new-workout-exercise-heading">
+                <h3>{exercise.exerciseName}</h3>
+                <span className="new-workout-exercise-kind">
+                  {exercise.isBodyweight ? 'bodyweight' : 'kg'}
+                </span>
+              </div>
             </article>
           ))}
-          <div className="field">
+          <div className="field exercise-picker">
             <label className="label" htmlFor="exercise-search">
               Add exercise
             </label>
@@ -226,11 +233,15 @@ export default function NewWorkout() {
               onChange={(event) => setExerciseQuery(event.target.value)}
             />
             {isExerciseSearchLoading && (
-              <p role="status">Searching exercises…</p>
+              <p className="muted exercise-search-status" role="status">
+                Searching exercises…
+              </p>
             )}
 
             {exerciseSearchMessage !== null && (
-              <p role="alert">{exerciseSearchMessage}</p>
+              <p className="form-message exercise-search-status" role="alert">
+                {exerciseSearchMessage}
+              </p>
             )}
 
             {/* Hide stale results while a newer search is loading or has failed. */}
@@ -238,25 +249,35 @@ export default function NewWorkout() {
               !isExerciseSearchLoading &&
               exerciseSearchMessage === null &&
               exerciseSuggestions.length === 0 && (
-                <p role="status">No matching exercises.</p>
+                <p className="muted exercise-search-status" role="status">
+                  No matching exercises.
+                </p>
               )}
 
             {exerciseQuery.trim() !== '' &&
               !isExerciseSearchLoading &&
               exerciseSearchMessage === null &&
               exerciseSuggestions.length > 0 && (
-                <ul aria-label="Exercise suggestions">
+                <ul
+                  className="exercise-suggestions"
+                  aria-label="Exercise suggestions"
+                >
                   {exerciseSuggestions.map((exercise) => (
                     <li key={exercise.id}>
                       <button
+                        className="exercise-suggestion"
                         type="button"
                         onClick={() => selectExercise(exercise)}
                       >
-                        <span>{exercise.name}</span>
-                        <span>
+                        <span className="exercise-suggestion-name">
+                          {exercise.name}
+                        </span>
+                        <span className="exercise-suggestion-kind">
                           {exercise.isBodyweight ? 'bodyweight' : 'kg'}
                         </span>
-                        <span>{describeLastSet(exercise)}</span>
+                        <span className="exercise-suggestion-last">
+                          {describeLastSet(exercise)}
+                        </span>
                       </button>
                     </li>
                   ))}
