@@ -472,6 +472,100 @@ exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContex
    .WithDescription("Autocomplete lookup, scoped to the authenticated user. Returns every exercise when search is omitted. Each result carries the most recently logged set for that exercise (null if none): the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else.")
    .Produces<List<ExerciseResponse>>(StatusCodes.Status200OK);
 
+exercises.MapGet("/{id:int}/history", async (int id, DateOnly? from, DateOnly? to, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    if (from.HasValue && to.HasValue && from > to)
+    {
+        return Results.BadRequest();
+    }
+
+    // Scope the lookup to the caller so an unknown id and another user's id are
+    // indistinguishable, matching every other ownership check in this API.
+    var exercise = await db.Exercises
+        .AsNoTracking()
+        .SingleOrDefaultAsync(e => e.Id == id && e.UserId == userId, ct);
+
+    if (exercise is null)
+    {
+        return Results.NotFound();
+    }
+
+    // Project only the fields needed to choose and explain each point. This is one
+    // database round trip; grouping happens after materialization because the chosen
+    // source set (weight + reps) must remain attached to the calculated maximum.
+    var candidatesQuery =
+        from setEntry in db.SetEntries.AsNoTracking()
+        join block in db.WorkoutExercises.AsNoTracking() on setEntry.WorkoutExerciseId equals block.Id
+        join workout in db.Workouts.AsNoTracking() on block.WorkoutId equals workout.Id
+        where block.ExerciseId == exercise.Id
+              && workout.UserId == userId
+              && !setEntry.IsWarmup
+              // An added-weight bodyweight set is a different metric from plain reps;
+              // PLAN.md deliberately defers charting that mixed load.
+              && (exercise.IsBodyweight ? setEntry.Weight == null : setEntry.Weight != null)
+        select new
+        {
+            WorkoutId = workout.Id,
+            workout.Date,
+            workout.StartedAt,
+            SetEntryId = setEntry.Id,
+            setEntry.Weight,
+            setEntry.Reps,
+        };
+
+    if (from.HasValue)
+    {
+        candidatesQuery = candidatesQuery.Where(candidate => candidate.Date >= from.Value);
+    }
+
+    if (to.HasValue)
+    {
+        candidatesQuery = candidatesQuery.Where(candidate => candidate.Date <= to.Value);
+    }
+
+    var candidates = await candidatesQuery.ToListAsync(ct);
+
+    // A workout is one chart point even when the exercise appears in more than one
+    // block. Workouts on the same calendar date are intentionally separate groups.
+    var points = candidates
+        .Select(candidate => new
+        {
+            Candidate = candidate,
+            Value = ProgressMetric.Calculate(exercise.IsBodyweight, candidate.Weight, candidate.Reps)!.Value,
+        })
+        .GroupBy(item => new
+        {
+            item.Candidate.WorkoutId,
+            item.Candidate.Date,
+            item.Candidate.StartedAt,
+        })
+        .Select(group => group
+            .OrderByDescending(item => item.Value)
+            .ThenBy(item => item.Candidate.SetEntryId)
+            .First())
+        .OrderBy(item => item.Candidate.Date)
+        .ThenBy(item => item.Candidate.StartedAt)
+        .ThenBy(item => item.Candidate.WorkoutId)
+        .Select(item => new ExerciseHistoryPointResponse(
+            item.Candidate.WorkoutId,
+            item.Candidate.Date,
+            item.Candidate.StartedAt,
+            item.Candidate.Weight,
+            item.Candidate.Reps,
+            item.Value))
+        .ToList();
+
+    return Results.Ok(new ExerciseHistoryResponse(exercise.Id, exercise.Name, exercise.IsBodyweight, points));
+})
+   .WithName("GetExerciseHistory")
+   .WithSummary("Gets an exercise's progress history")
+   .WithDescription("Returns the best qualifying working set per workout, oldest first. Loaded exercises use Epley e1RM (with tested singles unchanged); bodyweight exercises use reps and exclude added-weight sets. Optional from/to calendar dates are inclusive.")
+   .Produces<ExerciseHistoryResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status400BadRequest)
+   .Produces(StatusCodes.Status404NotFound);
+
 exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
     var userId = ParseUserId(caller);
