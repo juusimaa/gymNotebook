@@ -50,3 +50,32 @@ export function createEmptySetDraft(clientId: string): WorkoutSetDraft {
     isWarmup: false,
   }
 }
+
+// exercise names are valid because each appearance is a separate block.
+// clientId is a frontend-only React key; exerciseId is null for a new exercise.
+export interface WorkoutExerciseDraft {
+  clientId: string
+  exerciseId: number | null
+  exerciseName: string
+  isBodyweight: boolean
+  // UI-only switch controlling the added-weight field for bodyweight exercises.
+  isAddedWeightEnabled: boolean
+  sets: WorkoutSetDraft[]
+}
+
+export function createWorkoutExerciseDraft(
+  clientId: string,
+  initialSetClientId: string,
+  exerciseId: number | null,
+  exerciseName: string,
+  isBodyweight: boolean,
+): WorkoutExerciseDraft {
+  return {
+    clientId,
+    exerciseId,
+    exerciseName,
+    isBodyweight,
+    isAddedWeightEnabled: false,
+    sets: [createEmptySetDraft(initialSetClientId)],
+  }
+}

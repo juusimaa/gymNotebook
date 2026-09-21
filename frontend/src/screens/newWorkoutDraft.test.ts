@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createEmptySetDraft,
   createInitialHeadingDraft,
+  createWorkoutExerciseDraft,
 } from './newWorkoutDraft'
 
 describe('createInitialHeadingDraft', () => {
@@ -37,6 +38,60 @@ describe('createEmptySetDraft', () => {
       weight: '',
       reps: '',
       isWarmup: false,
+    })
+  })
+})
+
+describe('createWorkoutExerciseDraft', () => {
+  it('initializes an existing loaded exercise with one empty set', () => {
+    const draft = createWorkoutExerciseDraft(
+      'block-1',
+      'set-1',
+      42,
+      'Back Squat',
+      false,
+    )
+
+    expect(draft).toEqual({
+      clientId: 'block-1',
+      exerciseId: 42,
+      exerciseName: 'Back Squat',
+      isBodyweight: false,
+      isAddedWeightEnabled: false,
+      sets: [
+        {
+          clientId: 'set-1',
+          weight: '',
+          reps: '',
+          isWarmup: false,
+        },
+      ],
+    })
+  })
+
+  it('preserves a null id and bodyweight flag for a new exercise', () => {
+    const draft = createWorkoutExerciseDraft(
+      'block-2',
+      'set-2',
+      null,
+      'Pull-up',
+      true,
+    )
+
+    expect(draft).toEqual({
+      clientId: 'block-2',
+      exerciseId: null,
+      exerciseName: 'Pull-up',
+      isBodyweight: true,
+      isAddedWeightEnabled: false,
+      sets: [
+        {
+          clientId: 'set-2',
+          weight: '',
+          reps: '',
+          isWarmup: false,
+        },
+      ],
     })
   })
 })
