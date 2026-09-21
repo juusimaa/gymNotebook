@@ -4,6 +4,7 @@ import {
   createEmptySetDraft,
   createInitialHeadingDraft,
   createWorkoutExerciseDraft,
+  prepareWorkoutDraft,
   removeSetFromExercise,
   updateSetInExercise,
 } from './newWorkoutDraft'
@@ -191,5 +192,121 @@ describe('set draft operations', () => {
       },
     ])
     expect(original.sets.map((set) => set.clientId)).toEqual(['set-1', 'set-2'])
+  })
+})
+
+describe('prepareWorkoutDraft', () => {
+  it('converts local heading values and loaded sets to API requests', () => {
+    const heading = createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5))
+    heading.title = ' Leg day '
+    heading.bodyweightKg = '78,4'
+    heading.location = ' Liikuntamylly '
+
+    const exercise = createWorkoutExerciseDraft(
+      'block-1',
+      'set-1',
+      42,
+      'Back Squat',
+      false,
+    )
+    exercise.sets[0].weight = '90'
+    exercise.sets[0].reps = '3'
+
+    const result = prepareWorkoutDraft(heading, [exercise])
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        workout: {
+          date: '2026-09-15',
+          startedAt: new Date(2026, 8, 15, 7, 5).toISOString(),
+          title: 'Leg day',
+          bodyweightKg: 78.4,
+          location: 'Liikuntamylly',
+          notes: null,
+        },
+        exercises: {
+          exercises: [
+            {
+              exerciseName: 'Back Squat',
+              sets: [{ weight: 90, reps: 3, isWarmup: false }],
+            },
+          ],
+        },
+      },
+    })
+  })
+
+  it('sends null weight for bodyweight sets without added load', () => {
+    const heading = createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5))
+    const exercise = createWorkoutExerciseDraft(
+      'block-1',
+      'set-1',
+      null,
+      'Pull-up',
+      true,
+    )
+    exercise.sets[0].reps = '8'
+
+    const result = prepareWorkoutDraft(heading, [exercise])
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.exercises.exercises[0].sets[0].weight).toBeNull()
+    }
+  })
+
+  it('accepts added weight for a bodyweight exercise when enabled', () => {
+    const heading = createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5))
+    const exercise = createWorkoutExerciseDraft(
+      'block-1',
+      'set-1',
+      null,
+      'Pull-up',
+      true,
+    )
+    exercise.isAddedWeightEnabled = true
+    exercise.sets[0].weight = '10'
+    exercise.sets[0].reps = '5'
+
+    const result = prepareWorkoutDraft(heading, [exercise])
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.exercises.exercises[0].sets[0].weight).toBe(10)
+    }
+  })
+
+  it.each([
+    ['no exercises', [], 'Add at least one exercise.'],
+    [
+      'missing reps',
+      [{ weight: '100', reps: '' }],
+      'Back Squat, set 1: reps must be a whole number greater than zero.',
+    ],
+    [
+      'missing loaded weight',
+      [{ weight: '', reps: '5' }],
+      'Back Squat, set 1: enter a valid weight.',
+    ],
+  ])('rejects %s', (_scenario, setValues, expectedMessage) => {
+    const heading = createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5))
+    const exercises = setValues.map(({ weight, reps }) => {
+      const exercise = createWorkoutExerciseDraft(
+        'block-1',
+        'set-1',
+        42,
+        'Back Squat',
+        false,
+      )
+      exercise.sets[0].weight = weight
+      exercise.sets[0].reps = reps
+      return exercise
+    })
+
+    expect(prepareWorkoutDraft(heading, exercises)).toEqual({
+      ok: false,
+      message: expectedMessage,
+    })
   })
 })

@@ -1,3 +1,8 @@
+import type {
+  CreateWorkoutRequest,
+  PutWorkoutExercisesRequest,
+} from '../api/workouts'
+
 // Form fields stay as strings so empty and partially entered values such as
 // "78." remain representable until the draft is validated for submission.
 export interface WorkoutHeadingDraft {
@@ -125,5 +130,180 @@ export function removeSetFromExercise(
   return {
     ...exercise,
     sets: exercise.sets.filter((set) => set.clientId !== setClientId),
+  }
+}
+
+export interface PreparedWorkoutDraft {
+  workout: CreateWorkoutRequest
+  exercises: PutWorkoutExercisesRequest
+}
+
+export type PrepareWorkoutDraftResult =
+  { ok: true; value: PreparedWorkoutDraft } | { ok: false; message: string }
+
+function optionalText(value: string): string | null {
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+function parseNonNegativeDecimal(value: string): number | null {
+  const trimmed = value.trim()
+
+  // Accept the decimal comma commonly entered on Finnish keyboards, but keep
+  // the wire value numeric and culture-independent.
+  if (!/^\d+(?:[.,]\d+)?$/.test(trimmed)) {
+    return null
+  }
+
+  const parsed = Number(trimmed.replace(',', '.'))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function parsePositiveInteger(value: string): number | null {
+  const trimmed = value.trim()
+
+  if (!/^[1-9]\d*$/.test(trimmed)) {
+    return null
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function createLocalStartedAt(date: string, time: string): string | null {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time)
+
+  if (dateMatch === null || timeMatch === null) {
+    return null
+  }
+
+  const [, yearText, monthText, dayText] = dateMatch
+  const [, hourText, minuteText] = timeMatch
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const day = Number(dayText)
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  const local = new Date(year, month - 1, day, hour, minute)
+
+  // Date normalizes impossible values (for example 31 February) instead of
+  // rejecting them. Comparing every local component prevents that silent shift,
+  // including a wall-clock time skipped by a daylight-saving transition.
+  if (
+    local.getFullYear() !== year ||
+    local.getMonth() !== month - 1 ||
+    local.getDate() !== day ||
+    local.getHours() !== hour ||
+    local.getMinutes() !== minute
+  ) {
+    return null
+  }
+
+  return local.toISOString()
+}
+
+// Validates the complete editor state and converts its string fields into the
+// API's numeric and timestamp types in one place. A failed conversion never
+// produces a partial request for the screen to accidentally submit.
+export function prepareWorkoutDraft(
+  heading: WorkoutHeadingDraft,
+  exerciseDrafts: WorkoutExerciseDraft[],
+): PrepareWorkoutDraftResult {
+  const startedAt = createLocalStartedAt(heading.date, heading.startTime)
+
+  if (startedAt === null) {
+    return { ok: false, message: 'Enter a valid date and start time.' }
+  }
+
+  let bodyweightKg: number | null = null
+  if (heading.bodyweightKg.trim() !== '') {
+    bodyweightKg = parseNonNegativeDecimal(heading.bodyweightKg)
+    if (bodyweightKg === null || bodyweightKg === 0) {
+      return {
+        ok: false,
+        message: 'Bodyweight must be a number greater than zero.',
+      }
+    }
+  }
+
+  if (exerciseDrafts.length === 0) {
+    return { ok: false, message: 'Add at least one exercise.' }
+  }
+
+  const exercises: PutWorkoutExercisesRequest['exercises'] = []
+
+  for (
+    let exerciseIndex = 0;
+    exerciseIndex < exerciseDrafts.length;
+    exerciseIndex += 1
+  ) {
+    const exercise = exerciseDrafts[exerciseIndex]
+    const exerciseNumber = exerciseIndex + 1
+
+    if (exercise.exerciseName.trim() === '') {
+      return {
+        ok: false,
+        message: `Exercise ${exerciseNumber} needs a name.`,
+      }
+    }
+
+    if (exercise.sets.length === 0) {
+      return {
+        ok: false,
+        message: `${exercise.exerciseName} needs at least one set.`,
+      }
+    }
+
+    const sets: PutWorkoutExercisesRequest['exercises'][number]['sets'] = []
+
+    for (let setIndex = 0; setIndex < exercise.sets.length; setIndex += 1) {
+      const set = exercise.sets[setIndex]
+      const setNumber = setIndex + 1
+      const reps = parsePositiveInteger(set.reps)
+
+      if (reps === null) {
+        return {
+          ok: false,
+          message: `${exercise.exerciseName}, set ${setNumber}: reps must be a whole number greater than zero.`,
+        }
+      }
+
+      let weight: number | null = null
+      const needsWeight =
+        !exercise.isBodyweight || exercise.isAddedWeightEnabled
+
+      if (needsWeight) {
+        weight = parseNonNegativeDecimal(set.weight)
+        if (weight === null) {
+          return {
+            ok: false,
+            message: `${exercise.exerciseName}, set ${setNumber}: enter a valid weight.`,
+          }
+        }
+      }
+
+      sets.push({ weight, reps, isWarmup: set.isWarmup })
+    }
+
+    exercises.push({
+      exerciseName: exercise.exerciseName.trim(),
+      sets,
+    })
+  }
+
+  return {
+    ok: true,
+    value: {
+      workout: {
+        date: heading.date,
+        startedAt,
+        title: optionalText(heading.title),
+        bodyweightKg,
+        location: optionalText(heading.location),
+        notes: optionalText(heading.notes),
+      },
+      exercises: { exercises },
+    },
   }
 }
