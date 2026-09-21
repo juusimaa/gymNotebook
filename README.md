@@ -83,7 +83,7 @@ Current endpoints:
 | `POST` | `/auth/login` | – | Returns a JWT; rate limited |
 | `GET` | `/auth/me` | Bearer | The caller's id and username; proves a token is valid and not revoked |
 | `POST` | `/auth/change-password` | Bearer | Invalidates all previously issued tokens, returns a fresh one |
-| `GET` | `/exercises?search=` | Bearer | Autocomplete, scoped to the caller; each result carries its `lastSet` |
+| `GET` | `/exercises?search=` | Bearer | Index/autocomplete, scoped to the caller; results carry `sessionCount` and `lastSet` |
 | `GET` | `/exercises/{id}/history?from=&to=` | Bearer | Best loaded e1RM or bodyweight reps per session, oldest first |
 | `PATCH` | `/exercises/{id}` | Bearer | Rename (merges onto an existing name) and set/clear `isBodyweight` |
 | `GET` | `/workouts?limit=&before=` | Bearer | Pages newest first; rows carry exercise names, counts and end time |
@@ -156,7 +156,7 @@ PLAN.md                design, decisions and milestone log
 
 ## Status
 
-Milestones 1–8 are done. The backend and frontend are containerized, the CI/CD pipeline publishes images to GHCR on every push to `main`, a workout can be logged end-to-end, and each exercise has an e1RM/reps progress chart. Next is milestone 9: workout editing/deletion and the exercise rename/merge UI. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestones 1–9 are done. The backend and frontend are containerized, the CI/CD pipeline publishes images to GHCR on every push to `main`, workouts can be logged, edited and deleted end-to-end, and exercises have both an e1RM/reps progress chart and rename/merge management. Next is milestone 10: Azure deployment. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 

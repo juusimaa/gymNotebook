@@ -68,6 +68,36 @@ document.addEventListener('DOMContentLoaded', async function() {
     const manifest = JSON.parse(manifestEl.textContent);
     let template = JSON.parse(templateEl.textContent);
 
+    // Issue 35 amends the bundled prototype with an inline finish confirmation.
+    // Keep the patch here, before the template is mounted, so downloaded copies
+    // remain self-contained without rebuilding the original design artifact.
+    template = template.replace(
+      '    confirmDelete: false,\n    draft: [',
+      '    confirmDelete: false,\n    confirmFinish: false,\n    draft: ['
+    );
+    template = template.replace(
+      '          <button class="btn btn-secondary" sc-camel-on-click="{{ goHistory }}" style="flex:1;min-height:48px;font-size:15px">Finish session</button>',
+      `          <sc-if value="{{ confirmingFinish }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:22px;right:22px;bottom:82px;padding:12px 14px;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-md)">
+              <div style="font-size:14px;line-height:1.55;color:var(--color-neutral-800)">Finish this session now? The current time will be saved.</div>
+              <div style="display:flex;gap:10px;margin-top:10px">
+                <button class="btn btn-ghost" sc-camel-on-click="{{ cancelFinish }}" style="flex:1;min-height:44px;font-size:14px">Keep editing</button>
+                <button class="btn btn-primary" sc-camel-on-click="{{ finish }}" style="flex:1;min-height:44px;font-size:14px">Confirm finish</button>
+              </div>
+            </div>
+          </sc-if>
+          <button class="btn btn-secondary" sc-camel-on-click="{{ askFinish }}" style="flex:1;min-height:48px;font-size:15px">Finish session</button>`
+    );
+    template = template.replace(
+      '      confirmingDelete: this.state.confirmDelete,\n      askDelete:',
+      `      confirmingDelete: this.state.confirmDelete,
+      confirmingFinish: this.state.confirmFinish,
+      askFinish: (e) => { if (e) e.preventDefault(); this.setState({ confirmFinish: true }); },
+      cancelFinish: (e) => { if (e) e.preventDefault(); this.setState({ confirmFinish: false }); },
+      finish: (e) => { if (e) e.preventDefault(); this.setState({ confirmFinish: false, screen: "history" }); },
+      askDelete:`
+    );
+
     // Nested page bundles (iframe targets). Each ships ONCE, in the ROOT
     // document's manifest; frame srcs carry an about:blank#<uuid> marker
     // instead of a substitutable uuid. Every document mints the blobs for
