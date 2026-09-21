@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addEmptySetToExercise,
   createEmptySetDraft,
   createInitialHeadingDraft,
   createWorkoutExerciseDraft,
+  removeSetFromExercise,
+  updateSetInExercise,
 } from './newWorkoutDraft'
+
+function createTwoSetExercise() {
+  const exercise = createWorkoutExerciseDraft(
+    'block-1',
+    'set-1',
+    42,
+    'Back Squat',
+    false,
+  )
+
+  return addEmptySetToExercise(exercise, 'set-2')
+}
 
 describe('createInitialHeadingDraft', () => {
   // The draft represents the user's local calendar values, so constructing a
@@ -93,5 +108,88 @@ describe('createWorkoutExerciseDraft', () => {
         },
       ],
     })
+  })
+})
+
+describe('set draft operations', () => {
+  it('adds an empty set without changing the original exercise', () => {
+    const original = createWorkoutExerciseDraft(
+      'block-1',
+      'set-1',
+      42,
+      'Back Squat',
+      false,
+    )
+
+    const result = addEmptySetToExercise(original, 'set-2')
+
+    expect(result).not.toBe(original)
+    expect(result.sets).not.toBe(original.sets)
+    expect(result.sets).toEqual([
+      {
+        clientId: 'set-1',
+        weight: '',
+        reps: '',
+        isWarmup: false,
+      },
+      {
+        clientId: 'set-2',
+        weight: '',
+        reps: '',
+        isWarmup: false,
+      },
+    ])
+    expect(original.sets).toHaveLength(1)
+  })
+
+  it('updates only the targeted set without changing the original exercise', () => {
+    const original = createTwoSetExercise()
+
+    const result = updateSetInExercise(original, 'set-2', {
+      weight: '100',
+      reps: '5',
+      isWarmup: true,
+    })
+
+    expect(result).not.toBe(original)
+    expect(result.sets).not.toBe(original.sets)
+    expect(result.sets).toEqual([
+      {
+        clientId: 'set-1',
+        weight: '',
+        reps: '',
+        isWarmup: false,
+      },
+      {
+        clientId: 'set-2',
+        weight: '100',
+        reps: '5',
+        isWarmup: true,
+      },
+    ])
+    expect(original.sets[1]).toEqual({
+      clientId: 'set-2',
+      weight: '',
+      reps: '',
+      isWarmup: false,
+    })
+  })
+
+  it('removes only the targeted set without changing the original exercise', () => {
+    const original = createTwoSetExercise()
+
+    const result = removeSetFromExercise(original, 'set-1')
+
+    expect(result).not.toBe(original)
+    expect(result.sets).not.toBe(original.sets)
+    expect(result.sets).toEqual([
+      {
+        clientId: 'set-2',
+        weight: '',
+        reps: '',
+        isWarmup: false,
+      },
+    ])
+    expect(original.sets.map((set) => set.clientId)).toEqual(['set-1', 'set-2'])
   })
 })
