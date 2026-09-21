@@ -301,10 +301,53 @@
   margin: 0 0 var(--space-2);
 }
 
-.new-workout-actions > div {
-  display: grid;
-  grid-template-columns: 1fr 1.35fr;
+.new-workout-action-buttons {
+  display: flex;
   gap: var(--space-2);
+}
+
+.new-workout-action-buttons .btn {
+  flex: 1;
+}
+
+.new-workout-action-buttons .btn-primary {
+  flex-grow: 1.35;
+}
+
+.finish-confirmation {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
+.finish-confirmation p {
+  margin: 0;
+  color: var(--color-neutral-800);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.finish-confirmation > div {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.finish-confirmation .btn {
+  flex: 1;
+  font-size: 14px;
+}
+
+.new-workout-field-hint {
+  color: var(--color-neutral-600);
+  font-size: 12px;
+}
+
+.workout-editor-state {
+  align-items: flex-start;
+  justify-content: center;
 }
 
 @media (max-width: 370px) {

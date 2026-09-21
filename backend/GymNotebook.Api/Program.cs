@@ -469,7 +469,7 @@ exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContex
 })
    .WithName("SearchExercises")
    .WithSummary("Searches the caller's exercises")
-   .WithDescription("Autocomplete lookup, scoped to the authenticated user. Returns every exercise when search is omitted. Each result carries the most recently logged set for that exercise (null if none): the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else.")
+   .WithDescription("Exercise-index and autocomplete lookup scoped to the authenticated user. Returns every exercise when search is omitted. Each result carries its distinct session count and most recently logged set (null if none): the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else.")
    .Produces<List<ExerciseResponse>>(StatusCodes.Status200OK);
 
 exercises.MapGet("/{id:int}/history", async (int id, DateOnly? from, DateOnly? to, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
@@ -1093,8 +1093,8 @@ static int ParseUserId(ClaimsPrincipal user)
 }
 
 // The one definition of what an ExerciseResponse looks like, shared by GET /exercises and
-// PATCH /exercises/{id} so the two can't disagree about LastSet. Takes the already-filtered
-// and ordered query and only adds the projection.
+// PATCH /exercises/{id} so the two can't disagree about SessionCount or LastSet. Takes the
+// already-filtered and ordered query and only adds the projection.
 //
 // "Last" means: the most recent workout containing this exercise (date desc, then
 // started_at desc — the same ordering the sessions list uses), then within it the last
@@ -1112,6 +1112,11 @@ static IQueryable<ExerciseResponse> ProjectExerciseResponses(AppDbContext db, IQ
         e.Id,
         e.Name,
         e.IsBodyweight,
+        db.WorkoutExercises
+            .Where(we => we.ExerciseId == e.Id)
+            .Select(we => we.WorkoutId)
+            .Distinct()
+            .Count(),
         (from se in db.SetEntries
          join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
          join w in db.Workouts on we.WorkoutId equals w.Id

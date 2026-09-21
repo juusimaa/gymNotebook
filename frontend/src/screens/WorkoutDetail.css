@@ -16,12 +16,58 @@
 }
 
 .workout-detail-header a,
-.workout-detail-page-number {
+.workout-detail-actions,
+.workout-detail-actions button {
   font-size: 13px;
 }
 
-.workout-detail-page-number {
-  color: var(--color-neutral-600);
+.workout-detail-actions {
+  display: flex;
+  gap: 14px;
+}
+
+.workout-detail-actions button {
+  min-height: var(--hit-target);
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-neutral-700);
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+}
+
+.workout-detail-actions button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.workout-delete-confirmation {
+  padding: 14px 22px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.workout-delete-confirmation p {
+  margin: 0;
+  color: var(--color-neutral-800);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.workout-delete-confirmation .form-message {
+  margin-top: var(--space-2);
+  color: var(--color-accent-700);
+}
+
+.workout-delete-confirmation > div {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.workout-delete-confirmation .btn {
+  flex: 1;
+  font-size: 14px;
 }
 
 .workout-detail-content {
@@ -31,8 +77,12 @@
   padding: var(--space-6) 22px var(--space-8);
 }
 
-.workout-detail-heading .kicker {
+.workout-detail-date {
   margin: 0 0 var(--space-2);
+  color: var(--color-accent-700);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
 }
 
 .workout-detail-heading h1 {
@@ -111,6 +161,10 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
+.workout-detail-sets li:last-child {
+  border-bottom: 0;
+}
+
 .workout-detail-sets li.is-warmup {
   color: var(--color-neutral-600);
 }
@@ -139,13 +193,23 @@
 }
 
 .workout-detail-notes h2 {
-  font-size: 20px;
+  margin-bottom: 6px;
+  color: var(--color-neutral-600);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
 }
 
 .workout-detail-notes p {
   margin: 0;
-  line-height: 1.75;
+  color: var(--color-neutral-800);
+  font-size: 14px;
+  line-height: 1.65;
+  text-align: justify;
   white-space: pre-wrap;
+  hyphens: auto;
 }
 
 .workout-detail-state {

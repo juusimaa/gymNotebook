@@ -7,6 +7,8 @@ import Sessions from './screens/Sessions.tsx'
 import NewWorkout from './screens/NewWorkout.tsx'
 import WorkoutDetail from './screens/WorkoutDetail.tsx'
 import Progress from './screens/Progress.tsx'
+import Exercises from './screens/Exercises.tsx'
+import EditExercise from './screens/EditExercise.tsx'
 
 // The route table, one entry per screen in docs/ui/README.md. Data-mode router
 // (createBrowserRouter) rather than <BrowserRouter><Routes>, for the loader below.
@@ -33,8 +35,11 @@ export const router = createBrowserRouter([
       { path: '/change-password', element: <ChangePassword /> },
       { path: '/workouts', element: <Sessions /> },
       { path: '/workouts/new', element: <NewWorkout /> },
+      { path: '/workouts/:workoutId/edit', element: <NewWorkout /> },
       { path: '/workouts/:workoutId', element: <WorkoutDetail /> },
       { path: '/progress', element: <Progress /> },
+      { path: '/exercises', element: <Exercises /> },
+      { path: '/exercises/:exerciseId', element: <EditExercise /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

@@ -1,6 +1,7 @@
 import type {
   CreateWorkoutRequest,
   PutWorkoutExercisesRequest,
+  WorkoutDetailResponse,
 } from '../api/workouts'
 
 // Form fields stay as strings so empty and partially entered values such as
@@ -16,6 +17,11 @@ export interface WorkoutHeadingDraft {
 
 function padTwoDigits(value: number): string {
   return value.toString().padStart(2, '0')
+}
+
+function formatLocalTime(value: string): string {
+  const date = new Date(value)
+  return `${padTwoDigits(date.getHours())}:${padTwoDigits(date.getMinutes())}`
 }
 
 // Uses local date/time getters because the workout date is the calendar date
@@ -34,6 +40,48 @@ export function createInitialHeadingDraft(now: Date): WorkoutHeadingDraft {
     bodyweightKg: '',
     location: '',
     notes: '',
+  }
+}
+
+export interface ExistingWorkoutDraft {
+  heading: WorkoutHeadingDraft
+  endTime: string
+  exercises: WorkoutExerciseDraft[]
+}
+
+// Rehydrates the server response into the same string-valued draft used by the
+// new-page editor. The id factory keeps React keys local and makes this conversion
+// deterministic in tests.
+export function createExistingWorkoutDraft(
+  workout: WorkoutDetailResponse,
+  createClientId: () => string,
+): ExistingWorkoutDraft {
+  return {
+    heading: {
+      date: workout.date,
+      startTime: formatLocalTime(workout.startedAt),
+      title: workout.title ?? '',
+      bodyweightKg:
+        workout.bodyweightKg === null ? '' : String(workout.bodyweightKg),
+      location: workout.location ?? '',
+      notes: workout.notes ?? '',
+    },
+    endTime: workout.endedAt === null ? '' : formatLocalTime(workout.endedAt),
+    exercises: workout.exercises.map((exercise) => ({
+      clientId: createClientId(),
+      exerciseId: exercise.exerciseId,
+      exerciseName: exercise.exerciseName,
+      isBodyweight: exercise.isBodyweight,
+      isAddedWeightEnabled:
+        exercise.isBodyweight &&
+        exercise.sets.some((set) => set.weight !== null),
+      sets: exercise.sets.map((set) => ({
+        clientId: createClientId(),
+        weight: set.weight === null ? '' : String(set.weight),
+        reps: String(set.reps),
+        isWarmup: set.isWarmup,
+      })),
+    })),
   }
 }
 
@@ -170,7 +218,7 @@ function parsePositiveInteger(value: string): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null
 }
 
-function createLocalStartedAt(date: string, time: string): string | null {
+function createLocalTimestamp(date: string, time: string): Date | null {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
   const timeMatch = /^(\d{2}):(\d{2})$/.exec(time)
 
@@ -200,7 +248,33 @@ function createLocalStartedAt(date: string, time: string): string | null {
     return null
   }
 
-  return local.toISOString()
+  return local
+}
+
+function createLocalStartedAt(date: string, time: string): string | null {
+  return createLocalTimestamp(date, time)?.toISOString() ?? null
+}
+
+// A finish time earlier than the start time belongs to the following calendar
+// day, which keeps a late-night session editable without adding a second date
+// field to the paper-like heading.
+export function createLocalEndedAt(
+  date: string,
+  startTime: string,
+  endTime: string,
+): string | null {
+  const startedAt = createLocalTimestamp(date, startTime)
+  const endedAt = createLocalTimestamp(date, endTime)
+
+  if (startedAt === null || endedAt === null) {
+    return null
+  }
+
+  if (endedAt < startedAt) {
+    endedAt.setDate(endedAt.getDate() + 1)
+  }
+
+  return endedAt.toISOString()
 }
 
 // Validates the complete editor state and converts its string fields into the
