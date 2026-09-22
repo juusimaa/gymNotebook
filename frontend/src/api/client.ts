@@ -7,7 +7,10 @@ import { getToken } from '../auth/token'
 // named rather than on the first click. Milestone 6's runtime override
 // (window.__API_URL__, rendered by the container's entrypoint) goes here, ahead of
 // the build-time value, so the lookup keeps exactly one home.
-const configured: string | undefined = import.meta.env.VITE_API_URL
+const runtimeConfigured =
+  typeof window === 'undefined' ? undefined : window.__API_URL__
+
+const configured = runtimeConfigured ?? import.meta.env.VITE_API_URL
 if (configured === undefined) {
   throw new Error('VITE_API_URL is not configured.')
 }

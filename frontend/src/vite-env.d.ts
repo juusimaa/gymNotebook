@@ -7,3 +7,7 @@ interface ViteTypeOptions {
 interface ImportMetaEnv {
   readonly VITE_API_URL: string
 }
+
+interface Window {
+  readonly __API_URL__?: string
+}
