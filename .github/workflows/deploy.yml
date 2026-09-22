@@ -1,0 +1,99 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable GHCR tag to deploy to both apps
+        required: true
+        default: main-5177bdc
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gymnotebook-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      RESOURCE_GROUP: rg-gymnotebook-prod
+      DEPLOYMENT_NAME: gymnotebook-infrastructure
+      API_APP: ca-gymnote-prod-58dd-api
+      BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/gymnotebook-backend
+      FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/gymnotebook-frontend
+    steps:
+      - name: Check out the deployment template
+        uses: actions/checkout@v6
+
+      # This exchanges GitHub's short-lived OIDC token for Azure access. The Entra
+      # app registration is configured separately; no Azure client secret is stored
+      # in GitHub.
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The first pass creates/reconciles both apps. The frontend gets its API URL
+      # from the Bicep output; the API's browser-origin allow-list cannot be known
+      # until Azure has assigned the frontend its FQDN.
+      - name: Deploy infrastructure and immutable images
+        id: first-deploy
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -eu
+            frontend_fqdn=$(az deployment group create \
+              --name "$DEPLOYMENT_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --template-file infra/main.bicep \
+              --parameters @infra/main.parameters.json \
+                apiContainerImage="$BACKEND_IMAGE:${{ inputs.image_tag }}" \
+                frontendContainerImage="$FRONTEND_IMAGE:${{ inputs.image_tag }}" \
+                corsOrigins='https://localhost.invalid' \
+                neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
+                jwtSecret='${{ secrets.JWT_SECRET }}' \
+                inviteCode='${{ secrets.INVITE_CODE }}' \
+              --query properties.outputs.frontendFqdn.value \
+              --output tsv)
+            echo "frontend_fqdn=$frontend_fqdn" >> "$GITHUB_OUTPUT"
+
+      # Reconcile the API with the real browser origin. This is deliberately a
+      # second Bicep deployment instead of an imperative env-var mutation, keeping
+      # the deployed state reproducible from infra/main.bicep.
+      - name: Set the production CORS origin
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -eu
+            az deployment group create \
+              --name "$DEPLOYMENT_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --template-file infra/main.bicep \
+              --parameters @infra/main.parameters.json \
+                apiContainerImage="$BACKEND_IMAGE:${{ inputs.image_tag }}" \
+                frontendContainerImage="$FRONTEND_IMAGE:${{ inputs.image_tag }}" \
+                corsOrigins="https://${{ steps.first-deploy.outputs.frontend_fqdn }}" \
+                neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
+                jwtSecret='${{ secrets.JWT_SECRET }}' \
+                inviteCode='${{ secrets.INVITE_CODE }}'
+
+      - name: Verify the API health endpoint
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -eu
+            api_fqdn=$(az containerapp show \
+              --name "$API_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --query properties.configuration.ingress.fqdn \
+              --output tsv)
+            curl --fail --show-error --retry 12 --retry-all-errors --retry-delay 5 \
+              "https://$api_fqdn/health"

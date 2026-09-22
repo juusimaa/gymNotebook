@@ -105,3 +105,4 @@ testcontainers/
 
 *.tmp
 *.temp
+.copilot-azure/
