@@ -14,6 +14,7 @@ export interface ExerciseResponse {
   id: number
   name: string
   isBodyweight: boolean
+  sessionCount: number
   lastSet: LastSetResponse | null
 }
 
@@ -35,7 +36,7 @@ export interface ExerciseHistoryResponse {
 
 // PATCH updates only supplied fields. Null is intentionally excluded: the backend
 // treats null like an omitted property here, so it cannot clear either value.
-interface UpdateExerciseRequest {
+export interface UpdateExerciseRequest {
   name?: string
   isBodyweight?: boolean
 }

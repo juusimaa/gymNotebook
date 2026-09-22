@@ -7,7 +7,7 @@ import { request } from './client'
 
 // A saved set as returned by the API. Set numbers and ids are assigned by the
 // server, so they appear in responses but not in PutSetInput below.
-interface SetEntryResponse {
+export interface SetEntryResponse {
   id: number
   setNumber: number
   reps: number
@@ -18,7 +18,7 @@ interface SetEntryResponse {
 // One exercise block within a workout. This id identifies the block appearance;
 // exerciseId identifies the reusable per-user exercise behind it. They can differ
 // because one exercise may appear in multiple blocks or workouts.
-interface WorkoutExerciseResponse {
+export interface WorkoutExerciseResponse {
   id: number
   exerciseId: number
   exerciseName: string
@@ -137,6 +137,11 @@ export function updateWorkout(
     method: 'PATCH',
     body,
   })
+}
+
+// Deleting a page cascades through its exercise blocks and sets on the backend.
+export function deleteWorkout(id: number): Promise<void> {
+  return request<void>(`/workouts/${id}`, { method: 'DELETE' })
 }
 
 // Atomically replaces the workout's entire exercise/set contents. The response is

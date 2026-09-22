@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   addEmptySetToExercise,
   createEmptySetDraft,
+  createExistingWorkoutDraft,
   createInitialHeadingDraft,
+  createLocalEndedAt,
   createWorkoutExerciseDraft,
   prepareWorkoutDraft,
   removeSetFromExercise,
@@ -42,6 +44,80 @@ describe('createInitialHeadingDraft', () => {
       location: '',
       notes: '',
     })
+  })
+})
+
+describe('createExistingWorkoutDraft', () => {
+  it('rehydrates heading, finish time, and ordered exercise sets', () => {
+    let nextId = 0
+
+    const draft = createExistingWorkoutDraft(
+      {
+        id: 12,
+        date: '2026-09-15',
+        startedAt: new Date(2026, 8, 15, 23, 30).toISOString(),
+        endedAt: new Date(2026, 8, 16, 0, 15).toISOString(),
+        title: 'Late pull',
+        bodyweightKg: 78.4,
+        location: 'Liikuntamylly',
+        notes: null,
+        exercises: [
+          {
+            id: 20,
+            exerciseId: 42,
+            exerciseName: 'Pull-up',
+            isBodyweight: true,
+            sets: [
+              {
+                id: 21,
+                setNumber: 1,
+                reps: 5,
+                weight: 10,
+                isWarmup: false,
+              },
+            ],
+          },
+        ],
+      },
+      () => `client-${(nextId += 1)}`,
+    )
+
+    expect(draft).toEqual({
+      heading: {
+        date: '2026-09-15',
+        startTime: '23:30',
+        title: 'Late pull',
+        bodyweightKg: '78.4',
+        location: 'Liikuntamylly',
+        notes: '',
+      },
+      endTime: '00:15',
+      exercises: [
+        {
+          clientId: 'client-1',
+          exerciseId: 42,
+          exerciseName: 'Pull-up',
+          isBodyweight: true,
+          isAddedWeightEnabled: true,
+          sets: [
+            {
+              clientId: 'client-2',
+              weight: '10',
+              reps: '5',
+              isWarmup: false,
+            },
+          ],
+        },
+      ],
+    })
+  })
+})
+
+describe('createLocalEndedAt', () => {
+  it('rolls an earlier finish time onto the next local day', () => {
+    expect(createLocalEndedAt('2026-09-15', '23:30', '00:15')).toBe(
+      new Date(2026, 8, 16, 0, 15).toISOString(),
+    )
   })
 })
 

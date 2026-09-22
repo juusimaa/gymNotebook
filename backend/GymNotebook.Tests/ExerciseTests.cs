@@ -176,6 +176,45 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     }
 
     [Fact]
+    public async Task Search_counts_distinct_sessions_instead_of_repeated_blocks()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var exercise = await SeedExerciseAsync(userId, "Back Squat");
+        var firstBlock = await SeedSessionAsync(
+            userId,
+            exercise.Id,
+            new DateOnly(2026, 1, 8),
+            new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 90m, IsWarmup: false));
+
+        // Coming back to the same exercise later on one page creates another block,
+        // not another session in the exercise index.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.WorkoutExercises.Add(new WorkoutExercise
+            {
+                WorkoutId = firstBlock.WorkoutId,
+                ExerciseId = exercise.Id,
+                Position = 1,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await SeedSessionAsync(
+            userId,
+            exercise.Id,
+            new DateOnly(2026, 1, 10),
+            new DateTimeOffset(2026, 1, 10, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 3, Weight: 100m, IsWarmup: false));
+
+        var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        Assert.Equal(2, Assert.Single(body!).SessionCount);
+    }
+
+    [Fact]
     public async Task Search_falls_back_to_a_warm_up_when_the_latest_session_logged_nothing_else()
     {
         var (token, userId) = await RegisterAndGetUserAsync();

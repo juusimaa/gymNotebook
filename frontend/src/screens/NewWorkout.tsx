@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
+import { ApiError } from '../api/client'
 import {
   searchExercises,
   updateExercise as updateExerciseRecord,
@@ -7,12 +8,15 @@ import {
 } from '../api/exercises'
 import {
   createWorkout,
+  getWorkout,
   replaceWorkoutExercises,
   updateWorkout,
 } from '../api/workouts'
 import {
   addEmptySetToExercise,
+  createExistingWorkoutDraft,
   createInitialHeadingDraft,
+  createLocalEndedAt,
   createWorkoutExerciseDraft,
   prepareWorkoutDraft,
   removeSetFromExercise,
@@ -21,34 +25,20 @@ import {
   type WorkoutHeadingDraft,
   type WorkoutSetDraftChanges,
 } from './newWorkoutDraft'
+import { describeLastSet, normalizeExerciseName } from './exerciseFormat'
 import './NewWorkout.css'
-
-// Format the autocomplete hint using the notebook's set notation. Bodyweight
-// exercises prefix a non-null weight because it represents added load.
-function describeLastSet(exercise: ExerciseResponse): string {
-  const lastSet = exercise.lastSet
-
-  if (lastSet === null) {
-    return 'Not logged yet'
-  }
-
-  if (lastSet.weight === null) {
-    return `${lastSet.reps} reps`
-  }
-
-  const prefix = exercise.isBodyweight ? '+' : ''
-  return `${prefix}${lastSet.weight} kg × ${lastSet.reps}`
-}
-
-function normalizeExerciseName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ')
-}
 
 export default function NewWorkout() {
   const navigate = useNavigate()
+  const { workoutId: workoutIdParam } = useParams()
+  const parsedWorkoutId = Number(workoutIdParam)
+  const isEditing = workoutIdParam !== undefined
+  const hasValidWorkoutId =
+    Number.isSafeInteger(parsedWorkoutId) && parsedWorkoutId > 0
   const [heading, setHeading] = useState(() =>
     createInitialHeadingDraft(new Date()),
   )
+  const [endTime, setEndTime] = useState('')
   const [exercises, setExercises] = useState<WorkoutExerciseDraft[]>([])
   const [exerciseQuery, setExerciseQuery] = useState('')
   const [exerciseSuggestions, setExerciseSuggestions] = useState<
@@ -62,10 +52,64 @@ export default function NewWorkout() {
     null,
   )
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(isEditing)
+  const [loadMessage, setLoadMessage] = useState<string | null>(null)
+  const [confirmingFinish, setConfirmingFinish] = useState(false)
 
   // If the heading POST succeeds but a later request fails, retain its id. A
   // retry then updates that page instead of creating a duplicate empty page.
-  const [savedWorkoutId, setSavedWorkoutId] = useState<number | null>(null)
+  const [savedWorkoutId, setSavedWorkoutId] = useState<number | null>(
+    isEditing && hasValidWorkoutId ? parsedWorkoutId : null,
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadWorkoutForEditing() {
+      if (!isEditing) {
+        setIsLoading(false)
+        return
+      }
+
+      if (!hasValidWorkoutId) {
+        setLoadMessage('This session page does not exist.')
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        const workout = await getWorkout(parsedWorkoutId)
+        if (!cancelled) {
+          const draft = createExistingWorkoutDraft(
+            workout,
+            crypto.randomUUID.bind(crypto),
+          )
+          setHeading(draft.heading)
+          setEndTime(draft.endTime)
+          setExercises(draft.exercises)
+          setSavedWorkoutId(workout.id)
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setLoadMessage(
+            error instanceof ApiError && error.status === 404
+              ? 'This session page could not be found.'
+              : 'This session page could not be opened. Please try again.',
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadWorkoutForEditing()
+
+    return () => {
+      cancelled = true
+    }
+  }, [hasValidWorkoutId, isEditing, parsedWorkoutId])
 
   // Cleanup marks the previous request as stale so a slower response cannot
   // replace results for a newer query.
@@ -199,8 +243,19 @@ export default function NewWorkout() {
       return
     }
 
-    // Capture the button-click instant, not the later instant after network I/O.
-    const endedAt = finishSession ? new Date().toISOString() : null
+    // Capture the confirmation instant, not the later instant after network I/O.
+    let endedAt: string | null = finishSession ? new Date().toISOString() : null
+    if (isEditing && !finishSession && endTime !== '') {
+      endedAt = createLocalEndedAt(
+        prepared.value.workout.date,
+        heading.startTime,
+        endTime,
+      )
+      if (endedAt === null) {
+        setSaveMessage('Enter a valid finish time.')
+        return
+      }
+    }
     let workoutId = savedWorkoutId
 
     setSavingAction(finishSession ? 'finish' : 'save')
@@ -213,7 +268,12 @@ export default function NewWorkout() {
         setSavedWorkoutId(created.id)
       } else {
         // Corrections made after a failed attempt must reach the existing page.
-        await updateWorkout(workoutId, prepared.value.workout)
+        await updateWorkout(
+          workoutId,
+          isEditing
+            ? { ...prepared.value.workout, endedAt }
+            : prepared.value.workout,
+        )
       }
 
       const saved = await replaceWorkoutExercises(
@@ -239,11 +299,11 @@ export default function NewWorkout() {
         ),
       )
 
-      if (endedAt !== null) {
+      if (!isEditing && endedAt !== null) {
         await updateWorkout(workoutId, { endedAt })
       }
 
-      void navigate('/workouts')
+      void navigate(isEditing ? `/workouts/${workoutId}` : '/workouts')
     } catch {
       setSaveMessage(
         workoutId === null
@@ -266,11 +326,30 @@ export default function NewWorkout() {
     )
   const isSaving = savingAction !== null
 
+  if (isLoading) {
+    return <main className="page workout-editor-state">Opening page…</main>
+  }
+
+  if (loadMessage !== null) {
+    return (
+      <main className="page workout-editor-state">
+        <p className="form-message" role="alert">
+          {loadMessage}
+        </p>
+        <Link className="btn btn-ghost" to="/workouts">
+          Back to sessions
+        </Link>
+      </main>
+    )
+  }
+
+  const cancelTarget = isEditing ? `/workouts/${parsedWorkoutId}` : '/workouts'
+
   return (
     <main className="page new-workout">
       <header className="new-workout-header">
-        <Link to="/workouts">← Cancel</Link>
-        <h1>New page</h1>
+        <Link to={cancelTarget}>← Cancel</Link>
+        <h1>{isEditing ? 'Edit page' : 'New page'}</h1>
         <span className="new-workout-header-spacer" aria-hidden="true"></span>
       </header>
 
@@ -312,6 +391,23 @@ export default function NewWorkout() {
                   }
                 />
               </div>
+              {isEditing && (
+                <div className="field">
+                  <label className="label" htmlFor="endTime">
+                    Finished
+                  </label>
+                  <input
+                    className="input num"
+                    id="endTime"
+                    type="time"
+                    value={endTime}
+                    onChange={(event) => setEndTime(event.target.value)}
+                  />
+                  <span className="new-workout-field-hint">
+                    Leave empty to mark the session in progress.
+                  </span>
+                </div>
+              )}
               <div className="field">
                 <label className="label" htmlFor="title">
                   Title
@@ -614,21 +710,48 @@ export default function NewWorkout() {
                 {saveMessage}
               </p>
             )}
-            <div>
+            {confirmingFinish && (
+              <div className="finish-confirmation" role="alert">
+                <p>Finish this session now? The current time will be saved.</p>
+                <div>
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    onClick={() => setConfirmingFinish(false)}
+                  >
+                    Keep editing
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => void saveWorkout(true)}
+                  >
+                    Confirm finish
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="new-workout-action-buttons">
               <button
-                className="btn btn-secondary"
+                className={isEditing ? 'btn btn-primary' : 'btn btn-secondary'}
                 type="button"
                 onClick={() => void saveWorkout(false)}
               >
-                {savingAction === 'save' ? 'Saving…' : 'Save page'}
+                {savingAction === 'save'
+                  ? 'Saving…'
+                  : isEditing
+                    ? 'Save changes'
+                    : 'Save page'}
               </button>
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => void saveWorkout(true)}
-              >
-                {savingAction === 'finish' ? 'Finishing…' : 'Finish session'}
-              </button>
+              {(!isEditing || endTime === '') && (
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => setConfirmingFinish(true)}
+                >
+                  {savingAction === 'finish' ? 'Finishing…' : 'Finish session'}
+                </button>
+              )}
             </div>
           </footer>
         </fieldset>
