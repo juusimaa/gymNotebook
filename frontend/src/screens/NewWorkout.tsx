@@ -25,6 +25,7 @@ import {
   type WorkoutHeadingDraft,
   type WorkoutSetDraftChanges,
 } from './newWorkoutDraft'
+import { createClientId } from './clientId'
 import { describeLastSet, normalizeExerciseName } from './exerciseFormat'
 import './NewWorkout.css'
 
@@ -80,10 +81,7 @@ export default function NewWorkout() {
       try {
         const workout = await getWorkout(parsedWorkoutId)
         if (!cancelled) {
-          const draft = createExistingWorkoutDraft(
-            workout,
-            crypto.randomUUID.bind(crypto),
-          )
+          const draft = createExistingWorkoutDraft(workout, createClientId)
           setHeading(draft.heading)
           setEndTime(draft.endTime)
           setExercises(draft.exercises)
@@ -183,8 +181,8 @@ export default function NewWorkout() {
   // Repeated exercise selections remain separate blocks by design.
   function selectExercise(exercise: ExerciseResponse) {
     const draft = createWorkoutExerciseDraft(
-      crypto.randomUUID(),
-      crypto.randomUUID(),
+      createClientId(),
+      createClientId(),
       exercise.id,
       exercise.name,
       exercise.isBodyweight,
@@ -203,8 +201,8 @@ export default function NewWorkout() {
     }
 
     const draft = createWorkoutExerciseDraft(
-      crypto.randomUUID(),
-      crypto.randomUUID(),
+      createClientId(),
+      createClientId(),
       null,
       name,
       isBodyweight,
@@ -608,7 +606,7 @@ export default function NewWorkout() {
                     type="button"
                     onClick={() =>
                       changeExercise(exercise.clientId, (current) =>
-                        addEmptySetToExercise(current, crypto.randomUUID()),
+                        addEmptySetToExercise(current, createClientId()),
                       )
                     }
                   >

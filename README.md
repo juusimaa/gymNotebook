@@ -37,6 +37,8 @@ open http://localhost:3000
 
 The backend container applies pending migrations on start (`entrypoint.sh`), so a fresh database is ready without any manual step. Data lives in the `db_data` named volume and survives `docker compose down`. The frontend container is the production build served by nginx on <http://localhost:3000>, with `try_files` sending every route to `index.html` so a direct load of `/login` works; `VITE_API_URL` is baked in at image build time (Compose passes it as a build arg from `.env`), which is why `--build` is needed after changing it — milestone 6 replaces that with a runtime setting.
 
+To use the app from a phone on the same network, point `CORS_ORIGINS` and `VITE_API_URL` in `.env` at the machine's LAN address instead of `localhost` and rebuild. Note that such an origin is not a [secure context](PLAN.md#the-secure-context-trap), which puts some web APIs out of reach — see that section before reaching for one.
+
 ### From the SDK (for development and the API docs)
 
 Compose runs the app in Production mode, which is where the interactive API docs are deliberately switched off. For day-to-day development run the app directly, with only the database in a container:
