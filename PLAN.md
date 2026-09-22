@@ -249,6 +249,14 @@ Worth knowing before milestone 6 builds the frontend image, because subscription
 
 The fix that project landed on is a runtime config: the production image's entrypoint renders a small `config.js` from an `API_URL` env var at container *startup*, `index.html` loads it before the app bundle, and the API client prefers `window.__API_URL__` before falling back to the build-time value for local Vite dev. One image then works against any backend, and changing the URL is an env var update rather than a rebuild.
 
+### The secure-context trap
+
+The sibling of the one above, and it surfaces in the same situation — the app opened from a phone on the same network, at `http://<lan-ip>:3000` rather than `http://localhost:3000`. **Browsers gate a set of web APIs on the origin being a *secure context*: HTTPS, or `localhost`/`127.0.0.1` as a special case.** A LAN IP over plain HTTP is neither, so those APIs are simply not defined there, and nothing about the failure points at the cause: the API that is missing throws on first use and the screen reports whatever its own error handling reports.
+
+`crypto.randomUUID()` is one of them, and the session editor used it for the client-side ids its draft rows are keyed by. On the dev machine the editor worked and on the phone it answered "This session page could not be opened", because the call threw inside the load's `try` and only a 404 is distinguished there. The rest of `crypto` — `getRandomValues` included — is available in both contexts, so the guard belongs on the method, not the object.
+
+The fix is `createClientId()` in `screens/clientId.ts`: `crypto.randomUUID()` when it exists, a counter-based id otherwise. It can fall back to something non-cryptographic because these ids are React keys for rows that live only while the page is open — never sent to the API, never stored — so uniqueness within the page is their whole contract, and a counter meets it more exactly than randomness would. The general lesson for later screens: an API that needs a secure context can't be reached for by default in a phone-first app served over HTTP on a LAN.
+
 ## Testing and CI
 
 Tests exist from milestone 1, not as a later milestone. The plan's own rule — every change via a branch and PR, no direct commits to `main` — only means something if the PR has a check to pass, and branch protection with a required status check is what enforces it mechanically instead of by memory.
