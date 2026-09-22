@@ -23,6 +23,7 @@
 
 .workout-detail-actions {
   display: flex;
+  align-items: center;
   gap: 14px;
 }
 
@@ -112,11 +113,6 @@
   margin: 0;
 }
 
-.workout-detail-exercise + .workout-detail-exercise {
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--color-divider);
-}
-
 .workout-detail-exercise-heading {
   display: flex;
   align-items: flex-start;
@@ -161,10 +157,6 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
-.workout-detail-sets li:last-child {
-  border-bottom: 0;
-}
-
 .workout-detail-sets li.is-warmup {
   color: var(--color-neutral-600);
 }
@@ -189,7 +181,6 @@
 .workout-detail-notes {
   padding-top: var(--space-6);
   margin-top: var(--space-8);
-  border-top: 1px solid var(--color-divider);
 }
 
 .workout-detail-notes h2 {
