@@ -80,7 +80,7 @@ jobs:
               --parameters @infra/main.parameters.json \
                 apiContainerImage="$BACKEND_IMAGE:${{ inputs.image_tag }}" \
                 frontendContainerImage="$FRONTEND_IMAGE:${{ inputs.image_tag }}" \
-                corsOrigins="https://${{ steps.first-deploy.outputs.frontend_fqdn }}" \
+                corsOrigins="https://${{ steps.first-deploy.outputs.frontend_fqdn }},https://gymnotebook.fit" \
                 neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
                 jwtSecret='${{ secrets.JWT_SECRET }}' \
                 inviteCode='${{ secrets.INVITE_CODE }}'
