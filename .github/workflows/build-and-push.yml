@@ -27,9 +27,11 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/gymnotebook-backend
+          # The deploy workflow uses this full SHA tag to select the exact
+          # backend image built for a merge commit.
           tags: |
             type=ref,event=branch
-            type=sha,prefix={{branch}}-
+            type=sha,format=long,prefix={{branch}}-
 
       - name: Build and push backend
         uses: docker/build-push-action@v7
@@ -38,7 +40,7 @@ jobs:
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
-  
+
   build-frontend:
     runs-on: ubuntu-latest
     permissions:
@@ -60,9 +62,10 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/gymnotebook-frontend
+          # The backend and frontend must share the same immutable commit tag.
           tags: |
             type=ref,event=branch
-            type=sha,prefix={{branch}}-
+            type=sha,format=long,prefix={{branch}}-
 
       - name: Build and push frontend
         uses: docker/build-push-action@v7
