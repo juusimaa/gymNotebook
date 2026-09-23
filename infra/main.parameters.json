@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "gymnote-prod-58dd"
+    },
+    "location": {
+      "value": "swedencentral"
+    },
+    "sessionId": {
+      "value": "58DD5842-E4C7-42B5-8366-25B01A3E53F8"
+    },
+    "deployedBy": {
+      "value": "Jouni Uusimaa"
+    },
+    "createdAt": {
+      "value": "2026-09-22T14:27:26.9194710+03:00"
+    }
+  }
+}
