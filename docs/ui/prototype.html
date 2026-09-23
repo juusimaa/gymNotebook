@@ -319,6 +319,21 @@ document.addEventListener('DOMContentLoaded', async function() {
     // The manifest bytes are ours; SRI protects against CDN compromise, not this.
     template = template.replace(/\s+integrity="[^"]*"/gi, '').replace(/\s+crossorigin="[^"]*"/gi, '');
 
+    // A discreet support link belongs on the closed cover, where account-level
+    // actions already live. It stays out of the active logging screens, and
+    // text rather than a third-party badge keeps the editorial visual language.
+    const coverSignOut = `<div style="text-align:center;margin-top:16px;font-size:13px"><a href="#" sc-camel-on-click="{{ goLogin }}">Sign out</a></div>`;
+    const supportLink = `
+        <div style="text-align:center;margin-top:28px;font-size:12px;color:var(--color-neutral-600)">Enjoying the notebook? <a href="https://buymeacoffee.com/jouni" target="_blank" rel="noreferrer">Buy me a coffee ↗</a></div>`;
+    template = template.replace(coverSignOut, coverSignOut + supportLink);
+
+    // Links are colour-led navigation marks in this editorial system, not
+    // underlined web prose. Individual controls may still add their own state.
+    template = template.replace(
+      'a { color: var(--color-accent); text-underline-offset: 3px; }',
+      'a { color: var(--color-accent); text-decoration: none; }'
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';
