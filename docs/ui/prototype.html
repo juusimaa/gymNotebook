@@ -327,6 +327,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         <div style="text-align:center;margin-top:28px;font-size:12px;color:var(--color-neutral-600)">Enjoying the notebook? <a href="https://buymeacoffee.com/jouni" target="_blank" rel="noreferrer">Buy me a coffee ↗</a></div>`;
     template = template.replace(coverSignOut, coverSignOut + supportLink);
 
+    // Test a quieter, text-first opening action without changing the shared
+    // outlined-button treatment used by the logging and management screens.
+    const coverOpenButton = `<button class="btn btn-primary" sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook</button>`;
+    const borderlessCoverOpenButton = `<button class="btn btn-primary" sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook</button>`;
+    template = template.replace(coverOpenButton, borderlessCoverOpenButton);
+
     // Links are colour-led navigation marks in this editorial system, not
     // underlined web prose. Individual controls may still add their own state.
     template = template.replace(
