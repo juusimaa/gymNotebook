@@ -1,6 +1,16 @@
 name: deploy
 
 on:
+  # Wait for both GHCR images rather than racing the parallel build workflow.
+  workflow_run:
+    workflows:
+      - build-and-push
+    branches:
+      - main
+    types:
+      - completed
+
+  # Retain a deliberate way to deploy a previously published immutable image.
   workflow_dispatch:
     inputs:
       image_tag:
@@ -19,6 +29,10 @@ concurrency:
 
 jobs:
   deploy:
+    # A failed image build must never roll out a partial or missing image set.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -27,9 +41,16 @@ jobs:
       API_APP: ca-gymnote-prod-58dd-api
       BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/gymnotebook-backend
       FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/gymnotebook-frontend
+      # workflow_run supplies the commit whose images just finished publishing;
+      # workflow_dispatch keeps the explicit rollback/redeploy image tag.
+      IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || format('main-{0}', github.event.workflow_run.head_sha) }}
     steps:
       - name: Check out the deployment template
         uses: actions/checkout@v6
+        with:
+          # Deploy the infrastructure definition that belongs to the images,
+          # even if another commit reaches main while this job is queued.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       # This exchanges GitHub's short-lived OIDC token for Azure access. The Entra
       # app registration is configured separately; no Azure client secret is stored
@@ -55,8 +76,8 @@ jobs:
               --resource-group "$RESOURCE_GROUP" \
               --template-file infra/main.bicep \
               --parameters @infra/main.parameters.json \
-                apiContainerImage="$BACKEND_IMAGE:${{ inputs.image_tag }}" \
-                frontendContainerImage="$FRONTEND_IMAGE:${{ inputs.image_tag }}" \
+                apiContainerImage="$BACKEND_IMAGE:$IMAGE_TAG" \
+                frontendContainerImage="$FRONTEND_IMAGE:$IMAGE_TAG" \
                 corsOrigins='https://localhost.invalid' \
                 neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
                 jwtSecret='${{ secrets.JWT_SECRET }}' \
@@ -78,8 +99,8 @@ jobs:
               --resource-group "$RESOURCE_GROUP" \
               --template-file infra/main.bicep \
               --parameters @infra/main.parameters.json \
-                apiContainerImage="$BACKEND_IMAGE:${{ inputs.image_tag }}" \
-                frontendContainerImage="$FRONTEND_IMAGE:${{ inputs.image_tag }}" \
+                apiContainerImage="$BACKEND_IMAGE:$IMAGE_TAG" \
+                frontendContainerImage="$FRONTEND_IMAGE:$IMAGE_TAG" \
                 corsOrigins="https://${{ steps.first-deploy.outputs.frontend_fqdn }},https://gymnotebook.fit" \
                 neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
                 jwtSecret='${{ secrets.JWT_SECRET }}' \
