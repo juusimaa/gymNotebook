@@ -1,17 +1,3 @@
-<!--
-Sync Impact Report — temporary review material; remove before committing.
-Version change: unfilled template -> 1.0.0 (initial brownfield constitution draft).
-Principles: five template slots replaced by seven source-grounded principles.
-Added sections: Source Boundaries and Unresolved Questions; Development Workflow
-and Review; Governance.
-Removed sections: none; illustrative template text removed.
-Only this constitution is changed; dependent templates are not modified.
-Deferred: TODO(RATIFICATION_DATE), pending owner review; unresolved questions Q1–Q7.
-Risk-proportionate verification, focused AI comments, and review of generated
-plans/tasks are explicit instructions for this constitution, not claims that
-all source documents already state them verbatim.
--->
-
 # GymNotebook Constitution
 
 ## Core Principles
@@ -87,8 +73,9 @@ Risk-proportionate verification is explicit in this constitution request.
 ### V. Preserve Security and Privacy by Design
 
 Keep every exercise and workout operation scoped to its user, including nested
-sets. Access to another user's resource MUST return 404 rather than disclose its
-existence with 403; the pagination wording discrepancy is recorded as Q5 below.
+sets. Requests for a specific missing or unowned resource MUST return 404, not
+403. Invalid pagination cursors MUST return 400, treating nonexistent and foreign
+cursors identically so the response does not reveal another user's resource.
 Preserve BCrypt password hashing, JWT bearer authentication and token-version
 revocation, the invite-code registration gate, configured CORS origins, and per-IP
 rate limiting on login and registration. Do not disable these controls for local
@@ -136,50 +123,79 @@ Principle III.
 Basis: explicit instruction in this constitution request, alongside the planning
 and learning workflow in `AGENTS.md`.
 
-## Source Boundaries and Unresolved Questions
+## Source Boundaries and Resolved Questions
 
 This is a brownfield extraction from `AGENTS.md`, `PLAN.md`, `README.md`,
 `docs/ui/README.md`, `.editorconfig`, `docker-compose.yml`, and the three workflows
 in `.github/workflows/`: `test.yml`, `build-and-push.yml`, and `deploy.yml`.
-The user's explicit governance requirements are identified above. No application
-implementation or live deployment was audited to settle discrepancies.
+The user's explicit governance requirements are identified above. Cursor handling
+was inspected for Q5, bodyweight editing and interpretation for Q6, and the merge
+handler and existing test for Q7. No broader implementation or live deployment
+audit was performed; the merge test was inspected, not rerun.
 
-The following questions remain unresolved; none authorizes a behavior change:
+**Q1 — Project status: resolved by owner confirmation on 2026-09-24.**
+Milestones 1–10 are complete, including Azure deployment. The status descriptions
+in `AGENTS.md`, `PLAN.md`, and `README.md` are stale and need a separate documentation
+update; they are unchanged by this constitution-only task. Completion is recorded
+from the owner's confirmation, not inferred from `deploy.yml` or a live audit.
 
-- **Q1 — Project status:** `AGENTS.md` says milestone 7 is next; `README.md` and
-  `PLAN.md` record milestones 1–9 complete and Azure as next. `deploy.yml` already
-  defines automatic deployment after successful image publication and manual
-  redeployment. What completion status should these documents record? A workflow
-  definition alone does not establish successful deployment.
-- **Q2 — Login terminology:** `docs/ui/README.md` describes email login and
-  preserving email on 401; `PLAN.md` and `README.md` describe username/password
-  authentication without email verification. How should the UI description be
-  reconciled with the documented authentication contract?
-- **Q3 — Frontend configuration and image publication:** `README.md` says runtime
-  configuration will arrive in milestone 6, while that milestone is recorded as
-  complete. `PLAN.md` describes runtime `config.js` but its milestone 5 account and
-  Compose describe build-time `VITE_API_URL`. Milestone 6 also records older action
-  versions and `sha-<commit>` tags, while `build-and-push.yml` emits full
-  `main-<commit>` tags consumed by `deploy.yml`. Which passages are historical, and
-  which need updating to describe the current environment-specific setup?
-- **Q4 — UI status and missing states:** the UI spec is labelled proposed and says
-  empty/error/offline states are not drawn; `PLAN.md` says the UI is implemented
-  with loading/empty/error states and aligned with the prototype. Which reference
-  states and status labels remain to be reconciled?
-- **Q5 — Foreign pagination cursors:** `AGENTS.md` and `README.md` broadly require
-  404 for another user's data on workout routes, while `PLAN.md` milestone 4 says
-  an unknown or foreign `before` cursor returns 400. How should the documented
-  ownership rule and cursor-validation behavior be reconciled without changing
-  either by inference?
-- **Q6 — Bodyweight editing:** the UI spec's implementation notes say
-  `is_bodyweight` is written only on the exercise edit screen, while its new-page
-  section and `PLAN.md` also describe a follow-up PATCH for newly created
-  bodyweight exercises. How should the exclusive wording be corrected?
-- **Q7 — Exercise merge identity:** the UI edit description says the old name
-  disappears and sessions move to the existing name; `PLAN.md` milestone 4 says
-  the PATCHed row survives and the colliding row is deleted. Which identity and
-  movement semantics should the descriptions communicate? Do not infer a new
-  survivor-ID contract from the UI wording.
+**Q2 — Login terminology: resolved by owner confirmation on 2026-09-24.**
+Keep the established username/password authentication. References to email login
+and preserving email on 401 in `docs/ui/README.md` are stale wording to correct to
+username in a separate documentation update. The UI specification is unchanged by
+this constitution-only task. Email-based login and password reset remain future
+proposals requiring separate review, not current product requirements.
+
+**Q3 — Frontend configuration and image publication: resolved by owner confirmation
+on 2026-09-24.** Retain the current implementation as the intended behavior.
+Reconcile the older `PLAN.md` and `README.md` descriptions of frontend runtime
+configuration, build-time `VITE_API_URL`, action versions, and image tags with the
+current environment-specific implementation in a separate documentation update.
+Historical milestone accounts must be distinguished from current operating
+instructions. This resolution records the owner's acceptance; it does not claim
+an implementation audit or authorize configuration, infrastructure, or workflow changes.
+
+**Q4 — UI status and missing states: resolved by owner confirmation on 2026-09-24.**
+The UI specification is outdated regarding its proposed status and descriptions
+of empty/error/offline states. Reconcile these descriptions with the existing UI
+in a separate documentation update. This is a documentation gap, not a finding
+that implementation is missing; no implementation or browser audit was performed
+to establish coverage of individual states. The UI specification and prototype
+remain unchanged by this constitution-only task.
+
+**Q5 — Foreign pagination cursors: resolved by owner approval on 2026-09-24.**
+Preserve 404 for missing or unowned resources. Preserve 400 for invalid pagination
+cursors, treating nonexistent and foreign cursors identically. This matches the
+existing cursor handling in `backend/GymNotebook.Api/Program.cs` and the behavior
+recorded in `PLAN.md` milestone 4. Clarify the broad ownership wording in
+`AGENTS.md` and `README.md` in a separate documentation update, without changing
+API behavior. Only this constitution is updated here.
+
+**Q6 — Bodyweight editing: resolved by owner approval on 2026-09-24.**
+The exercise's Bodyweight/Loaded classification is set when creating a bodyweight
+exercise through the workout editor and can be changed later through exercise
+editing. Both use `PATCH /exercises/{id}`. Record "written only here" in the UI
+specification as stale wording to correct in a separate documentation update;
+preserve the existing behavior.
+
+This classification (`isBodyweight`) is separate from the lifter's bodyweight in
+kilograms (`bodyweightKg`), which is recorded per workout. Recording 82 kg today
+does not change a previous workout's recorded 80 kg. The exercise's current
+classification applies to past and future workouts' display and progress
+calculations without rewriting stored set weights or reps. The current bodyweight
+progress metric uses reps, not the lifter's recorded bodyweight in kilograms.
+
+**Q7 — Exercise merge identity: resolved by owner approval on 2026-09-24.**
+Preserve the existing merge semantics: the edited exercise keeps its ID and takes
+the requested name, the matching exercise's blocks are reassigned to it, and the
+duplicate exercise record is removed. Workouts and sets are preserved. This
+matches `PLAN.md` milestone 4, the merge handler, and the existing merge test.
+Clarify in a separate UI documentation update that "nothing is deleted" means
+no workouts or sets are deleted. UI wording must not imply which internal ID
+survives. This resolution does not change API or data-model behavior.
+
+All seven source questions are resolved. The documentation follow-ups recorded
+above remain separate from this constitution-only task.
 
 ## Development Workflow and Review
 
