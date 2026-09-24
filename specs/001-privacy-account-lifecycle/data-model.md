@@ -21,11 +21,13 @@ Keep existing field validation, normalization and ordering conventions. Bodyweig
 | PrivacyAccountId | UUID, non-null, unique, immutable, server generated | Non-reusable suppression identity independent of username and integer sequence |
 | AcknowledgedPrivacyNoticeVersion | Nullable bounded string, proposed max 64 | Latest current version acknowledged by Continue |
 | PrivacyNoticeAcknowledgedAt | Nullable timestamptz | When that acknowledgement was committed |
-| SignInSuspendedAt | Nullable timestamptz; proposed, subject to Q9 review | Set only by the restore fallback when a deletion's outcome is unknown (R6 Q2c). Login and token validation reject the account while set. Cleared or resolved by the owner through the privacy contact path |
+| SignInSuspendedAt | Nullable timestamptz; approved 2026-09-24 (P3) | Set only by the restore fallback when a deletion's outcome is unknown (R6 Q2c); the timestamp records when. Login verifies the password first, then returns 403 `account_suspended`; `OnTokenValidated` also rejects it as a backstop, at no extra query |
 
 Both acknowledgement fields are null or both populated. Acknowledgement stores no consent flag. Accept only the current published version from trusted notice configuration, never arbitrary client text. Same-version retries preserve the existing timestamp. A new version replaces the latest pair; prior public notice wording remains in versioned operator artifacts, not personal history.
 
 Existing accounts receive UUIDs and null acknowledgement. New registration behaves as before, creating UUID/null fields server-side. Notice acknowledgement is included in export and deleted with User. PrivacyAccountId is exported as account identity, not as a credential. SignInSuspendedAt is a restricted security control value, excluded from export like TokenVersion. A suspended account cannot sign in to export, and its requests go through the contact path.
+
+The operator sets and clears SignInSuspendedAt by documented manual SQL in `docs/privacy/restore.md`; there is no API or admin screen. To resolve a suspension, the operator confirms the intent with the user through the contact path. If deletion was intended, the operator completes it using the restore runbook's deletion steps. Otherwise the operator clears the marker.
 
 ## PrivacyNoticeVersion — repository artifact, not EF entity
 

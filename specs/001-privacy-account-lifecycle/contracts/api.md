@@ -13,8 +13,10 @@ Draft for owner review, 2026-09-24. These routes are proposed, not implemented. 
   - A request whose fresh check under the lock finds the account deleted or the token revoked returns 401.
   - A committed write whose delivery guard then fails returns 401 with no body. The work may have committed, so UI copy must warn that a retry after signing in again can duplicate it.
 - Unknown outcome instructs contact/revalidation; it does not claim the notebook is intact. Known precommit rollback leaves it intact. A later 401 cannot prove which outcome occurred.
-- Current password is verified anew for each export/deletion. Apply existing per-IP auth policy plus reviewed per-account throttling; proposed 10 attempts per 60 seconds, no queue. Only one export stream per account at a time; rejected concurrent exports disclose no data and do not modify the notebook.
+- Current password is verified anew for each export/deletion. Apply existing per-IP auth policy plus reviewed per-account throttling; proposed 10 attempts per 60 seconds, no queue. Only one export stream per account at a time, enforced across instances by an export-namespace advisory lock on the snapshot transaction (research R10); rejected concurrent exports disclose no data and do not modify the notebook.
 - Specific missing/unowned notebook resources remain 404; foreign/nonexistent pagination cursors remain identical 400s. The notice gate is UI routing, not an ownership or consent authorization rule.
+
+All routes below are mapped only when `PRIVACY_LIFECYCLE_ENABLED` is exactly `true`; otherwise they return 404 ([plan.md → Phase 1](../plan.md#phase-1--design-and-delivery-boundaries), P25). Lifecycle coordination on existing routes applies regardless of the flag.
 
 ## Endpoints
 

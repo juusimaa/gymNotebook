@@ -121,6 +121,18 @@ The cross-region figure is an estimate: the API runs in Azure swedencentral and 
 
 **Rationale:** UUIDs distinguish accounts after username reuse or sequence rewind during restore. Rotate JWT signing credentials before restored service access resumes so old integer subjects cannot authenticate as newly allocated identities. Explicit delete ordering preserves the exercise FK's Restrict semantics.
 
+**P18 decision (owner, 2026-09-24): rotate the JWT signing key on every restore.** A point-in-time restore rewinds the `users` ID sequence and each row's `TokenVersion`, which creates two concrete risks:
+
+- **ID reuse:** an account created after the restore point `T` is lost, and the next registration receives its integer ID with `TokenVersion` 0. The lost account's old token (`sub`, `tv` 0) would then authenticate as the new person.
+- **Revived revoked tokens:** a password change after `T` is undone, so the tokens it revoked validate again.
+
+Rotation closes both in the primary and fallback paths, and needs no evidence. The cost is signing every user out. With 30-minute tokens (`Jwt__ExpiryMinutes`), that is small, and it happens during a restore that already involves downtime. The operator generates the new secret directly into the Container Apps secret; it is never logged, printed or committed. Alternatives rejected: advancing the sequence and bumping every `TokenVersion` has the same sign-out effect but needs the preserved branch; bumping only changed accounts is error-prone.
+
+**Credentials changed after `T`:** a restore also reverts `PasswordHash`, so a password changed because of compromise would work again.
+
+- When the preserved branch is usable, the runbook copies `PasswordHash` and `TokenVersion` from it for every account whose values differ.
+- In the fallback path there is no source for the newer values. The limitation is recorded in `docs/privacy/restore.md` and disclosed in the notice's security information.
+
 **Alternatives considered:** Soft deletion retains active credentials/content; username tombstones can remove a new account; integer-only suppression needs separately proven sequence high-water recovery.
 
 ## R6 — Independent restore evidence
@@ -188,7 +200,7 @@ Neon restoration and branch capabilities are not this project's settings or veri
   - Neon's internal durability copies are not visible from the project and need supplier evidence (R8).
 - **Azure `rg-gymnotebook-prod`:**
   - Active Container Apps environment `cae-gymnote-prod-58dd` with workspace `log-gymnote-prod-58dd` (swedencentral).
-  - A leftover environment `cae-gymnotebook-prod-weu` with workspace `workspace-rggymnotebookproddLkl` (westeurope, created 2026-09-22, no apps, no log rows in 90 days). Candidate for removal by the owner.
+  - A leftover environment `cae-gymnotebook-prod-weu` with workspace `workspace-rggymnotebookproddLkl` (westeurope, created 2026-09-22, no apps, no log rows in 90 days). Removed with owner approval on 2026-09-24 (P27): the environment was deleted, and the workspace was deleted with `--force`, so no soft-delete copy remains.
   - No storage accounts, backup vaults or resource diagnostic settings.
 - **Log Analytics retention:**
   - Both workspaces keep 30 days, and `ContainerAppConsoleLogs_CL` is 30/30.
@@ -209,7 +221,15 @@ Neon restoration and branch capabilities are not this project's settings or veri
 
 **Rationale:** A notice is not consent and a contract rationale alone does not settle health-data treatment. This plan selects no legal basis and certifies no compliance. [GDPR official text](https://eur-lex.europa.eu/eli/reg/2016/679/), [EDPB consent guidance](https://www.edpb.europa.eu/documents/guideline/guidelines-052020-on-consent-under-regulation-2016679_en).
 
-`frontend/index.html` requests Google Fonts CSS/font resources. Include Google as an external-resource recipient candidate and verify actual browser traffic. Azure and Neon are repository-supported candidates; DNS/CDN and support recipients require discovery. Preserve the existing typefaces; self-hosting would require reviewed licensing and implementation, not an implicit change in this plan.
+`frontend/index.html` requests Google Fonts CSS/font resources. Azure and Neon are repository-supported candidates; DNS/CDN and support recipients require discovery.
+
+**P28 decision (owner, 2026-09-24): self-host the fonts in a separate PR before this feature.**
+
+- **What:** serve the five existing styles (Cormorant Garamond 400/600; Lora 400, 500, italic 400) as Latin-subset `.woff2` files from `frontend/public/fonts/`, with `@font-face` rules in the existing styles and the three Google `<link>` tags removed from `frontend/index.html`. The typefaces stay the same.
+- **Licensing:** both typefaces are under the SIL Open Font License 1.1. Ship the license text next to the files.
+- **No dependency:** no npm package is added; downloaded files meet the need.
+- **Effect:** once merged and verified in real browser traffic, Google is no longer a recipient. It drops out of the supplier inventory, the notice and the FR-004 review.
+- **Until then**, Google Fonts remains a recipient candidate in the operations inventory.
 
 **Alternatives considered:** Blanket acceptance contradicts FR-006; assuming all fitness data is or is not health data skips review; template controller/contact values cannot be published.
 
@@ -217,7 +237,7 @@ Neon restoration and branch capabilities are not this project's settings or veri
 
 **Decision:** Reuse `api/client.ts`, route guards, token storage and current UI preview. Add authenticated download/AbortSignal support. Distinguish invalid session (401) from a wrong password on new operations (400, `password_verification_failed`). Observed invalidation clears token, notebook/draft state, pending requests and export object URLs; notify same-origin tabs. Revalidate returning tabs and back/forward-cache restores before showing private state.
 
-**Rationale:** Current 401 handling is primarily in the route loader; an active screen can otherwise retain data until navigation. Login's existing generic 401 remains unchanged. Never store passwords in URLs, logs or browser persistence. Offline devices and downloaded files cannot be remotely erased.
+**Rationale:** Current 401 handling is primarily in the route loader; an active screen can otherwise retain data until navigation. Login's existing generic 401 remains unchanged for a wrong username or password. The one addition is the password-first 403 `account_suspended` for a suspended account (R4, Q5). Never store passwords in URLs, logs or browser persistence. Offline devices and downloaded files cannot be remotely erased.
 
 **Alternatives considered:** Treating any password failure as deletion harms retry; treating any 401 as deletion success violates FR-017; adding a cookie/analytics banner invents behavior.
 
@@ -226,6 +246,14 @@ Neon restoration and branch capabilities are not this project's settings or veri
 **Decision:** Apply the existing per-IP auth limiter to new password operations plus a per-account sensitive-operation bucket, proposed 10 attempts/60 seconds with no queue. Bound concurrent exports per account. Reuse ASP.NET primitives for the declared single-replica topology; verify live routing and concurrent revisions. Multiple serving instances require a shared limiter before claiming that aggregate bound.
 
 **Rationale:** Existing counters are in-process. Account keys come only from validated identities; untrusted forwarding headers cannot define IP identity. Use deterministic synchronization/time controls and independent test fixtures. [ASP.NET rate limiting](https://learn.microsoft.com/en-us/aspnet/core/performance/rate-limit?view=aspnetcore-10.0).
+
+**P12 decision (owner, 2026-09-24):**
+
+- **One export per account:** enforced by `pg_try_advisory_xact_lock(<export namespace>, userId)`, taken by the export's snapshot transaction. If it is already held, the request gets an immediate 429.
+  - It is correct across instances and revision overlaps, and PostgreSQL releases it on commit, abort or a lost connection.
+  - The namespace is separate from the R4 lifecycle namespace, and deletion never takes it. So it does not violate R3's rule against holding the lifecycle lock on the snapshot.
+- **Per-account password throttle (10 attempts per 60 s):** stays in process, like the existing auth limiter. Its documented bound is the limit times the number of running instances: normally one, and two during a Single-mode revision overlap. A shared limiter is needed before claiming an exact aggregate bound with more replicas.
+- **Finding (unverified, predates this feature):** `Program.cs` has no forwarded-headers configuration. Behind Container Apps ingress, `Connection.RemoteIpAddress` is probably the ingress's internal address, so the existing per-IP `auth` limiter may be one shared bucket for all visitors. Verify the deployed remote address separately. If confirmed, fix it outside this feature with trusted proxy configuration, never by trusting arbitrary `X-Forwarded-For`. The new operations inherit whatever the per-IP policy does.
 
 **Alternatives considered:** Unthrottled verification fails FR-009; sleep-based race tests are unreliable; automated/source checks do not prove owner mobile/keyboard acceptance.
 

@@ -117,15 +117,15 @@ Recorded after plan generation. Items marked as blocking must be resolved before
 | Q5 | R4 wait outcomes: deletion's response when exclusive access is not acquired in time (FR-017 safe retry), and the response to an ordinary request that waited behind a deletion that then committed. Also the login/token-validation response for a suspended account (R6 Q2c) | API behavior | **Answered 2026-09-24:** 503 `temporarily_unavailable` on lock timeout; 401 after a deletion or revocation wins, including a failed write delivery guard; password-first 403 `account_suspended` at login ([research R4](research.md#r4--coordinate-operations-and-response-delivery), [API contract](contracts/api.md)) | Project owner |
 | Q6 | R4 login: whether token issuance runs under the shared guard, so a login racing deletion cannot issue a token | Design decision | **Answered 2026-09-24:** no guard; stale login tokens fail the per-request check, proven by a race test ([research R4](research.md#r4--coordinate-operations-and-response-delivery)) | Project owner |
 | Q7 | R4 validation spike Part A (local) and Part B (deployed proxy, requires approval of disposable Azure resources) as defined in research R4 | Proof | No; becomes an early blocking task | Author; owner approves Part B |
-| Q8 | Controller/contact details, reviewed processing and consent conclusions, supplier evidence, and retention period/location for rights-request records | Owner content | No; release gates below | Project owner/controller |
-| Q9 | Review of the proposals: account UUID, endpoints, UI routes and additional storage | Review | Yes, whole plan | Project owner |
+| Q8 | Controller/contact details, reviewed processing and consent conclusions, supplier evidence, and retention period/location for rights-request records. Also verify the deployed client address seen by the per-IP limiter (unverified finding, research R10) | Owner content | No; release gates below | Project owner/controller |
+| Q9 | Review of the proposals: account UUID, endpoints, UI routes and additional storage. Itemized as P1–P28 in [checklists/proposal-review.md](checklists/proposal-review.md) | Review | **Answered 2026-09-24:** all items approved, with decisions recorded in the source documents | Project owner |
 
 **Recommended order:**
 
 1. Q1 first. If the database's own restore window is short and no other copies exist, the independent ledger in Q2 may shrink to a smaller mechanism. If longer-lived copies exist, the ledger is justified and Q2's answers are required. *Done: the window is 6 hours and no other controlled copies were found.*
 2. Q2 next, sized to Q1's findings. *Done.*
 3. Q3, Q5 and Q6, recording Q4 starting values. Q7 Part A can run alongside. *Done.*
-4. Q9, then `/speckit.tasks` and `/speckit.analyze`. Q7 and Q8 enter as tasks marked as release blockers.
+4. Q9, then `/speckit.tasks` and `/speckit.analyze`. *Q9 done; tasks next.* Q7 and Q8 enter as tasks marked as release blockers.
 
 Performance tests, the isolated restore exercise and the owner's mobile/keyboard walkthrough belong to implementation and release. They are not needed to approve the plan.
 
@@ -139,6 +139,14 @@ Performance tests, the isolated restore exercise and the owner's mobile/keyboard
 6. **Acceptance/release**: performance fixture, required checks, owner walkthrough, legal/provider evidence, retention boundary proof, isolated restore and aligned PLAN.md/README.md/docs/ui/operating records.
 
 These are suggested focused PR boundaries, not tasks or permission to create PRs. Each behavioral PR updates relevant documentation. Keep incomplete features disabled in production until prerequisites pass: automatic main deployment means merging enabled behavior would itself roll it out.
+
+**Production disablement (P25, owner decision 2026-09-24):**
+
+- **The flag:** a backend flag, `PRIVACY_LIFECYCLE_ENABLED`, read at startup next to `INVITE_CODE`. Only the exact value `true` enables it; unset, empty or any other value means disabled. Unlike `INVITE_CODE`, a missing setting fails closed.
+- **When disabled:** `/privacy/notice`, `/account/privacy`, `/account/export` and `/account/delete` are not mapped and return 404.
+- **Frontend:** it has no flag of its own. A 404 from `GET /account/privacy` means the feature is off, so the UI hides "Privacy & account" and skips the notice gate. Any other error shows the normal error state.
+- **Deployment:** the variable is a plain Container Apps environment value in `infra/`, set to `false` until the release gates pass. The implementing PR adds it to README.md and `.env.example`.
+- **Scope:** the flag covers the new routes and UI only. The migration (additive columns and UUID backfill) and the R4 endpoint filter ship unflagged, because they preserve behavior and tests prove them. This also allows guard overhead to be measured in production before any user-visible change.
 
 ## Release Gates and Evidence Owners
 
