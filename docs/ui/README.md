@@ -58,6 +58,18 @@ Two sessions on one date are two points, not one — the Pull-up series in the p
 - **Load** — a switch between "Loaded (kg)" and "Bodyweight", each with its consequence spelled out (reps vs e1RM; weight means *added* weight). This is the read/write surface for `is_bodyweight`.
 - **Remove** — explained, not offered. An exercise with sets against it can't be deleted; the copy says so and points at renaming-onto as the fix.
 
+### Privacy and account lifecycle — design preview
+
+These prototype screens explore `specs/001-privacy-account-lifecycle/spec.md`. They are clickable design samples, not a published privacy notice or working account operations. Controller details, legal bases, processor/transfer information, contact details and provider retention settings remain review gates in the feature specification.
+
+- **Public notice:** A "Privacy notice" link appears on the sign-in screen. The preview shows the content hierarchy, including what users enter, why it is used, retention and rights. Its own header says the legal text is pending review. Returning to sign-in does not record an acknowledgement.
+- **New notice version:** "Open the notebook" on the cover first shows the notice when the current version has not been acknowledged. "Continue to notebook" records the version shown in this prototype's in-memory state; it is explicitly not consent. Leaving without continuing causes the notice to appear again on the next attempt. The account privacy screen has a prototype control for previewing a revised version. Sign-out and sign-in in the same open prototype retain the acknowledgement for review; reloading the page resets all demo state.
+- **Account privacy:** "Privacy & account" sits on the cover, separate from workout navigation. It links to the notice, export and deletion. The prototype screens use the existing single-column layout and design tokens.
+- **Export:** The user sees the contents and privacy warning, enters a current password and downloads one *sample* JSON file with a field guide. An empty password or the literal `wrong` shows an inline verification error; a prototype link shows a recoverable export failure. No real account data is read.
+- **Deletion:** The review screen names the active information removed, sign-out across sessions, optional export, irreversibility, the proposed 30-day backup limit and the restricted security-log exception. It requires a separate password-confirmed action and offers cancellation. An empty password or `wrong` shows an inline error; a prototype link shows a recoverable failure. Success leads to a completion screen explaining backup and log expiry. No real account is deleted.
+
+All action buttons are at least 44px high and errors are shown beside the relevant action. The final notice wording and service behavior must be reviewed against the specification before implementation; the prototype is for layout and flow review.
+
 ## Rules the UI must not break
 
 These are UI-visible consequences of decisions in PLAN.md; each one is a thing a redesign can quietly undo.
