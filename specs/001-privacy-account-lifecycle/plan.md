@@ -4,7 +4,7 @@
 
 **Input**: `specs/001-privacy-account-lifecycle/spec.md`
 
-**Status**: Draft for owner review. Phase 0 research and Phase 1 design only; no implementation authorization or operational sign-off.
+**Status**: Draft for owner review. Restore safety and fail-closed behavior are approved requirements; the ledger protocol and retention guarantees are not approved. Phase 0 research and Phase 1 design only; no implementation authorization or operational sign-off.
 
 ## Summary
 
@@ -101,17 +101,17 @@ infra/                          # Retention configuration and independent ledger
 
 ## Phase 0 — Research Outcome
 
-Resolved technical questions: versioned notice with latest acknowledgement; single streamed JSON snapshot; transaction-level account locks; fresh delivery authorization; atomic deletion with independent receipt protocol; fail-closed restores and original retention clocks. See research R1–R10.
+Draft technical proposals cover versioned notice with latest acknowledgement, a single streamed JSON snapshot, transaction-level account locks, fresh delivery authorization and atomic active-data deletion. The owner approved the outcome that restores cannot revive deleted accounts and must fail closed when reconciliation cannot be verified. The independent receipt protocol and numerical retention guarantees remain unapproved pending provider-capability evidence, failure-handling proof and an isolated restore exercise. See research R1–R10.
 
-Selected ledger and concurrency mechanisms have mandatory implementation proof points. If their tests fail, revise the design rather than relax FR-016/017/020/022. Legal and deployment facts remain explicitly unverified release dependencies, not technical assumptions marked as proven.
+Candidate ledger and concurrency mechanisms have mandatory implementation proof points. If their tests fail, revise the design rather than relax FR-016/017/020/022. Legal and deployment facts remain explicitly unverified release dependencies, not technical assumptions marked as proven.
 
 ## Phase 1 — Design and Delivery Boundaries
 
 1. **Processing/publication prerequisites**: inventory collection, legal/health-data review, controller/contact/authority, provider settings and notice. Record evidence gaps with owner and release consequence; do not publish placeholders.
 2. **Notice/account controls**: public versioned notice, latest acknowledgement, authenticated controls and deep-link-safe notebook gate. Privacy/contact/export/delete remain available without acknowledgement.
-3. **Lifecycle foundation**: reviewed migration, non-reusable account reference, coordination of existing login/password/write paths and personal response delivery, receipt infrastructure. Complete this before enabling deletion.
+3. **Lifecycle foundation**: reviewed migration, non-reusable account reference, coordination of existing login/password/write paths and personal response delivery. Review any proposed receipt infrastructure before implementation. Complete this foundation before enabling deletion.
 4. **Export**: field guide, deterministic snapshot, authenticated streaming, cancellation and retry states, no persistent artifacts.
-5. **Deletion/recovery**: password plus confirmation, independent prepared receipt, atomic removal and commit receipt, ledger completion, all-session invalidation, device cleanup and failure/restore exercises.
+5. **Deletion/recovery**: password plus confirmation, atomic active-data removal, all-session invalidation, device cleanup and failure/restore exercises. Select and review the independent restore-evidence mechanism after the capability and failure review; prepared receipts and ledger completion are candidate details, not authorized implementation tasks.
 6. **Acceptance/release**: performance fixture, required checks, owner walkthrough, legal/provider evidence, retention boundary proof, isolated restore and aligned PLAN.md/README.md/docs/ui/operating records.
 
 These are suggested focused PR boundaries, not tasks or permission to create PRs. Each behavioral PR updates relevant documentation. Keep incomplete features disabled in production until prerequisites pass: automatic main deployment means merging enabled behavior would itself roll it out.
@@ -124,8 +124,8 @@ These are suggested focused PR boundaries, not tasks or permission to create PRs
 | Lawful basis, possible health data and consent decision | Controller with appropriate reviewer | Dated per-purpose conclusions; amendment if consent needed | Unverified; blocks affected processing |
 | Controller/contact/authority and complete notice | Project owner/controller | Final wording and tested monitored contact | Not supplied; blocks publication |
 | Hosting/database/logs/network/fonts/support recipients | Operator | Actual inventory, roles, agreements, locations, transfers and settings | Candidates only; blocks affected processing |
-| Strict retention, including receipt copies | Operator | Configuration/disposal evidence at all deadlines | Unverified; blocks release |
-| Independent ledger and fail-closed restore | Operator | Crash-point and isolated restore evidence | Proposed; not implemented |
+| Proposed retention limits, including receipt copies | Operator | Provider settings, configuration and disposal evidence at all deadlines | Guarantees not approved; unverified; blocks release |
+| Restore safety and evidence mechanism | Operator | Provider capability review, crash-point proof and isolated restore exercise | Fail-closed outcome approved; ledger protocol not approved |
 | In-flight cancellation and concurrency | Author/reviewer | Two-host Postgres tests and real HTTP/proxy evidence | Not implemented |
 | Usability, correctness and performance | Project owner | SC-001–007 evidence per quickstart | Not performed |
 

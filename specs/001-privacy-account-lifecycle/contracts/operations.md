@@ -1,6 +1,6 @@
 # Operational Contract and Release Evidence
 
-Draft, 2026-09-24. This defines artifacts and acceptance requirements to implement; it is not a published notice, completed inventory or legal approval. Project owner is the provisional accountable operator; record the actual controller/reviewer identities before release.
+Draft, 2026-09-24. This defines proposed artifacts and acceptance requirements; it is not a published notice, completed inventory or legal approval. The owner approved the requirement that restores cannot revive deleted accounts and must fail closed when reconciliation is uncertain. The ledger protocol and retention guarantees below remain unapproved pending provider-capability evidence, failure-handling proof and an isolated restore exercise. Project owner is the provisional accountable operator; record the actual controller/reviewer identities before release.
 
 ## Maintained artifacts
 
@@ -33,6 +33,8 @@ Do not label all candidates processors without assessing role. No cloud reads or
 
 ## Retention schedule contract
 
+The numerical limits below are draft product requirements, not verified provider guarantees or approved operational promises. Verify all sources and copies before approving or publishing them.
+
 Use UTC instants for enforcement deadlines and explain them in the notice. A calendar day deadline is computed from the original event; copies, restoration, ledger state changes and retries cannot extend it. Schedule cleanup early enough to verify completion by the maximum.
 
 | Category | Start event and maximum | Disposal/control |
@@ -55,6 +57,8 @@ The Azure workspace declaration alone is insufficient: verify the strict 30-day 
 Independent storage cleanup must account for soft delete, versioning, replicas and diagnostics. An asynchronous lifecycle rule or application read denial is not evidence of destruction by the deadline. If provider capability cannot meet a limit, remove that processing/storage choice or obtain a reviewed specification change before rollout.
 
 ## Deletion/ledger protocol
+
+**Unapproved candidate design.** The owner approved the restore safety outcome, not this two-store mechanism. Validate provider capabilities and every failure boundary, then demonstrate an isolated restore before seeking design approval. Do not implement this section as a settled architecture decision.
 
 1. Validate bearer, throttle, take exclusive account transaction lock and freshly check identity/token/password and explicit confirmation. No receipt is created for cancellation/wrong password.
 2. Capture a deletion boundary and absolute expiry. Durably create PREPARED in independent private storage with conditional/idempotent semantics. If this fails definitively, roll back and leave the notebook intact. An ambiguous storage timeout remains tracked until reconciled.
