@@ -63,7 +63,7 @@ p {
 
 a {
   color: var(--color-accent);
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 /* Figures — set tabular wherever numbers stand as figures (times, weights,

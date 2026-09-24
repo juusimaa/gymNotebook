@@ -45,9 +45,10 @@ export default function Cover() {
         </p>
       </div>
 
-      {/* /workouts arrives in milestone 7; until then the catch-all route
-            bounces it straight back here. */}
-      <Link to="/workouts" className="btn btn-primary btn-block">
+      <Link
+        to="/workouts"
+        className="btn btn-primary btn-block cover-open-notebook"
+      >
         Open the notebook
       </Link>
       <div className="cover-actions">
@@ -58,6 +59,16 @@ export default function Cover() {
           Sign out
         </button>
       </div>
+      <p className="cover-support">
+        Enjoying the notebook?{' '}
+        <a
+          href="https://buymeacoffee.com/jouni"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Buy me a coffee ↗
+        </a>
+      </p>
     </main>
   )
 }
