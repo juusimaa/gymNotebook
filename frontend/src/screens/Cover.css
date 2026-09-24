@@ -72,3 +72,17 @@
   margin-top: var(--space-4);
   font-size: 13px;
 }
+
+/* The cover opens with a quieter, text-first action; shared primary buttons
+   remain outlined on the notebook's working screens. */
+.cover-open-notebook {
+  border-color: transparent;
+}
+
+/* A small support link belongs to the closed cover, below account actions, so
+   it does not interrupt workout logging or management tasks. */
+.cover-support {
+  margin: 28px 0 0;
+  color: var(--color-neutral-600);
+  font-size: 12px;
+}
