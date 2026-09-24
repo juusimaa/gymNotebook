@@ -101,9 +101,34 @@ infra/                          # Retention configuration and independent ledger
 
 ## Phase 0 — Research Outcome
 
-Draft technical proposals cover versioned notice with latest acknowledgement, a single streamed JSON snapshot, transaction-level account locks, fresh delivery authorization and atomic active-data deletion. The owner approved the outcome that restores cannot revive deleted accounts and must fail closed when reconciliation cannot be verified. The independent receipt protocol and numerical retention guarantees remain unapproved pending provider-capability evidence, failure-handling proof and an isolated restore exercise. See research R1–R10.
+Draft technical proposals cover versioned notice with latest acknowledgement, a single streamed JSON snapshot, transaction-level account locks, fresh delivery authorization and atomic active-data deletion. The account locks and export cancellation (R4) are a candidate design pending the validation spike and open questions below. The owner approved the outcome that restores cannot revive deleted accounts and must fail closed when reconciliation cannot be verified. The independent receipt protocol and numerical retention guarantees remain unapproved pending provider-capability evidence, failure-handling proof and an isolated restore exercise. See research R1–R10.
 
 Candidate ledger and concurrency mechanisms have mandatory implementation proof points. If their tests fail, revise the design rather than relax FR-016/017/020/022. Legal and deployment facts remain explicitly unverified release dependencies, not technical assumptions marked as proven.
+
+## Open Design Questions
+
+Recorded after plan generation. Items marked as blocking must be resolved before `/speckit.tasks` produces tasks for the affected slice; otherwise those tasks would be placeholders. Per constitution Principle VII, these are shown as unresolved rather than decided by generation.
+
+| # | Question | Kind | Blocks tasks? | Owner |
+| --- | --- | --- | --- | --- |
+| Q1 | Actual Neon/Azure retention: database history/point-in-time window, any other backup or export copies, Log Analytics settings, external font requests, and candidate ledger disposal behavior | Infrastructure evidence | Indirectly: sizes Q2 | Operator |
+| Q2 | Deletion/recovery ledger (R6, [operations.md](contracts/operations.md) Deletion/ledger protocol): how ledger completeness is proven before a restore; what runs reconciliation and expiry cleanup while Container Apps is scaled to zero; how failed cleanup is detected and handled before retention deadlines | Design gap | Yes, deletion/recovery slice | Project owner |
+| Q3 | R4 per-request shared guard: transaction advisory locks release at transaction end, so the current token-version check in `OnTokenValidated` cannot hold them. Choose the mechanism (for example request middleware or an endpoint filter owning a per-request transaction), its connection-pool cost, and how existing explicit transactions reuse it | Architecture decision | Yes, lifecycle foundation, export delivery and deletion | Project owner |
+| Q4 | R4 time bounds: deletion's exclusive-lock wait, write/flush timeout, export chunk size and the A1 p95 latency limit, all within SC-003/SC-005's 60-second budgets | Starting values, tuned by spike Part A | No, if starting values are recorded | Author |
+| Q5 | R4 wait outcomes: deletion's response when exclusive access is not acquired in time (FR-017 safe retry), and the response to an ordinary request that waited behind a deletion that then committed | API behavior | Yes, contracts for deletion and ordinary routes | Project owner |
+| Q6 | R4 login: whether token issuance runs under the shared guard, so a login racing deletion cannot issue a token | Design decision | Yes, lifecycle foundation | Project owner |
+| Q7 | R4 validation spike Part A (local) and Part B (deployed proxy, requires approval of disposable Azure resources) as defined in research R4 | Proof | No; becomes an early blocking task | Author; owner approves Part B |
+| Q8 | Controller/contact details, reviewed processing and consent conclusions, supplier evidence, and retention period/location for rights-request records | Owner content | No; release gates below | Project owner/controller |
+| Q9 | Review of the proposals: account UUID, endpoints, UI routes and additional storage | Review | Yes, whole plan | Project owner |
+
+**Recommended order:**
+
+1. Q1 first. If the database's own restore window is short and no other copies exist, the independent ledger in Q2 may shrink to a smaller mechanism. If longer-lived copies exist, the ledger is justified and Q2's answers are required.
+2. Q2 next, sized to Q1's findings.
+3. Q3, Q5 and Q6, recording Q4 starting values. Q7 Part A can run alongside.
+4. Q9, then `/speckit.tasks` and `/speckit.analyze`. Q7 and Q8 enter as tasks marked as release blockers.
+
+Performance tests, the isolated restore exercise and the owner's mobile/keyboard walkthrough belong to implementation and release. They are not needed to approve the plan.
 
 ## Phase 1 — Design and Delivery Boundaries
 
@@ -126,7 +151,7 @@ These are suggested focused PR boundaries, not tasks or permission to create PRs
 | Hosting/database/logs/network/fonts/support recipients | Operator | Actual inventory, roles, agreements, locations, transfers and settings | Candidates only; blocks affected processing |
 | Proposed retention limits, including receipt copies | Operator | Provider settings, configuration and disposal evidence at all deadlines | Guarantees not approved; unverified; blocks release |
 | Restore safety and evidence mechanism | Operator | Provider capability review, crash-point proof and isolated restore exercise | Fail-closed outcome approved; ledger protocol not approved |
-| In-flight cancellation and concurrency | Author/reviewer | Two-host Postgres tests and real HTTP/proxy evidence | Not implemented |
+| In-flight cancellation and concurrency | Author/reviewer | Two-host Postgres tests and real HTTP/proxy evidence | Not implemented; validation spike defined in research R4 (Q7) |
 | Usability, correctness and performance | Project owner | SC-001–007 evidence per quickstart | Not performed |
 
 No live cloud audit, provider-contract review, legal approval or browser QA was performed by this planning command.

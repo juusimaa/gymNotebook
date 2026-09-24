@@ -30,7 +30,7 @@ Before starting, reconcile any retained PREPARED records for this account; fail 
 
 ## R4 — Coordinate operations and response delivery
 
-**Status:** Candidate design, not owner-approved. The locks and export cancellation change existing authenticated endpoints, so implementation waits on the validation spike below: a local part (A) and a separately authorized deployed-proxy part (B). Approval follows only if both pass their pre-agreed criteria.
+**Status:** Candidate design, not owner-approved. The locks and export cancellation change existing authenticated endpoints, so implementation waits on the validation spike below: a local part (A) and a separately authorized deployed-proxy part (B). Approval follows only if both pass their pre-agreed criteria. Open design questions for this decision are tracked as Q3–Q7 in [plan.md → Open Design Questions](plan.md#open-design-questions).
 
 **Decision:** Use PostgreSQL transaction advisory locks in a dedicated account namespace keyed by existing User.Id. Ordinary authenticated operations acquire shared access and freshly check account identity, token version and expiry. Deletion and password changes acquire exclusive access. Login revalidates its resolved account before token issuance. Existing explicit transactions join the lifecycle boundary rather than creating nested transactions.
 
