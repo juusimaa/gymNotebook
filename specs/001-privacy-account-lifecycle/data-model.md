@@ -21,10 +21,11 @@ Keep existing field validation, normalization and ordering conventions. Bodyweig
 | PrivacyAccountId | UUID, non-null, unique, immutable, server generated | Non-reusable suppression identity independent of username and integer sequence |
 | AcknowledgedPrivacyNoticeVersion | Nullable bounded string, proposed max 64 | Latest current version acknowledged by Continue |
 | PrivacyNoticeAcknowledgedAt | Nullable timestamptz | When that acknowledgement was committed |
+| SignInSuspendedAt | Nullable timestamptz; proposed, subject to Q9 review | Set only by the restore fallback when a deletion's outcome is unknown (R6 Q2c). Login and token validation reject the account while set. Cleared or resolved by the owner through the privacy contact path |
 
 Both acknowledgement fields are null or both populated. Acknowledgement stores no consent flag. Accept only the current published version from trusted notice configuration, never arbitrary client text. Same-version retries preserve the existing timestamp. A new version replaces the latest pair; prior public notice wording remains in versioned operator artifacts, not personal history.
 
-Existing accounts receive UUIDs and null acknowledgement. New registration behaves as before, creating UUID/null fields server-side. Notice acknowledgement is included in export and deleted with User. PrivacyAccountId is exported as account identity, not as a credential.
+Existing accounts receive UUIDs and null acknowledgement. New registration behaves as before, creating UUID/null fields server-side. Notice acknowledgement is included in export and deleted with User. PrivacyAccountId is exported as account identity, not as a credential. SignInSuspendedAt is a restricted security control value, excluded from export like TokenVersion. A suspended account cannot sign in to export, and its requests go through the contact path.
 
 ## PrivacyNoticeVersion — repository artifact, not EF entity
 
@@ -32,23 +33,25 @@ Fields: version (unique, immutable), effectiveAt (UTC instant), publishedAt, mat
 
 State: draft → reviewed/announced → effective/current → superseded. Only reviewed content can be published. A pending notice is communicated before activation; acknowledging the current notice never authorizes new processing. Version identifiers are compared by equality, not lexicographic date ordering. No placeholders can reach publication.
 
-## DeletionReceipt — short-lived transactional entity
+## Deletion log lines — operational log records, not EF entity
 
-Fields: PrivacyAccountId (UUID unique/key, no FK to deleted User), DeletionBoundaryAt (timestamptz), SuppressionExpiresAt (timestamptz). It contains no integer user ID, username, password/token, notebook content or IP address.
+Chosen in [research R6](research.md#r6--independent-restore-evidence). These are structured lines in the existing Container Apps console logs. They are the fallback restore evidence when the pre-restore branch is unusable.
 
-Insert in the same transaction as active deletion. The boundary timestamp is taken after password/confirmation and exclusive coordination, immediately before preparing the independent receipt. It is a conservative retention origin preceding commit, so deadlines cannot be extended by slow commit/finalization. Transaction/lock timeouts bound this interval. Success is still defined by completed commit, not this timestamp.
+Fields: event (`deletion.intent`, `deletion.committed` or `deletion.rolled_back`), PrivacyAccountId (UUID) and DeletionBoundaryAt (timestamptz). They contain no integer user ID, username, password/token, notebook content or IP address.
 
-Local receipt state: absent → committed with active deletion → externally finalized → removed. A rolled-back transaction leaves no receipt and the pre-deletion notebook intact. Remove local receipt promptly after archival and always before boundary +24 hours. Its backups must also be unusable before boundary +31 days; the receipt table is not an indefinite audit trail.
+- **intent:** written under exclusive coordination before commit.
+- **committed:** written after commit and before the success response.
+- **rolled_back:** written when the transaction definitively rolls back, so the fallback can release that intent.
 
-## Independent deletion ledger — restricted operational storage
+The boundary timestamp is taken after password/confirmation and exclusive coordination, immediately before the intent line. It is a conservative retention origin preceding commit, so a slow commit cannot extend deadlines. Transaction/lock timeouts bound this interval. Success is still defined by completed commit, not this timestamp.
 
-Same minimal payload as DeletionReceipt; protocol metadata distinguishes PREPARED and COMMITTED. Conditional/idempotent writes key by immutable account UUID and operation boundary. Prepared records may concern an account whose transaction never committed, so they cannot automatically suppress that account.
+The lines follow the 30-day log retention in R7 and are not an indefinite audit trail. They need the FR-004/FR-019 continued-retention justification (R6 Q2e).
 
-State: absent → durably PREPARED → COMMITTED after authoritative DB commit evidence → expired/disposed. Proven rollback removes PREPARED. Unknown outcome remains unresolved and blocks affected restore. Never infer rollback from absence of a receipt in an old backup. A restored database is not authoritative evidence for post-backup commits.
+## Restore evidence and invariant
 
-Absolute expiry is no later than boundary +31 calendar days, including storage versions, snapshots and copied evidence. Failed/prepared operations are bounded from their original preparation time too. If ambiguity remains, eliminate affected restore sources before removing evidence. Reusing a username creates a different UUID; replay cannot remove that new account.
+The primary evidence is the preserved pre-restore Neon branch. It is not an entity and never enters this schema.
 
-PREPARED may temporarily be linked to a live account. Before export, reconcile and remove any such retained preparation; if that cannot be verified, fail export safely with the contact path rather than silently omit a user-linked feature record. This is checked under export's short initialization guard before establishing its snapshot.
+**Invariant (R6 Q2d):** account deletion is the only operation that removes a User row. A test guards this, and any new path that removes User rows must revisit R6 first. A restored database is not evidence for deletions after its restore point; only the preserved branch or complete log lines are.
 
 ## Export document — transient value, not stored entity
 
@@ -58,7 +61,7 @@ Streams/buffers are request-owned and released on completion, cancellation, expi
 
 ## Reviewed operational records
 
-These are maintained records, not new public administration APIs or EF entities. Public non-personal policy belongs in `docs/privacy/`; request correspondence, deletion evidence, credentials and private provider evidence do not belong in Git.
+These are maintained records, not new public administration APIs or EF entities. Public non-personal policy belongs in `docs/privacy/`; request correspondence, deletion log evidence, credentials and private provider evidence do not belong in Git.
 
 | Record | Required fields / validation |
 | --- | --- |
@@ -74,5 +77,5 @@ The rights register's scope and numeric retention period need purpose-specific o
 1. Backfill UUIDs with uniqueness enforced; keep existing keys and relationships unchanged. Never seed notice acknowledgement or consent. Ensure old backups predating this migration are retired before activation or handled by a reviewed compatible restore migration; do not generate a new UUID on restore and assume it matches old deletion evidence.
 2. Preserve all existing constraints/cascades. Review the generated migration for unrelated changes before applying it to real Postgres tests.
 3. Account operations take shared lifecycle access and freshly validate; deletion/password change take exclusive access. Reuse the existing transaction boundary in bulk writes. Account lock order precedes notebook-row operations.
-4. Deletion removes workouts/blocks/sets before exercises, then User/acknowledgement, while inserting the receipt atomically. Rollback restores all active data, not an empty usable account.
-5. Restore uses committed independent evidence and authoritative coverage proof, rejects unresolved prepared records, applies suppression before ingress, rotates JWT signing credentials, and verifies original retention deadlines. An expired evidence record cannot legitimize an over-age restore source.
+4. Deletion removes workouts/blocks/sets before exercises, then User/acknowledgement, in one transaction bracketed by the intent and committed log lines. Rollback restores all active data, not an empty usable account, and logs `deletion.rolled_back`.
+5. Restore diffs PrivacyAccountId between the restored database and the preserved pre-restore branch, and re-deletes accounts missing from the preserved branch before ingress. If that branch is unusable, it uses gap-free log lines instead, and suspends sign-in for intent-only accounts. It rotates JWT signing credentials and verifies original retention deadlines. Unverifiable evidence keeps access closed.

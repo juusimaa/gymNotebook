@@ -4,7 +4,7 @@
 
 **Input**: `specs/001-privacy-account-lifecycle/spec.md`
 
-**Status**: Draft for owner review. Restore safety and fail-closed behavior are approved requirements; the ledger protocol and retention guarantees are not approved. Phase 0 research and Phase 1 design only; no implementation authorization or operational sign-off.
+**Status**: Draft for owner review. Restore safety and fail-closed behavior are approved requirements. The restore-evidence direction (pre-restore diff with a log fallback, no ledger) was chosen on 2026-09-24 but is not yet proven; retention guarantees are not approved. Phase 0 research and Phase 1 design only; no implementation authorization or operational sign-off.
 
 ## Summary
 
@@ -20,7 +20,7 @@ See [research.md](research.md), [data-model.md](data-model.md), [API contract](c
 
 **Primary Dependencies**: ASP.NET Core Minimal APIs/JwtBearer 10.0.12, EF Core 10.0.12, Npgsql EF provider 10.0.3, BCrypt.Net-Next 4.2.1, System.Text.Json, React Router ^8.3.1. Reuse installed libraries; no component library or new application layer.
 
-**Storage**: PostgreSQL 17 locally/tests and the existing Neon deployment path; latest acknowledgement on User; short-lived transactional deletion receipts. Proposed independent private Azure Blob ledger outside the notebook restore boundary. This is a new infrastructure dependency for review, not a verified resource. No persistent export files.
+**Storage**: PostgreSQL 17 locally/tests and the existing Neon deployment path; latest acknowledgement and a proposed sign-in suspension marker on User. Restore evidence is the preserved pre-restore Neon branch, with minimal deletion log lines in the existing Container Apps logs as fallback (research R6); no new storage or receipt table. No persistent export files.
 
 **Testing**: xUnit + WebApplicationFactory + Testcontainers PostgreSQL 17, existing Vitest helpers, real HTTP/proxy cancellation checks, isolated restore exercise and recorded owner mobile/keyboard walkthrough. No new browser test framework.
 
@@ -80,7 +80,6 @@ backend/GymNotebook.Api/
 ├── AccountLifecycle.cs          # Proposed concrete coordination helper
 ├── PrivacyEndpoints.cs          # Proposed Minimal API mapping, not controllers
 ├── NotebookExport.cs            # Proposed snapshot/field guide and streamed result
-├── DeletionReceipt.cs           # Proposed short-lived EF entity
 ├── Data/AppDbContext.cs
 └── Migrations/                  # Reviewed migration after schema approval
 backend/GymNotebook.Tests/       # Existing project; privacy/concurrency coverage
@@ -94,16 +93,16 @@ frontend/src/
 frontend/index.html              # Discovered external font requests
 docs/privacy/                   # Proposed reviewed notice/operating records
 docs/ui/                        # Existing specification and prototype
-infra/                          # Retention configuration and independent ledger
+infra/                          # Retention configuration (for example Log Analytics table retention)
 ```
 
-**Structure Decision**: Extend the existing API/test/frontend layout. The independent ledger addresses a restore boundary, not a reason for another application project. Evaluate built-in HTTP/identity facilities before adding a storage SDK; a dependency needs a demonstrated gap and review.
+**Structure Decision**: Extend the existing API/test/frontend layout. Restore evidence uses the existing database provider and logs, so no storage SDK or application project is added. Evaluate built-in HTTP/identity facilities first; any dependency needs a demonstrated gap and review.
 
 ## Phase 0 — Research Outcome
 
 Draft technical proposals cover versioned notice with latest acknowledgement, a single streamed JSON snapshot, transaction-level account locks, fresh delivery authorization and atomic active-data deletion. The account locks and export cancellation (R4) are a candidate design pending the validation spike and open questions below. The owner approved the outcome that restores cannot revive deleted accounts and must fail closed when reconciliation cannot be verified. The independent receipt protocol and numerical retention guarantees remain unapproved pending provider-capability evidence, failure-handling proof and an isolated restore exercise. See research R1–R10.
 
-Candidate ledger and concurrency mechanisms have mandatory implementation proof points. If their tests fail, revise the design rather than relax FR-016/017/020/022. Legal and deployment facts remain explicitly unverified release dependencies, not technical assumptions marked as proven.
+The restore-evidence and concurrency mechanisms have mandatory implementation proof points. If their tests fail, revise the design rather than relax FR-016/017/020/022. Legal and deployment facts remain explicitly unverified release dependencies, not technical assumptions marked as proven.
 
 ## Open Design Questions
 
@@ -111,11 +110,11 @@ Recorded after plan generation. Items marked as blocking must be resolved before
 
 | # | Question | Kind | Blocks tasks? | Owner |
 | --- | --- | --- | --- | --- |
-| Q1 | Actual Neon/Azure retention: database history/point-in-time window, any other backup or export copies, Log Analytics settings, external font requests, and candidate ledger disposal behavior | Infrastructure evidence | Indirectly: sizes Q2 | Operator |
-| Q2 | Deletion/recovery ledger (R6, [operations.md](contracts/operations.md) Deletion/ledger protocol): how ledger completeness is proven before a restore; what runs reconciliation and expiry cleanup while Container Apps is scaled to zero; how failed cleanup is detected and handled before retention deadlines | Design gap | Yes, deletion/recovery slice | Project owner |
+| Q1 | Actual Neon/Azure retention: database history/point-in-time window, any other backup or export copies, Log Analytics settings, external font requests, and candidate ledger disposal behavior | Infrastructure evidence | **Answered 2026-09-24**, except the log-content scan and Neon internal copies; see [research R7 → Verified settings](research.md#r7--retention-is-more-than-configuration-intent) | Operator |
+| Q2 | Deletion/recovery ledger (R6, [operations.md](contracts/operations.md) Deletion/ledger protocol): how ledger completeness is proven before a restore; what runs reconciliation and expiry cleanup while Container Apps is scaled to zero; how failed cleanup is detected and handled before retention deadlines. Q1 found a 6-hour restore window. **Direction chosen 2026-09-24: pre-restore diff with a log fallback, no ledger** ([research R6](research.md#r6--independent-restore-evidence)). Sub-questions Q2a–Q2c answered and Q2d–Q2e recorded as consequences in R6; dependent documents aligned 2026-09-24 | Design gap | **Answered**; proof remains a release gate | Project owner |
 | Q3 | R4 per-request shared guard: transaction advisory locks release at transaction end, so the current token-version check in `OnTokenValidated` cannot hold them. Choose the mechanism (for example request middleware or an endpoint filter owning a per-request transaction), its connection-pool cost, and how existing explicit transactions reuse it | Architecture decision | Yes, lifecycle foundation, export delivery and deletion | Project owner |
 | Q4 | R4 time bounds: deletion's exclusive-lock wait, write/flush timeout, export chunk size and the A1 p95 latency limit, all within SC-003/SC-005's 60-second budgets | Starting values, tuned by spike Part A | No, if starting values are recorded | Author |
-| Q5 | R4 wait outcomes: deletion's response when exclusive access is not acquired in time (FR-017 safe retry), and the response to an ordinary request that waited behind a deletion that then committed | API behavior | Yes, contracts for deletion and ordinary routes | Project owner |
+| Q5 | R4 wait outcomes: deletion's response when exclusive access is not acquired in time (FR-017 safe retry), and the response to an ordinary request that waited behind a deletion that then committed. Also the login/token-validation response for a suspended account (R6 Q2c) | API behavior | Yes, contracts for deletion and ordinary routes | Project owner |
 | Q6 | R4 login: whether token issuance runs under the shared guard, so a login racing deletion cannot issue a token | Design decision | Yes, lifecycle foundation | Project owner |
 | Q7 | R4 validation spike Part A (local) and Part B (deployed proxy, requires approval of disposable Azure resources) as defined in research R4 | Proof | No; becomes an early blocking task | Author; owner approves Part B |
 | Q8 | Controller/contact details, reviewed processing and consent conclusions, supplier evidence, and retention period/location for rights-request records | Owner content | No; release gates below | Project owner/controller |
@@ -123,8 +122,8 @@ Recorded after plan generation. Items marked as blocking must be resolved before
 
 **Recommended order:**
 
-1. Q1 first. If the database's own restore window is short and no other copies exist, the independent ledger in Q2 may shrink to a smaller mechanism. If longer-lived copies exist, the ledger is justified and Q2's answers are required.
-2. Q2 next, sized to Q1's findings.
+1. Q1 first. If the database's own restore window is short and no other copies exist, the independent ledger in Q2 may shrink to a smaller mechanism. If longer-lived copies exist, the ledger is justified and Q2's answers are required. *Done: the window is 6 hours and no other controlled copies were found.*
+2. Q2 next, sized to Q1's findings. *Done.*
 3. Q3, Q5 and Q6, recording Q4 starting values. Q7 Part A can run alongside.
 4. Q9, then `/speckit.tasks` and `/speckit.analyze`. Q7 and Q8 enter as tasks marked as release blockers.
 
@@ -134,9 +133,9 @@ Performance tests, the isolated restore exercise and the owner's mobile/keyboard
 
 1. **Processing/publication prerequisites**: inventory collection, legal/health-data review, controller/contact/authority, provider settings and notice. Record evidence gaps with owner and release consequence; do not publish placeholders.
 2. **Notice/account controls**: public versioned notice, latest acknowledgement, authenticated controls and deep-link-safe notebook gate. Privacy/contact/export/delete remain available without acknowledgement.
-3. **Lifecycle foundation**: reviewed migration, non-reusable account reference, coordination of existing login/password/write paths and personal response delivery. Review any proposed receipt infrastructure before implementation. Complete this foundation before enabling deletion.
+3. **Lifecycle foundation**: reviewed migration, non-reusable account reference, coordination of existing login/password/write paths and personal response delivery. Include the reviewed suspension marker and the Q2d invariant test. Complete this foundation before enabling deletion.
 4. **Export**: field guide, deterministic snapshot, authenticated streaming, cancellation and retry states, no persistent artifacts.
-5. **Deletion/recovery**: password plus confirmation, atomic active-data removal, all-session invalidation, device cleanup and failure/restore exercises. Select and review the independent restore-evidence mechanism after the capability and failure review; prepared receipts and ledger completion are candidate details, not authorized implementation tasks.
+5. **Deletion/recovery**: password plus confirmation, atomic active-data removal, all-session invalidation, device cleanup and failure/restore exercises. Deletion log lines and the restore runbook ([operations contract](contracts/operations.md)) follow the direction chosen in research R6, proven by the isolated restore exercise.
 6. **Acceptance/release**: performance fixture, required checks, owner walkthrough, legal/provider evidence, retention boundary proof, isolated restore and aligned PLAN.md/README.md/docs/ui/operating records.
 
 These are suggested focused PR boundaries, not tasks or permission to create PRs. Each behavioral PR updates relevant documentation. Keep incomplete features disabled in production until prerequisites pass: automatic main deployment means merging enabled behavior would itself roll it out.
@@ -149,8 +148,8 @@ These are suggested focused PR boundaries, not tasks or permission to create PRs
 | Lawful basis, possible health data and consent decision | Controller with appropriate reviewer | Dated per-purpose conclusions; amendment if consent needed | Unverified; blocks affected processing |
 | Controller/contact/authority and complete notice | Project owner/controller | Final wording and tested monitored contact | Not supplied; blocks publication |
 | Hosting/database/logs/network/fonts/support recipients | Operator | Actual inventory, roles, agreements, locations, transfers and settings | Candidates only; blocks affected processing |
-| Proposed retention limits, including receipt copies | Operator | Provider settings, configuration and disposal evidence at all deadlines | Guarantees not approved; unverified; blocks release |
-| Restore safety and evidence mechanism | Operator | Provider capability review, crash-point proof and isolated restore exercise | Fail-closed outcome approved; ledger protocol not approved |
+| Proposed retention limits, including deletion log lines | Operator | Provider settings, configuration and disposal evidence at all deadlines | Guarantees not approved; unverified; blocks release |
+| Restore safety and evidence mechanism | Operator | Preserved-branch diff and log-fallback exercises, crash-point proof and isolated restore exercise | Fail-closed outcome approved; direction chosen 2026-09-24; not yet proven |
 | In-flight cancellation and concurrency | Author/reviewer | Two-host Postgres tests and real HTTP/proxy evidence | Not implemented; validation spike defined in research R4 (Q7) |
 | Usability, correctness and performance | Project owner | SC-001–007 evidence per quickstart | Not performed |
 

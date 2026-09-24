@@ -22,7 +22,7 @@ Date: 2026-09-24. Draft technical decisions for review. Repository inspection an
 
 **Decision:** Use one read-only PostgreSQL REPEATABLE READ transaction for all export queries. Capture `snapshotAt` with the database clock at the first snapshot query. Project only permitted fields, order deterministically, and stream one JSON document with embedded explanations. Enumerate large collections with readers or keyset batches inside that snapshot; do not build the entire graph in memory or call paginated public endpoints.
 
-Before starting, reconcile any retained PREPARED records for this account; fail export safely if their outcome/cleanup cannot be verified. Otherwise a still-live account could have a feature-created personal record omitted from its export. Under a short shared initialization guard on a separate READ COMMITTED connection, freshly verify password/JWT, confirm no outstanding preparation, and establish the snapshot. Release that guard before enumeration; the long-lived snapshot transaction must never hold an account advisory lock.
+Under a short shared initialization guard on a separate READ COMMITTED connection, freshly verify password/JWT and establish the snapshot. Deletion evidence lives outside the database under R6, so export has no outstanding deletion records to reconcile first. Release that guard before enumeration; the long-lived snapshot transaction must never hold an account advisory lock.
 
 **Rationale:** Separate READ COMMITTED queries can observe different states, whereas repeatable read supplies a stable view. Avoid persistent files and public URLs. Interrupted JSON is a failed download, never a completed export. Preserve unused exercises and repeated blocks. [PostgreSQL isolation](https://www.postgresql.org/docs/17/transaction-iso.html).
 
@@ -64,7 +64,7 @@ For personal responses, hold shared access through a bounded write/flush and che
 
 ## R5 — Removal and identity
 
-**Decision:** Add immutable account UUID `PrivacyAccountId` for restore suppression, keeping integer keys/JWT claims. Backfill genuine UUIDs, never acknowledgement. Under exclusive coordination and fresh password verification, delete workouts (cascade blocks/sets), then exercises, then User and its acknowledgement; insert a minimal commit receipt in the same transaction.
+**Decision:** Add immutable account UUID `PrivacyAccountId` for restore suppression, keeping integer keys/JWT claims. Backfill genuine UUIDs, never acknowledgement. Under exclusive coordination and fresh password verification, delete workouts (cascade blocks/sets), then exercises, then User and its acknowledgement, in one transaction. Log the R6 intent line before commit and the committed line after it. No receipt table is kept (R6 Q2a).
 
 **Rationale:** UUIDs distinguish accounts after username reuse or sequence rewind during restore. Rotate JWT signing credentials before restored service access resumes so old integer subjects cannot authenticate as newly allocated identities. Explicit delete ordering preserves the exercise FK's Restrict semantics.
 
@@ -72,9 +72,11 @@ For personal responses, hold shared access through a bounded write/flush and che
 
 ## R6 — Independent restore evidence
 
-**Status:** Candidate design, not owner-approved. The owner approved the requirement that restores cannot revive deleted accounts and must fail closed; approval of this protocol awaits provider-capability evidence, failure-handling proof and an isolated restore exercise.
+**Status:** Direction chosen by the owner on 2026-09-24: pre-restore diff with a log fallback (see Owner decision below). Sub-questions Q2a–Q2c were answered the same day. The owner approved the requirement that restores cannot revive deleted accounts and must fail closed. Approval of the full protocol awaits answers to those questions, failure-handling proof and an isolated restore exercise.
 
-**Proposal:** Use a private Azure Blob ledger outside notebook restores. Durably write a minimal PREPARED receipt before committing database deletion; mark COMMITTED after database commit and before reporting success. The database transaction also writes a short-lived commit receipt. Object metadata/namespaces carry protocol state; personal payload contains only account UUID, deletion-boundary timestamp and absolute suppression expiry.
+**Superseded proposal (31-day Azure Blob ledger).** Kept as the fallback design (option 3 below) if longer-lived database copies are introduced. Not the current direction.
+
+Use a private Azure Blob ledger outside notebook restores. Durably write a minimal PREPARED receipt before committing database deletion; mark COMMITTED after database commit and before reporting success. The database transaction also writes a short-lived commit receipt. Object metadata/namespaces carry protocol state; personal payload contains only account UUID, deletion-boundary timestamp and absolute suppression expiry.
 
 Definitive rollback allows removing the prepared record. Ambiguous commit/crash leaves PREPARED; reconcile with authoritative transaction evidence. Never treat missing evidence as rollback, nor a prepared intent as permission to erase an intact account. Restoration stays closed if evidence cannot resolve ambiguity. Postcommit ledger failure returns an uncertain outcome/contact path, not a claim of rollback. An invalid old JWT retry never certifies deletion.
 
@@ -84,7 +86,34 @@ Purge local commit receipts immediately after external finalization and in all c
 
 **Alternatives considered:** Same-database tombstones disappear on rollback to an old backup; periodic exports have coverage gaps; uncoordinated dual writes have ambiguous failure; distributed transaction infrastructure is disproportionate.
 
-**Capability boundary:** Asynchronous storage lifecycle policy alone is not proof of a precise disposal deadline. [Azure Blob lifecycle behavior](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-policy-structure). The new infrastructure, access policy, identity integration and receipt protocol require review and crash-point tests; no resource or provider setting was verified.
+**Sizing after Q1:** Q1 (R7 → Verified settings) found a 6-hour Neon history window, no snapshots, no snapshot schedule and no other controlled database copies. A deleted account can therefore be revived only by a restore to a point before its deletion, performed within 6 hours of that deletion. The 31-day ledger above was sized for backup copies that do not currently exist. Options:
+
+1. **Restore rule using existing logs.** A restore target must be later than the most recent deletion. After commit, deletion writes a minimal line (account UUID and deletion-boundary timestamp only) to the existing 30-day Container Apps logs, and the restore procedure reads it before reopening. No new infrastructure. Weaker: a lost log line allows revival, and the line is subject to the R7 log-retention rules.
+2. **Short-lived independent record.** Keep the PREPARED/COMMITTED protocol, but expire evidence at the restore window plus a margin (hours, not 31 days). This removes most expiry scheduling and the day-31 disposal proof, but still adds storage and a scale-to-zero reconciliation runner.
+3. **Full ledger as proposed.** Justified only if longer-lived copies are planned, for example a paid Neon plan with longer history or snapshots.
+
+Whichever option is chosen, any change to Neon plan, history retention, snapshots or branches must re-trigger this sizing check. That makes those settings a drift-checked release gate.
+
+**Owner decision (2026-09-24): pre-restore diff with a log fallback.** A fourth option, chosen over options 1–3. It uses the restore mechanism itself as the evidence and needs no new storage.
+
+- **Primary evidence: the pre-restore branch.** Restore with `neon branches restore main main@<T> --preserve-under-name <name>`, which keeps the pre-restore state as a separate branch. User rows disappear only through account deletion. So every `PrivacyAccountId` present in the restored database but absent from the preserved branch was deleted after `T`. Before any access resumes, delete those accounts again in the restored database. Then verify that none remain and delete the preserved branch. Accounts created and deleted after `T` exist in neither, and need nothing. UUIDs, not usernames, make the comparison safe across username reuse (R5).
+- **Fallback evidence: minimal deletion log lines.** For restores where the preserved branch is unusable (the current database is lost or corrupt), deletion writes minimal structured lines to the existing 30-day Container Apps console logs. They carry only the account UUID and deletion-boundary timestamp, with no username or notebook content. The restore procedure re-deletes every logged UUID committed after `T`.
+- **Fail closed.** If neither source can be verified for the interval from `T` to the restore, access stays closed, as already approved.
+- **Unchanged:** isolated restore with public ingress disabled, JWT signing-key rotation before access resumes (R5), and original retention deadlines (R7).
+- **Removed:** the Azure Blob ledger, PREPARED/COMMITTED protocol, independent finalization before the success response, 31-day evidence expiry and scale-to-zero cleanup runner. This answers Q2's original three questions by removing their subjects: completeness is proven by the database diff, and no new store needs cleanup.
+
+**Owner answers to the sub-questions (2026-09-24):**
+
+- **Q2a — DeletionReceipt removed.** The User row's absence in the preserved branch and the fallback log lines cover its purpose. This also removes its 24-hour purge.
+- **Q2b — intent and committed lines, verified for gaps.** Under exclusive coordination, deletion logs an intent line (UUID and boundary) before commit, and a committed line after commit but before the success response. On definitive rollback it logs a rolled-back line, so the fallback can release that intent instead of suspending the account. The fallback counts as verified only if log ingestion shows no gap over the interval from `T` to the restore. Otherwise the restore stays closed.
+- **Q2c — suspend sign-in on unknown outcome.** An intent line with no committed line means the outcome is unknown. The account is neither erased nor revived. Its sign-in is suspended until the owner resolves it through the privacy contact path, and the rest of the restore may reopen. This needs a suspension marker on User, which is a new schema proposal subject to Q9 review.
+
+**Consequences to document (not choices):**
+
+- **Q2d — diff invariant.** Account deletion must remain the only way a User row disappears. Document this as an invariant and guard it with a test.
+- **Q2e — log line as personal data.** The pseudonymous account UUID in 30-day logs must appear in the FR-004 processing decision and the FR-019 log-retention justification.
+
+**Capability boundary (applies to the superseded ledger, option 3):** Asynchronous storage lifecycle policy alone is not proof of a precise disposal deadline. [Azure Blob lifecycle behavior](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-policy-structure). The new infrastructure, access policy, identity integration and receipt protocol require review and crash-point tests. Existing provider settings were inspected under Q1 (R7), but no ledger resource exists yet, so its disposal behavior is unverified.
 
 ## R7 — Retention is more than configuration intent
 
@@ -95,6 +124,29 @@ For this design, identifying external logs may be collected only where continued
 **Rationale:** `infra/modules/log-analytics.bicep` declares 30-day workspace retention. Microsoft documents that this can retain 31 days without `immediatePurgeDataOn30Days`; table overrides and total retention also need inspection. Use the supported API in deployment if Bicep cannot express the strict setting. [Azure retention configuration](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/data-retention-configure).
 
 Neon restoration and branch capabilities are not this project's settings or verified disposal guarantees. Inventory branches, snapshots, manual dumps, replicas and non-production copies; copying does not restart deadlines. [Neon restore capability](https://neon.com/blog/announcing-point-in-time-restore), [Neon branch workflow](https://neon.com/docs/get-started-with-neon/workflow-primer).
+
+**Verified settings (read-only inspection, 2026-09-24):**
+
+- **Neon project `dawn-pine-04463679`** (free plan, `aws-eu-central-1`):
+  - `history_retention_seconds` 21600 (6 hours).
+  - No snapshots and no automatic snapshot schedule.
+  - One branch (`main`).
+  - No `pg_dump`/backup scripts in the repo, CI or infra.
+  - Neon's internal durability copies are not visible from the project and need supplier evidence (R8).
+- **Azure `rg-gymnotebook-prod`:**
+  - Active Container Apps environment `cae-gymnote-prod-58dd` with workspace `log-gymnote-prod-58dd` (swedencentral).
+  - A leftover environment `cae-gymnotebook-prod-weu` with workspace `workspace-rggymnotebookproddLkl` (westeurope, created 2026-09-22, no apps, no log rows in 90 days). Candidate for removal by the owner.
+  - No storage accounts, backup vaults or resource diagnostic settings.
+- **Log Analytics retention:**
+  - Both workspaces keep 30 days, and `ContainerAppConsoleLogs_CL` is 30/30.
+  - `immediatePurgeDataOn30Days` is not set.
+  - The App\*, `Usage` and `AzureActivity` tables are at 90 days. They currently hold no user data (no Application Insights; `Usage` is billing metadata), but should be pinned to 30 days in IaC.
+  - Only `ContainerAppConsoleLogs_CL`, `ContainerAppSystemLogs_CL` and `Usage` contain rows.
+- **Log content (from code, not from the data):**
+  - The API has no explicit logging calls; `Microsoft.AspNetCore` is at Warning, and EF Core does not log parameter values (no `EnableSensitiveDataLogging`).
+  - The frontend nginx uses its default access log to the console: remote address, user agent, path and time. Whether the remote address is the visitor's or the ingress's is unverified.
+  - A scan of stored log text for IPs, usernames, tokens or connection strings was not performed and remains an operator task.
+- **Third-party requests:** `frontend/index.html` loads Google Fonts from `fonts.googleapis.com`/`fonts.gstatic.com`, so visitors' IP addresses reach Google. This belongs in the FR-004 processing decision; self-hosting the fonts would remove it.
 
 **Alternatives considered:** A provider name or Bicep default is insufficient evidence; row deletion does not remove backup history; silently extending the specification's limits is out of scope.
 
