@@ -340,6 +340,307 @@ document.addEventListener('DOMContentLoaded', async function() {
       'a { color: var(--color-accent); text-decoration: none; }'
     );
 
+    // Privacy and account-lifecycle design preview. Patch decoded anchors and
+    // fail visibly if the bundled source changes, so the clickable artifact
+    // cannot silently lose these screens. No account or server data is changed.
+    const replacePrivacyAnchor = (anchor, replacement) => {
+      if (!template.includes(anchor)) throw new Error('Privacy prototype anchor missing: ' + anchor.slice(0, 90));
+      template = template.replace(anchor, replacement);
+    };
+    replacePrivacyAnchor(
+      '    confirmFinish: false,\n    draft: [',
+      `    confirmFinish: false,
+    noticeSeen: false,
+    noticeVersion: 1,
+    noticeReturn: "login",
+    exportPassword: "",
+    exportError: "",
+    exportDone: false,
+    deletePassword: "",
+    deleteError: "",
+    draft: [`
+    );
+    replacePrivacyAnchor(
+      '  go = (screen) => (e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ screen }); };',
+      `  go = (screen) => (e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ screen }); };
+
+  openNotebook = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => s.noticeSeen
+      ? { screen: "history" }
+      : { screen: "notice", noticeReturn: "history" });
+  };
+  openPublicNotice = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "notice", noticeReturn: "login" });
+  };
+  openAccountNotice = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "notice", noticeReturn: "privacy" });
+  };
+  leaveNotice = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ screen: s.noticeReturn === "history" ? "cover" : s.noticeReturn }));
+  };
+  continueNotice = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ noticeSeen: true, screen: "history" });
+  };
+  previewRevisedNotice = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ noticeVersion: s.noticeVersion + 1, noticeSeen: false, noticeReturn: "history", screen: "notice" }));
+  };
+  openExport = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "accountExport", exportPassword: "", exportError: "", exportDone: false });
+  };
+  setExportPassword = (e) => this.setState({ exportPassword: e.target.value, exportError: "" });
+  failExport = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ exportError: "The export could not be prepared. Your notebook has not changed. Try again.", exportDone: false });
+  };
+  downloadSampleExport = (e) => {
+    if (e) e.preventDefault();
+    const password = this.state.exportPassword;
+    if (!password || password === "wrong") {
+      this.setState({ exportError: "Check your current password and try again.", exportDone: false });
+      return;
+    }
+    const sampleExercises = EXERCISES.map((x, i) => ({
+      id: i + 1, name: x.name, isBodyweight: x.bodyweight, createdAt: "2026-09-01T10:00:00Z"
+    }));
+    const sampleTime = (w, clock) => clock
+      ? String(w.date[0]) + "-" + String(w.date[1]).padStart(2, "0") + "-" + String(w.date[2]).padStart(2, "0") + "T" + clock.replace(".", ":") + ":00+03:00"
+      : null;
+    const sample = {
+      formatVersion: 1,
+      snapshotAt: new Date().toISOString(),
+      fieldGuide: {
+        date: "Calendar date chosen for the workout (YYYY-MM-DD)",
+        timestamps: "ISO 8601 timestamps; workout times in this sample use the Helsinki September offset (+03:00)",
+        bodyweightKg: "Kilograms; null means not logged",
+        weightKg: "Kilograms; null means no weight logged",
+        exerciseId: "Links an ordered exercise block to an exercise in the exercises list",
+        position: "Order of exercise blocks within a workout",
+        order: "Order of sets within an exercise block"
+      },
+      account: { id: 1, username: "sample-user", createdAt: "2026-09-01T10:00:00Z", noticeAcknowledgement: { version: "Preview " + this.state.noticeVersion, shownAt: new Date().toISOString() } },
+      exercises: sampleExercises,
+      workouts: DATA.map((w) => ({
+        id: w.id,
+        date: String(w.date[0]) + "-" + String(w.date[1]).padStart(2, "0") + "-" + String(w.date[2]).padStart(2, "0"),
+        startedAt: sampleTime(w, w.time), endedAt: sampleTime(w, w.end),
+        title: w.title, location: w.loc, notes: w.notes, bodyweightKg: w.bw,
+        createdAt: sampleTime(w, w.time),
+        exerciseBlocks: w.blocks.map((b, bi) => ({
+          id: w.id * 100 + bi + 1,
+          exerciseId: sampleExercises.find((x) => x.name === b.name).id,
+          position: bi + 1,
+          sets: b.sets.map((set, si) => ({ id: w.id * 10000 + bi * 100 + si + 1, order: si + 1, weightKg: set[0], reps: set[1], isWarmup: set[2] }))
+        }))
+      }))
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "gym-notebook-sample-export.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    this.setState({ exportPassword: "", exportError: "", exportDone: true });
+  };
+  openAccountDelete = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "accountDelete", deletePassword: "", deleteError: "" });
+  };
+  setDeletePassword = (e) => this.setState({ deletePassword: e.target.value, deleteError: "" });
+  failAccountDelete = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ deleteError: "Deletion could not be completed. Your sample notebook is unchanged. Try again or use the privacy contact." });
+  };
+  confirmAccountDelete = (e) => {
+    if (e) e.preventDefault();
+    if (!this.state.deletePassword || this.state.deletePassword === "wrong") {
+      this.setState({ deleteError: "Check your current password and try again." });
+      return;
+    }
+    this.setState({ screen: "accountDeleted", deletePassword: "", deleteError: "" });
+  };
+  restartPrivacyPreview = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "login", noticeSeen: false, noticeVersion: 1, exportPassword: "", deletePassword: "" });
+  };`
+    );
+    const privacyLoginLink = `<div style="margin-top:20px;text-align:center;font-size:13px"><a href="#" sc-camel-on-click="{{ openPublicNotice }}">Privacy notice</a></div>`;
+    replacePrivacyAnchor(
+      '          <a href="#" sc-camel-on-click="{{ goCover }}">Change password</a>\n        </div>\n      </div>\n    </sc-if>',
+      '          <a href="#" sc-camel-on-click="{{ goCover }}">Change password</a>\n        </div>\n        ' + privacyLoginLink + '\n      </div>\n    </sc-if>'
+    );
+    replacePrivacyAnchor(coverSignOut, `<div style="text-align:center;margin-top:14px;font-size:13px"><a href="#" sc-camel-on-click="{{ goPrivacy }}">Privacy &amp; account</a></div>\n        ` + coverSignOut);
+    replacePrivacyAnchor(
+      'sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook',
+      'sc-camel-on-click="{{ openNotebook }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook'
+    );
+
+    const privacyScreens = `
+    <sc-if value="{{ isNotice }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;justify-content:space-between">
+          <a href="#" sc-camel-on-click="{{ leaveNotice }}" style="font-size:13px">← Back</a>
+          <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600)">Preview {{ noticeVersion }}</div>
+        </div>
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Privacy</div>
+          <h2 style="font-family:var(--font-heading);font-size:35px;font-weight:400;line-height:1.08;margin:10px 0 14px">Your notebook,<br>your information</h2>
+          <p style="font-size:13px;line-height:1.65;color:var(--color-neutral-700);margin:0 0 22px">This is a design preview. Controller details, lawful bases, processors and transfer information need review before a notice can be published.</p>
+          <div style="border-top:1px solid var(--color-accent);padding-top:16px">
+            <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">What you put in</h3>
+            <p style="font-size:13px;line-height:1.6;margin:0 0 18px">Your username, exercises, workouts, bodyweight if you enter it, and your notes. Notes may contain sensitive details, so choose what you write.</p>
+            <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">What the service does</h3>
+            <p style="font-size:13px;line-height:1.6;margin:0 0 18px">It keeps your log and draws progress from the sets you record. The reviewed notice will explain the basis for each purpose and which service providers handle information.</p>
+            <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">Keeping and removing it</h3>
+            <p style="font-size:13px;line-height:1.6;margin:0 0 18px">You can export your notebook or delete your account. This draft proposes up to 30 days for backup copies after deletion and up to 30 days from collection for necessary, restricted security logs. These limits need provider verification.</p>
+            <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">Your choices</h3>
+            <p style="font-size:13px;line-height:1.6;margin:0">The published notice will explain access, correction, deletion, restriction, objection and portability where applicable, plus the privacy contact and complaint route. Reading this notice is not consent.</p>
+          </div>
+          <div style="height:1px;background:var(--color-divider);margin:22px 0 16px"></div>
+          <div style="font-size:12px;color:var(--color-neutral-600);line-height:1.55">Preview copy only · effective date and contact pending review</div>
+        </div>
+        <sc-if value="{{ isNoticeGate }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:12px 22px 22px;border-top:1px solid var(--color-divider);background:var(--color-bg)">
+            <p style="font-size:12px;line-height:1.45;color:var(--color-neutral-600);margin:0 0 10px">Continue records the version shown to you. It does not record consent.</p>
+            <button class="btn btn-primary" sc-camel-on-click="{{ continueNotice }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px">Continue to notebook</button>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isPrivacy }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider)"><a href="#" sc-camel-on-click="{{ goCover }}" style="font-size:13px">← Cover</a></div>
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Your account</div>
+          <h2 style="font-family:var(--font-heading);font-size:34px;font-weight:400;margin:10px 0 8px">Privacy &amp; account</h2>
+          <p style="font-size:13px;color:var(--color-neutral-700);line-height:1.6;margin:0 0 22px">Read how this notebook handles information, take a copy, or leave the service.</p>
+          <div style="border-top:1px solid var(--color-accent);padding:17px 0 20px">
+            <div style="font-family:var(--font-heading);font-size:20px">Privacy notice</div>
+            <p style="font-size:12px;color:var(--color-neutral-600);line-height:1.55;margin:5px 0 12px">Current design preview: version {{ noticeVersion }}. Reading it is separate from consent.</p>
+            <button class="btn btn-ghost" sc-camel-on-click="{{ openAccountNotice }}" style="min-height:44px;width:100%">Read privacy notice</button>
+          </div>
+          <div style="border-top:1px solid var(--color-divider);padding:17px 0 20px">
+            <div style="font-family:var(--font-heading);font-size:20px">Export your notebook</div>
+            <p style="font-size:12px;color:var(--color-neutral-600);line-height:1.55;margin:5px 0 12px">Get one JSON file with your account, exercises, sessions and sets.</p>
+            <button class="btn btn-ghost" sc-camel-on-click="{{ openExport }}" style="min-height:44px;width:100%">Export my data</button>
+          </div>
+          <div style="border-top:1px solid var(--color-divider);padding:17px 0 20px">
+            <div style="font-family:var(--font-heading);font-size:20px">Delete your account</div>
+            <p style="font-size:12px;color:var(--color-neutral-600);line-height:1.55;margin:5px 0 12px">Remove your active notebook and sign out of every session. See what may remain temporarily before confirming.</p>
+            <button class="btn btn-secondary" sc-camel-on-click="{{ openAccountDelete }}" style="min-height:44px;width:100%">Review account deletion</button>
+          </div>
+          <div style="border-top:1px solid var(--color-divider);padding-top:17px;font-size:12px;line-height:1.55;color:var(--color-neutral-600)">
+            Need another privacy right? Use the contact route in the published notice.
+          </div>
+          <div style="margin-top:24px;padding-top:14px;border-top:1px dashed var(--color-divider);font-size:11px;color:var(--color-neutral-600)">
+            Prototype control · <a href="#" sc-camel-on-click="{{ previewRevisedNotice }}">Preview a new notice version</a>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAccountExport }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider)"><a href="#" sc-camel-on-click="{{ goPrivacy }}" style="font-size:13px">← Privacy &amp; account</a></div>
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Your information</div>
+          <h2 style="font-family:var(--font-heading);font-size:34px;font-weight:400;margin:10px 0 12px">Take a copy</h2>
+          <p style="font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Download one JSON file containing your account details, exercises, sessions, notes and sets. The file explains its fields and preserves each exercise's place in a session.</p>
+          <div style="border-top:1px solid var(--color-accent);margin:22px 0 18px"></div>
+          <label style="display:flex;flex-direction:column;gap:7px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)">Current password
+            <input class="input" type="password" autocomplete="current-password" value="{{ exportPassword }}" sc-camel-on-change="{{ setExportPassword }}" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+          </label>
+          <p style="font-size:12px;line-height:1.55;color:var(--color-neutral-600);margin:10px 0 20px">The file downloads to your device. Keep it somewhere private. This prototype downloads sample data only.</p>
+          <sc-if value="{{ hasExportError }}" hint-placeholder-val="{{ false }}"><p role="alert" style="font-size:13px;line-height:1.55;color:#9b382b">{{ exportError }}</p></sc-if>
+          <sc-if value="{{ exportDone }}" hint-placeholder-val="{{ false }}"><p role="status" style="font-size:13px;line-height:1.55;color:var(--color-accent-700)">Sample JSON downloaded. Your notebook has not changed.</p></sc-if>
+          <button class="btn btn-primary" sc-camel-on-click="{{ downloadSampleExport }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">Download sample JSON</button>
+          <div style="margin-top:18px;font-size:11px;color:var(--color-neutral-600)">Prototype control · <a href="#" sc-camel-on-click="{{ failExport }}">Simulate unavailable export</a></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAccountDelete }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider)"><a href="#" sc-camel-on-click="{{ goPrivacy }}" style="font-size:13px">← Privacy &amp; account</a></div>
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Before you leave</div>
+          <h2 style="font-family:var(--font-heading);font-size:34px;font-weight:400;margin:10px 0 12px">Delete your account</h2>
+          <p style="font-size:13px;line-height:1.6;margin:0 0 18px">This permanently removes your active account, exercises, sessions, notes and sets. Every signed-in session loses access. You cannot undo this.</p>
+          <button class="btn btn-ghost" sc-camel-on-click="{{ openExport }}" style="min-height:44px;width:100%">Export first (optional)</button>
+          <div style="border-top:1px solid var(--color-accent);margin:22px 0 18px"></div>
+          <div style="font-family:var(--font-heading);font-size:21px;margin-bottom:8px">What remains temporarily</div>
+          <p style="font-size:13px;line-height:1.6;margin:0 0 12px">Backup copies may remain for up to 30 calendar days after deletion and cannot be used as your active notebook.</p>
+          <p style="font-size:13px;line-height:1.6;margin:0 0 18px">Necessary, restricted security logs may remain until 30 days after they were collected. Any other exception would be explained here before release.</p>
+          <label style="display:flex;flex-direction:column;gap:7px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)">Current password
+            <input class="input" type="password" autocomplete="current-password" value="{{ deletePassword }}" sc-camel-on-change="{{ setDeletePassword }}" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+          </label>
+          <sc-if value="{{ hasDeleteError }}" hint-placeholder-val="{{ false }}"><p role="alert" style="font-size:13px;line-height:1.55;color:#9b382b">{{ deleteError }}</p></sc-if>
+          <button class="btn btn-secondary" sc-camel-on-click="{{ confirmAccountDelete }}" style="min-height:48px;width:100%;margin-top:18px;font-family:var(--font-heading);font-size:17px">Delete my account</button>
+          <button class="btn btn-ghost" sc-camel-on-click="{{ goPrivacy }}" style="min-height:44px;width:100%;margin-top:10px">Keep my account</button>
+          <div style="margin-top:14px;font-size:11px;color:var(--color-neutral-600)">Prototype control · <a href="#" sc-camel-on-click="{{ failAccountDelete }}">Simulate deletion failure</a></div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAccountDeleted }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:36px 30px">
+        <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Account closed · prototype</div>
+        <h2 style="font-family:var(--font-heading);font-size:38px;font-weight:400;line-height:1.08;margin:14px 0">Your account is deleted</h2>
+        <p style="font-size:13px;line-height:1.65">The active account and notebook are gone, and sessions are signed out. Backup copies can take up to 30 calendar days to expire. Necessary, restricted security logs can remain until 30 days after collection.</p>
+        <p style="font-size:12px;line-height:1.55;color:var(--color-neutral-600)">This prototype only shows the flow. No real account or records were removed.</p>
+        <button class="btn btn-primary" sc-camel-on-click="{{ restartPrivacyPreview }}" style="min-height:48px;width:100%;margin-top:20px;font-family:var(--font-heading);font-size:17px">Return to sign in</button>
+      </div>
+    </sc-if>
+
+`;
+    replacePrivacyAnchor(
+      '    <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">',
+      privacyScreens + '    <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">'
+    );
+    replacePrivacyAnchor(
+      '      isLogin: screen === "login",',
+      `      isNotice: screen === "notice",
+      isNoticeGate: screen === "notice" && this.state.noticeReturn === "history",
+      isPrivacy: screen === "privacy",
+      isAccountExport: screen === "accountExport",
+      isAccountDelete: screen === "accountDelete",
+      isAccountDeleted: screen === "accountDeleted",
+      noticeVersion: this.state.noticeVersion,
+      exportPassword: this.state.exportPassword,
+      exportError: this.state.exportError,
+      hasExportError: !!this.state.exportError,
+      exportDone: this.state.exportDone,
+      deletePassword: this.state.deletePassword,
+      deleteError: this.state.deleteError,
+      hasDeleteError: !!this.state.deleteError,
+      openNotebook: this.openNotebook,
+      openPublicNotice: this.openPublicNotice,
+      openAccountNotice: this.openAccountNotice,
+      leaveNotice: this.leaveNotice,
+      continueNotice: this.continueNotice,
+      previewRevisedNotice: this.previewRevisedNotice,
+      goPrivacy: this.go("privacy"),
+      openExport: this.openExport,
+      setExportPassword: this.setExportPassword,
+      failExport: this.failExport,
+      downloadSampleExport: this.downloadSampleExport,
+      openAccountDelete: this.openAccountDelete,
+      setDeletePassword: this.setDeletePassword,
+      failAccountDelete: this.failAccountDelete,
+      confirmAccountDelete: this.confirmAccountDelete,
+      restartPrivacyPreview: this.restartPrivacyPreview,
+      isLogin: screen === "login",`
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';
