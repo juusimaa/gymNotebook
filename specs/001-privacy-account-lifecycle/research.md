@@ -30,9 +30,9 @@ Under a short shared initialization guard on a separate READ COMMITTED connectio
 
 ## R4 — Coordinate operations and response delivery
 
-**Status:** Candidate design, not owner-approved. The locks and export cancellation change existing authenticated endpoints, so implementation waits on the validation spike below: a local part (A) and a separately authorized deployed-proxy part (B). Approval follows only if both pass their pre-agreed criteria. Open design questions for this decision are tracked as Q3–Q7 in [plan.md → Open Design Questions](plan.md#open-design-questions).
+**Status:** Candidate design, not owner-approved. The locks and export cancellation change existing authenticated endpoints, so implementation waits on the validation spike below: a local part (A) and a separately authorized deployed-proxy part (B). Approval follows only if both pass their pre-agreed criteria. Q3–Q6 are decided below; the remaining open item is the Q7 validation spike, tracked in [plan.md → Open Design Questions](plan.md#open-design-questions).
 
-**Decision:** Use PostgreSQL transaction advisory locks in a dedicated account namespace keyed by existing User.Id. Ordinary authenticated operations acquire shared access and freshly check account identity, token version and expiry. Deletion and password changes acquire exclusive access. Login revalidates its resolved account before token issuance. Existing explicit transactions join the lifecycle boundary rather than creating nested transactions.
+**Decision:** Use PostgreSQL transaction advisory locks in a dedicated account namespace keyed by existing User.Id. Ordinary authenticated operations acquire shared access and freshly check account identity, token version and expiry. Deletion and password changes acquire exclusive access. Login does not take the guard (Q6 below): a token issued in a race is rejected on first use by the per-request check. Existing explicit transactions join the lifecycle boundary rather than creating nested transactions.
 
 The export snapshot is the explicit exception to a long-lived operation lock; its short initialization guard and separate delivery guards are defined in R3 and below. Deletion's terminal success response contains only its minimal outcome metadata and is authorized by the completed operation, not by rechecking a now-absent User. Password-change delivery checks the newly committed token version under a fresh shared guard after releasing its exclusive transaction; if deletion or another password change wins first, do not emit the stale token. Never reacquire a conflicting lock through another connection while still holding exclusive access.
 
@@ -44,10 +44,63 @@ For personal responses, hold shared access through a bounded write/flush and che
 
 **Mandatory proof:** Two app hosts, actual flush/cancellation and deployed proxy behavior. Bytes already handed to transport cannot be recalled. Disable response buffering/caching on this path and test slow downloads. If the real proxy continues unfinished delivery independently after deletion, revise the design before release. [ASP.NET HttpContext and Abort](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/use-http-context?view=aspnetcore-10.0).
 
+**Q3 decision (owner, 2026-09-24): endpoint filter on the authorized route groups.**
+
+- **Where:** a concrete filter in the proposed `AccountLifecycle.cs`, with no interface. It is attached to `/exercises`, `/workouts`, `/auth/me`, `/auth/change-password` and the new privacy routes.
+- **What it does:**
+  - It begins a transaction on the request's scoped `AppDbContext`. That is the same instance the handler and `OnTokenValidated` receive, so the handler's queries run inside it.
+  - It takes `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)`, then freshly checks that the account exists and the token version matches, under the lock.
+- **Reads:** the filter writes the result to the response while holding the lock, within the bounded write timeout, then commits.
+- **Writes:** the filter commits first, then writes the response under a short **delivery guard**: a new transaction, a fresh shared lock and a fresh token check. This is the same pattern as password-change delivery above, so a 2xx is never sent for work that failed to commit. If deletion wins between commit and delivery, no personal response is written; the Q5 outcome applies.
+- **Existing transactions:** the explicit `BeginTransactionAsync` calls in PUT `/workouts/{id}/exercises` and POST `/workouts/{id}/sets` are removed. Those handlers run inside the filter's transaction, and their intermediate `SaveChangesAsync` calls stay.
+- **Export** does not use this filter. It uses its own initialization and delivery guards (R3 and above).
+- **Coverage test:** a test enumerates the endpoint data source and fails if any endpoint that requires authorization lacks the filter, unless it is on an explicit allow-list (export only).
+- **`OnTokenValidated`:** its token-version check stays as an early rejection before any transaction or lock is taken.
+- **Connection pooling:** each guarded request holds one pooled connection for its duration, including the response write, which is bounded by the write timeout. Transaction-level advisory locks remain valid through Neon's transaction-mode pooler; confirm whether the production connection string uses the pooler endpoint.
+- **Alternatives rejected:**
+  - Middleware starts the response before commit, so it would need buffering or the same split, plus an export special case.
+  - A per-handler helper cannot be verified from endpoint metadata.
+  - Opening the transaction in `OnTokenValidated` has no commit hook.
+
+**Q5 decision (owner, 2026-09-24): wait and revocation outcomes.**
+
+- **Deletion cannot acquire exclusive access within its bounded wait:** 503 `temporarily_unavailable` with `Retry-After`. Nothing was mutated, so retry is safe (FR-017). By the same rule, an ordinary request whose shared-lock wait times out gets the same 503.
+- **An ordinary request waited behind a deletion that committed:** the fresh check under the lock finds no account, so it gets 401, the same as a revoked token. No new status reveals the deletion.
+- **A write committed but its delivery guard fails** (the account was deleted, or a password change revoked the token): 401 with no body. No personal bytes are sent after revocation.
+  - Known consequence: after a password change the write did commit, so a user who signs in again and retries a POST can duplicate it. Document this in the UI copy for the re-sign-in state.
+- **A suspended account signs in** (R6 Q2c): the password is verified first.
+  - Wrong password: the existing 401.
+  - Correct password: 403 `{ "code": "account_suspended" }`, and the UI shows the privacy contact path.
+
+  Only someone who already knows the password learns the status. Existing tokens are invalid after restore because of the signing-key rotation, so token validation needs no new case.
+
+**Q6 decision (owner, 2026-09-24): login takes no lifecycle guard.** Login keeps its current lookup, BCrypt verification and issuance, with no lock or transaction.
+
+- A token issued while a deletion or password change commits is harmless. It carries the user ID (`sub`) and token version (`tv`), and every guarded request re-checks both, so the token gets 401 on first use.
+- Integer IDs are not reused, except on a restore sequence rewind, which the JWT signing-key rotation covers (R5).
+- The login response contains only the token, so no personal data is delivered to a deleted account.
+- The accepted cost is feedback: in this rare race, login returns 200 and the next `/auth/me` returns 401, so the user is returned to sign-in without an explanation.
+- A test must prove that a token issued in each race (deletion first, password change first) gets 401 on a guarded route.
+- The suspended-account 403 (Q5) is a plain check after password verification. It needs no guard, because suspension is set only while ingress is disabled.
+
+**Q4 starting values (owner, 2026-09-24).** These are starting points that spike Part A tunes; they are not final limits.
+
+| Limit | Start | Basis |
+| --- | --- | --- |
+| Shared-lock wait, ordinary requests | 5 s, then 503 (Q5) | Per-transaction `lock_timeout`; ordinary requests wait only while a deletion holds exclusive access |
+| Response write/flush timeout | 10 s per write or flush | Bounds how long a slow client holds shared access; an ordinary read's whole response write must fit |
+| Deletion's exclusive-lock wait | 15 s, then 503 (Q5) | Longer than the longest shared hold (handler plus 10 s write). PostgreSQL queues later shared requests behind a waiting exclusive one, so deletion is not starved; ordinary requests arriving during that window may get 503 |
+| Deletion transaction statement timeout | 30 s | 15 s wait + 30 s work stays within SC-005's 60 s |
+| Export batch | 1,000 rows per keyset batch, flushed per batch, one delivery guard per chunk | The reference notebook is about 10 MB, or about 110 chunks. At about 3–4 round trips per guard, roughly 0.1 s cross-region, that is about 11 s total, within SC-003's 60 s. Deletion stops an export within one chunk |
+| Export hard cap | 120 s, then abort the stream and dispose of the snapshot | 60 s is the target; the cap bounds the snapshot transaction |
+| Spike A1 pass criterion | p95 increase ≤ 10 ms locally at 20 concurrent clients; connection pool never exhausted | Deployed overhead is reported from measured round-trip time, not used as pass/fail |
+
+The cross-region figure is an estimate: the API runs in Azure swedencentral and Neon in aws-eu-central-1 (R7). Part B measures the actual round-trip time. Combining the lock acquisition and token-version check in one statement saves a round trip per guarded request.
+
 **Validation spike:** Time-boxed, on a separate `spike/` branch. Spike code is not merged into feature code. Part A tests are kept as the start of the permanent R4 suite.
 
 - **Part A — local (no extra authorization).** Testcontainers Postgres with two app hosts sharing one database.
-  - A1: ordinary endpoints under load with and without the shared guard. Pass when p95 latency increase stays within an agreed bound and the connection pool is never exhausted.
+  - A1: ordinary endpoints under load with and without the shared guard. Pass when the p95 latency increase stays within the Q4 bound (≤ 10 ms locally at 20 concurrent clients) and the connection pool is never exhausted.
   - A2: deletion on one host during a slow export on the other. Pass when deletion acquires exclusive access within its bounded wait and the export aborts at its next chunk check.
   - A3: a client that stops reading. Pass when the bounded write/flush times out, the guard is released and deletion proceeds.
   - A4: password change racing deletion. Pass when no stale token is emitted, no deadlock occurs and no conflicting lock is reacquired while exclusive access is held.

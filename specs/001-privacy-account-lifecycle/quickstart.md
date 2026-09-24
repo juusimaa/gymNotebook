@@ -75,7 +75,7 @@ Run two independent application hosts against the same real Postgres. For every 
 | Overlap with deletion | Required outcome |
 | --- | --- |
 | Workout create/PATCH/delete, bulk replace, append/update/delete set, exercise rename/merge | Earlier protected write may commit before deletion then be erased; later write is denied; no orphan, recreated account or B mutation |
-| Login/password change | Fresh validation after coordination; no valid access to deleted identity; password-change-first invalidates old delete token |
+| Login/password change | Password change validates freshly after coordination; password-change-first invalidates old delete token. Login is unguarded (Q6): a token issued during deletion or password change gets 401 on the first guarded request |
 | Notice acknowledgement and /auth/me | No recreated privacy record; no stale tracked User reuse or missing-user 500 |
 | Snapshot export and ordinary personal-data response | No newly authorized personal bytes after successful deletion commit; unfinished stream aborts, buffers/snapshot release |
 | Slow/blocked client, cancellation or lock timeout | Bounded waits, rollback where precommit, no false completion and no indefinite deletion starvation |
