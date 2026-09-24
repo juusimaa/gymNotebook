@@ -26,7 +26,7 @@ Every artifact has owner, version/review date and supporting evidence. Changes i
 | Neon | Inspected 2026-09-24 (research R7): free plan, aws-eu-central-1, 6-hour history window, no snapshots/schedule, one branch | Internal durability copies, agreements and deletion assistance; any change of plan, history retention, snapshots or branches reopens R6 sizing |
 | Google Fonts | frontend/index.html requests fonts.googleapis.com/fonts.gstatic.com | To be removed by self-hosting in a separate PR before this feature (research R8, P28); verify in real browser traffic that no Google request remains, then remove this row |
 | DNS/CDN/network delivery | Must inspect deployed DNS and request path | Actual supplier(s), role, access/request logs, regions/retention; do not infer from brand names |
-| Frontend nginx and browser storage | nginx frontend; JWT in gymnotebook.token localStorage | Access logs, caches, any additional runtime collection, expiry and observed cleanup |
+| Frontend nginx and browser storage | nginx frontend (access log to be turned off, analysis C1); JWT in gymnotebook.token localStorage | Access logs, caches, any additional runtime collection, expiry and observed cleanup |
 | Support/privacy contact | Required by this feature | Actual providers, monitored address, permissions, retention, contracts and locations |
 
 Do not label all candidates processors without assessing role. Read-only settings inspection is recorded in research R7; no log-content scan or provider agreement review was performed. Unknown evidence blocks the affected rollout; it is not a reason to publish speculative guarantees.

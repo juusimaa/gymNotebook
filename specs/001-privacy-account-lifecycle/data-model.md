@@ -37,7 +37,7 @@ State: draft → reviewed/announced → effective/current → superseded. Only r
 
 ## Deletion log lines — operational log records, not EF entity
 
-Chosen in [research R6](research.md#r6--independent-restore-evidence). These are structured lines in the existing Container Apps console logs. They are the fallback restore evidence when the pre-restore branch is unusable.
+Chosen in [research R6](research.md#r6--independent-restore-evidence). **Terminology:** these lines are the spec's "deletion evidence" (FR-020, SC-006). The "restore suppression" in research R5 and the "minimal suppression evidence" in contracts/ui.md mean the same thing: re-deleting an account during restore reconciliation. These are structured lines in the existing Container Apps console logs. They are the fallback restore evidence when the pre-restore branch is unusable.
 
 Fields: event (`deletion.intent`, `deletion.committed` or `deletion.rolled_back`), PrivacyAccountId (UUID) and DeletionBoundaryAt (timestamptz). They contain no integer user ID, username, password/token, notebook content or IP address.
 

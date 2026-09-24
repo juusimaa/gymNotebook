@@ -10,7 +10,7 @@
 
 Add a public versioned privacy notice, account-level acknowledgement, password-verified JSON export and permanent account deletion. Preserve the current username/password, invite gate, JWT revocation, notebook model and UI conventions. Notice acknowledgement is never consent. Deliver maintained processing, supplier, retention, rights-request and restore records alongside implementation.
 
-The critical changes are a repeatable-read export, PostgreSQL coordination of account operations and response delivery, atomic active-data deletion, and independent restore-suppression evidence. Existing JWT validation rejects later requests after deletion but does not protect requests already running. A restored database cannot supply evidence of deletions made after its backup.
+The critical changes are a repeatable-read export, PostgreSQL coordination of account operations and response delivery, atomic active-data deletion, and restore reconciliation that uses the preserved pre-restore Neon branch, with minimal deletion log lines as fallback. Existing JWT validation rejects later requests after deletion but does not protect requests already running. A restored database alone cannot supply evidence of deletions made after its restore point, which is why the preserved branch or the logs are needed (research R6).
 
 See [research.md](research.md), [data-model.md](data-model.md), [API contract](contracts/api.md), [UI contract](contracts/ui.md), [operations contract](contracts/operations.md) and [quickstart.md](quickstart.md). Proposed APIs, schema and mechanisms require owner review under constitution Principle VII. Legal and provider evidence is a release dependency, not something technical research can approve.
 
@@ -100,7 +100,7 @@ infra/                          # Retention configuration (for example Log Analy
 
 ## Phase 0 — Research Outcome
 
-Draft technical proposals cover versioned notice with latest acknowledgement, a single streamed JSON snapshot, transaction-level account locks, fresh delivery authorization and atomic active-data deletion. The account locks and export cancellation (R4) are a candidate design pending the validation spike and open questions below. The owner approved the outcome that restores cannot revive deleted accounts and must fail closed when reconciliation cannot be verified. The independent receipt protocol and numerical retention guarantees remain unapproved pending provider-capability evidence, failure-handling proof and an isolated restore exercise. See research R1–R10.
+Draft technical proposals cover versioned notice with latest acknowledgement, a single streamed JSON snapshot, transaction-level account locks, fresh delivery authorization and atomic active-data deletion. The account locks and export cancellation (R4) are a candidate design pending the validation spike and open questions below. The owner approved the outcome that restores cannot revive deleted accounts and must fail closed when reconciliation cannot be verified. The restore-evidence direction (pre-restore branch diff with a log fallback, research R6) was chosen on 2026-09-24. It and the numerical retention guarantees remain unapproved pending failure-handling proof and an isolated restore exercise. See research R1–R10.
 
 The restore-evidence and concurrency mechanisms have mandatory implementation proof points. If their tests fail, revise the design rather than relax FR-016/017/020/022. Legal and deployment facts remain explicitly unverified release dependencies, not technical assumptions marked as proven.
 

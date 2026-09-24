@@ -25,9 +25,15 @@ Idle → password verification/generation → receiving → complete, or actiona
 
 ## Deletion transitions
 
-Review → separate password/confirmation action → deleting → confirmed completion, or failure/uncertain result. Show active data categories, irreversibility, all-session sign-out, optional export, backup deadline, 31-day minimal suppression evidence and the reviewed restricted log exception before confirmation. Export is optional and never a prerequisite. Cancellation and incorrect password change nothing. Disable repeated submission while pending, but do not imply that closing the page after confirmed submission cancels server deletion.
+Review → separate password/confirmation action → deleting → confirmed completion, or failure/uncertain result. Show active data categories, irreversibility, all-session sign-out, optional export, backup deadline, 31-day minimal deletion evidence (the deletion log lines, data-model.md) and the reviewed restricted log exception before confirmation. Export is optional and never a prerequisite. Cancellation and incorrect password change nothing. Disable repeated submission while pending, but do not imply that closing the page after confirmed submission cancels server deletion.
 
 Successful response clears local app-owned state and navigates to completion with only non-personal outcome metadata. A lost response/401 says the session no longer grants access and provides sign-in/contact options; it never certifies deletion. A known precommit failure offers retry. Unknown outcome explains uncertainty and the contact path without promising rollback.
+
+## Coordination and suspension states (research R4 Q5, R6 Q2c)
+
+- **Suspended account at login:** after a correct password, a 403 `account_suspended` shows neutral copy directing the user to the privacy contact. A wrong password keeps the existing generic login error, so the suspension is never shown to someone without the password.
+- **Temporarily unavailable:** a 503 `temporarily_unavailable` shows a retry action, honouring `Retry-After` when present. Nothing was changed, so retrying is safe. Deletion uses the same copy for a lock timeout.
+- **Write interrupted by sign-out:** a 401 on a write means the change may already have been saved. The re-sign-in state warns the user to check before repeating it, because a retried write can be duplicated.
 
 ## Invalidation and accessibility
 

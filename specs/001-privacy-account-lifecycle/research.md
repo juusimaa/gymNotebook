@@ -46,7 +46,7 @@ For personal responses, hold shared access through a bounded write/flush and che
 
 **Q3 decision (owner, 2026-09-24): endpoint filter on the authorized route groups.**
 
-- **Where:** a concrete filter in the proposed `AccountLifecycle.cs`, with no interface. It is attached to `/exercises`, `/workouts`, `/auth/me`, `/auth/change-password` and the new privacy routes.
+- **Where:** a concrete filter in the proposed `AccountLifecycle.cs`, with no interface. It is attached to `/exercises`, `/workouts`, `/auth/me` and the new privacy routes that need only shared access. The filter takes shared access only.
 - **What it does:**
   - It begins a transaction on the request's scoped `AppDbContext`. That is the same instance the handler and `OnTokenValidated` receive, so the handler's queries run inside it.
   - It takes `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)`, then freshly checks that the account exists and the token version matches, under the lock.
@@ -54,7 +54,11 @@ For personal responses, hold shared access through a bounded write/flush and che
 - **Writes:** the filter commits first, then writes the response under a short **delivery guard**: a new transaction, a fresh shared lock and a fresh token check. This is the same pattern as password-change delivery above, so a 2xx is never sent for work that failed to commit. If deletion wins between commit and delivery, no personal response is written; the Q5 outcome applies.
 - **Existing transactions:** the explicit `BeginTransactionAsync` calls in PUT `/workouts/{id}/exercises` and POST `/workouts/{id}/sets` are removed. Those handlers run inside the filter's transaction, and their intermediate `SaveChangesAsync` calls stay.
 - **Export** does not use this filter. It uses its own initialization and delivery guards (R3 and above).
-- **Coverage test:** a test enumerates the endpoint data source and fails if any endpoint that requires authorization lacks the filter, unless it is on an explicit allow-list (export only).
+- **Exclusive endpoints own their transaction (analysis I1, owner decision 2026-09-24):** `/auth/change-password` and `POST /account/delete` do not use the filter. Wrapping them would need a shared-to-exclusive upgrade, which this section forbids and which deadlocks two concurrent upgraders.
+  - Each endpoint takes exclusive access itself through a concrete helper in `AccountLifecycle.cs` (for example `AcquireExclusiveAsync`), using the Q4 exclusive wait (15 s).
+  - Each owns its commit. Deletion needs this to write its post-commit log line, write `deletion.rolled_back` and map an uncertain commit to 503 `deletion_outcome_unknown`. Change-password needs it to deliver the new token under a fresh shared guard after commit.
+  - An exclusive endpoint never holds the shared filter lock at the same time.
+- **Coverage test:** a test enumerates the endpoint data source and fails if any endpoint that requires authorization lacks the filter, unless it is on an explicit allow-list: export, change-password and delete, each with a documented reason. The lock tests prove that each allow-listed endpoint takes its own guard.
 - **`OnTokenValidated`:** its token-version check stays as an early rejection before any transaction or lock is taken.
 - **Connection pooling:** each guarded request holds one pooled connection for its duration, including the response write, which is bounded by the write timeout. Transaction-level advisory locks remain valid through Neon's transaction-mode pooler; confirm whether the production connection string uses the pooler endpoint.
 - **Alternatives rejected:**
@@ -209,7 +213,7 @@ Neon restoration and branch capabilities are not this project's settings or veri
   - Only `ContainerAppConsoleLogs_CL`, `ContainerAppSystemLogs_CL` and `Usage` contain rows.
 - **Log content (from code, not from the data):**
   - The API has no explicit logging calls; `Microsoft.AspNetCore` is at Warning, and EF Core does not log parameter values (no `EnableSensitiveDataLogging`).
-  - The frontend nginx uses its default access log to the console: remote address, user agent, path and time. Whether the remote address is the visitor's or the ingress's is unverified.
+  - The frontend nginx uses its default access log to the console: remote address, user agent, path and time. Whether the remote address is the visitor's or the ingress's is unverified. **Owner decision (analysis C1, 2026-09-24):** turn the nginx access log off (`access_log off;`, keeping `error_log`) in an early standalone PR. Stored lines age out about 30–31 days after that deployment; verify this before enabling the feature, or purge if enabling sooner.
   - A scan of stored log text for IPs, usernames, tokens or connection strings was not performed and remains an operator task.
 - **Third-party requests:** `frontend/index.html` loads Google Fonts from `fonts.googleapis.com`/`fonts.gstatic.com`, so visitors' IP addresses reach Google. This belongs in the FR-004 processing decision; self-hosting the fonts would remove it.
 
