@@ -46,9 +46,9 @@ Planning gates were checked before research and again against this design. Both 
 | IV. Real behavior | Plan real-Postgres security/persistence checks | Pass: concurrency, rollback, restore and browser evidence remain distinct; no application checks claimed for this docs-only change |
 | V. Security/privacy | Preserve BCrypt/JWT, invite gate, CORS, ownership | Pass: fresh checks under coordination; no client-selected account; legal conclusions remain release gates |
 | VI. Documentation alignment | Read PLAN.md, README.md and current UI preview | Pass: require matching operating/API/UI updates with implementation; no unrelated stale-doc cleanup |
-| VII. Review artifacts | Constitution/specification remain drafts | Pass: proposals are not approved API/schema/UI decisions or implementation authority |
+| VII. Review artifacts | Specification and plan remain drafts | Pass: proposals are not approved API/schema/UI decisions or implementation authority |
 
-Constitution ratification remains pending owner review. A draft planning pass is not ratification or production sign-off. There are no constitution exceptions.
+The constitution was ratified on 2026-09-25 (v1.0.1). Ratification does not approve this plan: a draft planning pass is not owner review or production sign-off. There are no constitution exceptions.
 
 ## Project Structure
 
@@ -152,7 +152,7 @@ These are suggested focused PR boundaries, not tasks or permission to create PRs
 
 | Gate | Owner | Required evidence | Current status |
 | --- | --- | --- | --- |
-| Plan/schema/API/UI review and constitution adoption | Project owner | Reviewed decisions and adoption date | Pending |
+| Plan/schema/API/UI review and constitution adoption | Project owner | Reviewed decisions and adoption date | Constitution adopted 2026-09-25 (v1.0.1); plan/schema/API/UI review pending |
 | Lawful basis, possible health data and consent decision | Controller with appropriate reviewer | Dated per-purpose conclusions; amendment if consent needed | Unverified; blocks affected processing |
 | Controller/contact/authority and complete notice | Project owner/controller | Final wording and tested monitored contact | Not supplied; blocks publication |
 | Hosting/database/logs/network/fonts/support recipients | Operator | Actual inventory, roles, agreements, locations, transfers and settings | Candidates only; blocks affected processing |
