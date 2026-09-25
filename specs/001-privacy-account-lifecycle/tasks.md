@@ -45,11 +45,13 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Land it early: stored lines (remote address, user agent, path) only age out about 30–31 days after deployment (research R7).
   - T075 verifies the age-out before the flag is enabled.
   - **Done 2026-09-25:** merged in PR #47; stored lines age out by about 2026-10-26.
-- [ ] T003 Read `PRIVACY_LIFECYCLE_ENABLED` at startup next to `INVITE_CODE` in `backend/GymNotebook.Api/Program.cs`. Only the exact value `true` enables the feature; unset, empty or any other value disables it (fail closed, P25). Comment why this deliberately differs from `INVITE_CODE`.
-- [ ] T004 [P] Add `PRIVACY_LIFECYCLE_ENABLED` to `.env.example` (value `false`) and to the backend service in `docker-compose.yml`.
-- [ ] T005 [P] Add `PRIVACY_LIFECYCLE_ENABLED` as a plain (non-secret) environment value set to `false` in `infra/modules/container-app-api.bicep`.
-- [ ] T006 [P] Add `PrivacyEnabledGymNotebookFactory` to `backend/GymNotebook.Tests/PrivacyEnabledGymNotebookFactory.cs`, following the `InviteCodeGymNotebookFactory` pattern and setting `PRIVACY_LIFECYCLE_ENABLED=true`.
-- [ ] T007 Document `PRIVACY_LIFECYCLE_ENABLED` (purpose, fail-closed default, how to enable locally) in the Configuration section of `README.md`.
+- [x] T003 Read `PRIVACY_LIFECYCLE_ENABLED` at startup next to `INVITE_CODE` in `backend/GymNotebook.Api/Program.cs`. Only the exact value `true` enables the feature; unset, empty or any other value disables it (fail closed, P25). Comment why this deliberately differs from `INVITE_CODE`.
+- [x] T004 [P] Add `PRIVACY_LIFECYCLE_ENABLED` to `.env.example` (value `false`) and to the backend service in `docker-compose.yml`.
+- [x] T005 [P] Add `PRIVACY_LIFECYCLE_ENABLED` as a plain (non-secret) environment value set to `false` in `infra/modules/container-app-api.bicep`.
+- [x] T006 [P] Add `PrivacyEnabledGymNotebookFactory` to `backend/GymNotebook.Tests/PrivacyEnabledGymNotebookFactory.cs`, following the `InviteCodeGymNotebookFactory` pattern and setting `PRIVACY_LIFECYCLE_ENABLED=true`.
+- [x] T007 Document `PRIVACY_LIFECYCLE_ENABLED` (purpose, fail-closed default, how to enable locally) in the Configuration section of `README.md`.
+
+**Delegation (owner, 2026-09-25, constitution Principle III):** AI implemented T003–T007 on `feat/001-privacy-lifecycle-flag`, as explicitly requested. The scope is only the flag, its configuration and documentation, and the test factory. The base `GymNotebookFactory` also pins the flag to `false`, the same way it pins `INVITE_CODE`. The delegation does not extend to Phase 2 or later tasks.
 
 **Checkpoint**: The flag exists and defaults to off everywhere; T001 and T002 can merge independently.
 
@@ -138,6 +140,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 - [ ] T028 [P] [US1] Add notice API tests in `backend/GymNotebook.Tests/PrivacyNoticeTests.cs`:
   - `GET /privacy/notice` is public, has no side effects and returns 404 with the flag off.
+  - These are the flag's first behavioural tests (T003 has none, because nothing reads the flag yet). Besides `"false"` (the base factory) and `"true"` (`PrivacyEnabledGymNotebookFactory`), also boot with near-miss values, at least `"True"` and `""`, and expect 404. This proves the exact-match, fail-closed rule (P25). Each value needs its own factory subclass, like `InviteCodeGymNotebookFactory`.
   - `GET /account/privacy` returns `requiresAcknowledgement` correctly for null and old acknowledgement.
   - `PUT /account/privacy/acknowledgement` accepts only the current version, returns 409 `notice_version_changed` for a stale one, is idempotent for the same version (preserving the timestamp) and stores no consent value.
   - An announced successor appears in `announcedSuccessor` before its effective date without changing `requiresAcknowledgement`. After activation, an account that acknowledged the prior version gets `requiresAcknowledgement: true` again (FR-003, quickstart §1.4).

@@ -104,6 +104,8 @@ Every route under `/exercises` and `/workouts` answers 404 for anything the call
 
 Everything comes from environment variables; [.env.example](.env.example) lists them and the gitignored `.env` holds real values. The full story — including why `ConnectionStrings__Default` has a double underscore and why `INVITE_CODE` empty means *open registration* — is in [PLAN.md → Configuration](PLAN.md#configuration).
 
+`PRIVACY_LIFECYCLE_ENABLED` switches on the privacy and account lifecycle feature (privacy notice, data export, account deletion; see [specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). Because `main` deploys automatically, the unfinished feature merges switched off. Unlike `INVITE_CODE`, a missing or empty value fails closed: only the exact value `true` enables it, and `True`, `1` or a typo leave it off. It is `false` in Azure until every release gate has evidence. To try the feature locally, set `PRIVACY_LIFECYCLE_ENABLED=true` in `.env` (Compose) or `dotnet user-secrets set PRIVACY_LIFECYCLE_ENABLED true` (SDK). Tests that need it on use `PrivacyEnabledGymNotebookFactory`.
+
 ## Tests
 
 ```sh
