@@ -36,7 +36,10 @@ jobs:
       - name: Build and push backend
         uses: docker/build-push-action@v7
         with:
-          context: ./backend
+          # Repository root, so the image can embed docs/privacy/notices/
+          # (see backend/Dockerfile and backend/Dockerfile.dockerignore).
+          context: .
+          file: ./backend/Dockerfile
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}

@@ -1,0 +1,71 @@
+{
+  "version": "dev-2026-09-25",
+  "effectiveAt": "2026-09-25T00:00:00Z",
+  "publishedAt": "2026-09-25T00:00:00Z",
+  "materialChangeSummary": "SYNTHETIC DEVELOPMENT NOTICE. First development version, used only to exercise the notice screens and the acknowledgement gate.",
+  "owner": "Project owner",
+  "reviewDate": null,
+  "reviewEvidence": "None. Synthetic development content; not reviewed and not for publication (tasks.md T030, gated on T041-T043).",
+  "sections": [
+    {
+      "id": "about",
+      "heading": "About this notice",
+      "paragraphs": [
+        "This is a synthetic development notice. It is not a reviewed privacy notice and must not be published. It exists so the notice, account privacy and gate screens can be built and tested.",
+        "The reviewed notice will replace this text before the privacy features are switched on in production."
+      ]
+    },
+    {
+      "id": "controller",
+      "heading": "Who is responsible",
+      "paragraphs": [
+        "Controller identity: to be supplied and reviewed (tasks.md T043)."
+      ]
+    },
+    {
+      "id": "information",
+      "heading": "What you put in",
+      "paragraphs": [
+        "Required to have an account: a username and a password. The password is stored only as a one-way hash. Without them the service cannot keep a notebook for you.",
+        "Your notebook: exercises, workouts, sets, and optionally bodyweight, titles, locations and notes. Optional fields can be left empty. Notes may contain sensitive details, so choose what you write."
+      ]
+    },
+    {
+      "id": "purposes",
+      "heading": "What the service does with it",
+      "paragraphs": [
+        "Keeps your training log and draws progress charts from the sets you record. No automated decision-making or profiling takes place.",
+        "Purposes and lawful bases: to be recorded in the reviewed processing decision (tasks.md T041)."
+      ]
+    },
+    {
+      "id": "recipients",
+      "heading": "Who handles it",
+      "paragraphs": [
+        "Service providers, processing locations and any transfer safeguards: to be supplied from the reviewed supplier inventory."
+      ]
+    },
+    {
+      "id": "retention",
+      "heading": "Keeping and removing it",
+      "paragraphs": [
+        "You can export your notebook or delete your account. Retention periods for backups and security logs: to be supplied from the reviewed retention rules."
+      ]
+    },
+    {
+      "id": "rights",
+      "heading": "Your rights",
+      "paragraphs": [
+        "Access, correction, erasure, restriction, objection and portability where applicable: instructions to be supplied and reviewed.",
+        "Reading this notice, or pressing Continue, is not consent."
+      ]
+    },
+    {
+      "id": "contact",
+      "heading": "Contact and complaints",
+      "paragraphs": [
+        "Privacy contact and supervisory authority: to be supplied and reviewed (tasks.md T043)."
+      ]
+    }
+  ]
+}

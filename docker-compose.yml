@@ -15,7 +15,11 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    # Repository root as the context so the image can embed docs/privacy/notices/
+    # (see backend/Dockerfile); backend/Dockerfile.dockerignore limits what is sent.
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=postgres;Password=${POSTGRES_PASSWORD}"
       Jwt__Secret: "${Jwt__Secret}"

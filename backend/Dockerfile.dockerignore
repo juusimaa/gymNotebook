@@ -1,0 +1,9 @@
+# BuildKit reads <Dockerfile>.dockerignore in place of the context root's .dockerignore,
+# so this applies only to the backend image. The context is the repository root; send
+# only what the Dockerfile copies.
+*
+!backend/GymNotebook.Api/
+!backend/entrypoint.sh
+!docs/privacy/notices/
+**/bin/
+**/obj/
