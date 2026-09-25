@@ -18,22 +18,50 @@ if (configured === undefined) {
 // "//auth/login".
 const baseUrl = configured.replace(/\/$/, '')
 
-// A non-2xx response. The backend answers errors with a bare status and no body
-// (Results.BadRequest(), Results.Conflict(), ...), so the status is the whole
-// error. Extending Error is what lets a screen tell "the server said no" apart from
-// "the request never got there": `err instanceof ApiError` on the one hand, fetch's
-// own TypeError on the other.
+// A non-2xx response. Most backend errors are a bare status with no body
+// (Results.BadRequest(), Results.Conflict(), ...), so the status is usually the
+// whole error. A few carry a JSON `{ "code": "..." }` (ErrorResponse in the API)
+// where the same status can mean different things — a 403 at login is
+// "account_suspended", a 403 at register is a wrong invite code — and `code`
+// holds it when present. Extending Error is what lets a screen tell "the server
+// said no" apart from "the request never got there": `err instanceof ApiError` on
+// the one hand, fetch's own TypeError on the other.
 export class ApiError extends Error {
-  // Declared as a field rather than a `constructor(public readonly status)`
-  // parameter property: tsconfig has erasableSyntaxOnly on, which only allows
+  // Declared as fields rather than `constructor(public readonly status)`
+  // parameter properties: tsconfig has erasableSyntaxOnly on, which only allows
   // TypeScript syntax that can be deleted to leave valid JavaScript, and
   // parameter properties generate an assignment.
   readonly status: number
+  readonly code: string | undefined
 
-  constructor(status: number) {
+  constructor(status: number, code?: string) {
     super(`API responded ${status}`)
     this.status = status
+    this.code = code
   }
+}
+
+// Reads the `code` out of an error response, if it has one. Only a JSON body is
+// parsed, and a body that isn't the expected shape just means "no code" — the
+// status alone is still a complete error.
+async function readErrorCode(response: Response): Promise<string | undefined> {
+  if (!response.headers.get('Content-Type')?.includes('application/json')) {
+    return undefined
+  }
+  try {
+    const body: unknown = await response.json()
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'code' in body &&
+      typeof body.code === 'string'
+    ) {
+      return body.code
+    }
+  } catch {
+    // Malformed JSON on an error response: fall back to the status alone.
+  }
+  return undefined
 }
 
 interface RequestOptions {
@@ -74,7 +102,7 @@ export async function request<T>(
   })
 
   if (!response.ok) {
-    throw new ApiError(response.status)
+    throw new ApiError(response.status, await readErrorCode(response))
   }
 
   // 204 has no body; response.json() on it rejects. Milestone 9's delete routes

@@ -14,7 +14,13 @@ export function describeAuthError(error: unknown): string {
       case 401:
         return 'Invalid username or password'
       case 403:
-        return 'Invite code is wrong or missing'
+        // Only login sends a code with its 403, and only after the password was
+        // right (specs/001 contracts/ui.md): neutral copy pointing to the privacy
+        // contact, since the operator resolves a suspension with the user. Without
+        // a code, the 403 is register's invite-code check.
+        return error.code === 'account_suspended'
+          ? 'Sign-in is paused for this account. Please contact the privacy contact to resolve it'
+          : 'Invite code is wrong or missing'
       case 409:
         return 'Username already taken'
       case 429:
