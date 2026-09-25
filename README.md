@@ -2,7 +2,7 @@
 
 A digital replacement for a paper gym log: record workouts (exercises, sets, reps, weight) and see strength progress over time.
 
-This is a learning project — the goal is to write a full-stack app in C# by hand, mirroring the container/PR/CI patterns of an earlier Python project. The design rationale, data model, API contract and milestone log all live in [PLAN.md](PLAN.md); this file is the "how do I run it" companion.
+This is a learning project — the goal is to learn full-stack C# by building this app (by hand through milestone 10, AI-implemented and owner-reviewed since), mirroring the container/PR/CI patterns of an earlier Python project. The design rationale, data model, API contract and milestone log all live in [PLAN.md](PLAN.md); this file is the "how do I run it" companion.
 
 ## Stack
 
