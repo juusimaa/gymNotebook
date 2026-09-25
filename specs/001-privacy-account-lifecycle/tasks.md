@@ -367,7 +367,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 **Independent Test**: Walk through grant, refusal, withdrawal, re-grant, rejected writes and the transition question with a fresh, a consenting and an existing account (quickstart §6a).
 
-**Blocked on** plan.md Q10 (owner review of the amendment's proposals). Depends on Phase 2 and US1 (the notebook gate). Independent of US3 and US4, except where T096 notes otherwise.
+**Proposals approved** 2026-09-25 (plan.md Q10, P29–P35). Depends on Phase 2 and US1 (the notebook gate). Independent of US3 and US4, except where T096 notes otherwise.
 
 ### Tests for User Story 6
 
@@ -387,7 +387,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 ### Implementation for User Story 6
 
 - [ ] T089 [US6] (owner) Write the consent statement content in `docs/privacy/consent/` (index plus one version), per FR-030. Real wording, not synthetic: it is shown to users with the notice's reviewed content (T043).
-- [ ] T090 [US6] Add `OptionalDetailsConsentVersion` and `OptionalDetailsConsentedAt` to `backend/GymNotebook.Api/User.cs` with a both-or-neither check constraint, and generate and review the migration. No backfill (depends on Q10).
+- [ ] T090 [US6] Add `OptionalDetailsConsentVersion` and `OptionalDetailsConsentedAt` to `backend/GymNotebook.Api/User.cs` with a both-or-neither check constraint, and generate and review the migration. No backfill (P29).
 - [ ] T091 [US6] Embed and validate the consent statement at startup, reusing the `PrivacyNoticeCatalog` pattern, in `backend/GymNotebook.Api/OptionalDetailsConsentCatalog.cs` and `GymNotebook.Api.csproj` (depends on T089; a synthetic test version can stand in until then).
 - [ ] T092 [US6] Map the three routes and extend `GET /account/privacy` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`: flag-gated, lifecycle filter, `Cache-Control: no-store`. Withdrawal is one transaction with a single `ExecuteUpdateAsync` (makes T085 pass).
 - [ ] T093 [US6] Enforce consent in `POST /workouts` and `PATCH /workouts/{id}` in `backend/GymNotebook.Api/Program.cs`, only when the flag is on, before any change. Comment the owner-accepted interim behaviour with the flag off (makes T086–T087 pass).
@@ -428,7 +428,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 - **US2 (Phase 4)**: No code dependency; owner work can start immediately and run alongside everything. Its gates (T042, T043) block release.
 - **US3 (Phase 5)**: Depends on Phase 2. T053 depends on T009 and on a deployable export.
 - **US4 (Phase 6)**: Depends on Phase 2. The optional export link in T065 is soft-linked to US3; deletion works without it.
-- **US6 (Phase 7a)**: Depends on Phase 2, US1 and owner review Q10. T089 needs T043's reviewed notice. T096 is coordinated with US3.
+- **US6 (Phase 7a)**: Depends on Phase 2 and US1; its proposals were approved as Q10. T089 needs T043's reviewed notice. T096 is coordinated with US3.
 - **US5 (Phase 7)**: T069–T073 can start any time. T074 depends on US4 (T061) and T072.
 - **Polish (Phase 8)**: T081–T084 depend on all stories and release gates; T081 also uses the T053 environment if Part B was approved.
 
