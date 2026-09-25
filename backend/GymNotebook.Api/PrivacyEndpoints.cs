@@ -37,7 +37,7 @@ public static class PrivacyEndpoints
            .Produces<PrivacyNoticeResponse>(StatusCodes.Status200OK);
 
         // The account's own privacy state. A group of its own, "/account/privacy" rather
-        // than "/account": the export and delete routes US3/US4 add under /account take
+        // than "/account": the export and delete routes under /account take
         // their own guards and must NOT inherit the shared lifecycle filter (see the
         // allow-list in LifecycleCoverageTests).
         //
@@ -133,6 +133,31 @@ public static class PrivacyEndpoints
            .WithDescription("Verifies the current password, then streams the whole notebook as one JSON file (format version 1) read from a single database snapshot, with an embedded field guide. The stream is cut, never completed, if the account is deleted, the password changed or the token expires during the download.")
            .Accepts<ExportRequest>("application/json")
            .Produces(StatusCodes.Status200OK, contentType: "application/json")
+           .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+           .Produces(StatusCodes.Status401Unauthorized)
+           .Produces(StatusCodes.Status415UnsupportedMediaType)
+           .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests)
+           .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
+
+        // User story 4: permanent account deletion. Also on LifecycleCoverageTests'
+        // allow-list rather than under the shared filter: AccountDeletion takes exclusive
+        // access in its own transaction, and owns its commit so it can write the deletion
+        // log lines around it. POST, not DELETE, so the body (password plus confirmation)
+        // doesn't depend on DELETE-with-body support anywhere on the path. The same rate
+        // limits as the export: per IP, plus the per-account bucket for sensitive
+        // operations, which the two share.
+        app.MapPost("/account/delete", (DeleteAccountRequest request, AccountDeletion deletion, HttpContext http) =>
+            deletion.RunAsync(request, http))
+           .RequireAuthorization()
+           .AddEndpointFilter(NoStore)
+           .RequireRateLimiting("auth")
+           .WithMetadata(new SensitiveOperationMetadata())
+           .WithName("DeleteAccount")
+           .WithTags("Privacy")
+           .WithSummary("Permanently deletes the caller's account")
+           .WithDescription("Verifies the current password and requires confirmDeletion: true, then removes the account, its exercises, workouts and sets in one transaction and signs out every session. Returns only dates, never a token. 503 temporarily_unavailable means nothing was deleted; 503 deletion_outcome_unknown means the outcome could not be confirmed.")
+           .Accepts<DeleteAccountRequest>("application/json")
+           .Produces<DeletionResponse>(StatusCodes.Status200OK)
            .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
            .Produces(StatusCodes.Status401Unauthorized)
            .Produces(StatusCodes.Status415UnsupportedMediaType)

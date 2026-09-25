@@ -127,6 +127,33 @@ public sealed class TwoHostGymNotebookFixture : IAsyncLifetime
         return seeded.Select(w => w.Id).ToList();
     }
 
+    // The SC-003/SC-005 reference notebook: exactly 1,000 workouts × 10 blocks × 10 sets =
+    // 100,000 sets, over 10 exercises. Seeded in SQL, so it takes seconds rather than
+    // minutes.
+    public async Task SeedReferenceNotebookAsync(int userId)
+    {
+        await ExecuteAsync(
+            "INSERT INTO exercises (user_id, name, normalized_name, is_bodyweight) SELECT @id, 'Exercise ' || n, 'exercise ' || n, false FROM generate_series(0, 9) AS n",
+            userId);
+        await ExecuteAsync(
+            "INSERT INTO workouts (user_id, date, started_at, ended_at) SELECT @id, DATE '2020-01-01' + n, TIMESTAMPTZ '2020-01-01 08:00Z' + n * INTERVAL '1 day', TIMESTAMPTZ '2020-01-01 09:00Z' + n * INTERVAL '1 day' FROM generate_series(0, 999) AS n",
+            userId);
+        await ExecuteAsync(
+            """
+            INSERT INTO workout_exercises (workout_id, exercise_id, position)
+            SELECT w.id, e.id, row_number() OVER (PARTITION BY w.id ORDER BY e.id) - 1
+            FROM workouts w CROSS JOIN exercises e
+            WHERE w.user_id = @id AND e.user_id = @id
+            """, userId);
+        await ExecuteAsync(
+            """
+            INSERT INTO set_entries (workout_exercise_id, set_number, weight, reps, is_warmup)
+            SELECT we.id, n, 102.50, 5, false
+            FROM workout_exercises we JOIN workouts w ON w.id = we.workout_id CROSS JOIN generate_series(1, 10) AS n
+            WHERE w.user_id = @id
+            """, userId);
+    }
+
     // One workout whose JSON is several megabytes — far beyond every socket buffer on the
     // path — so a guarded read's response write genuinely blocks when the client stops
     // reading. The sets are generated in SQL so seeding stays fast.
@@ -304,12 +331,20 @@ public sealed class CommitBarrier : DbTransactionInterceptor
     }
 }
 
-// Pauses the host's first EF query whose SQL contains `fragment`, before it runs, until
-// the test releases it: for example between two of the export's table queries. The wait
-// honours the query's cancellation token, so the export's own time limit still ends it.
-// Armed once; later queries pass straight through.
-public sealed class QueryBarrier(string fragment) : DbCommandInterceptor
+// Pauses the host's first EF command whose SQL contains `fragment`, before it runs, until
+// the test releases it: for example between two of the export's table queries, or inside
+// a deletion's transaction once it holds exclusive access (its set-based deletes are
+// non-query commands, hence both overrides). The wait honours the command's cancellation
+// token, so the export's own time limit still ends it. Armed once; later commands pass
+// straight through. The predicate form matches on anything about the SQL, for when no
+// single fragment identifies the command.
+public sealed class QueryBarrier(Func<string, bool> matches) : DbCommandInterceptor
 {
+    public QueryBarrier(string fragment)
+        : this(sql => sql.Contains(fragment, StringComparison.Ordinal))
+    {
+    }
+
     private int _armed = 1;
     private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -321,12 +356,24 @@ public sealed class QueryBarrier(string fragment) : DbCommandInterceptor
     public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
         DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
     {
-        if (command.CommandText.Contains(fragment, StringComparison.Ordinal) && Interlocked.Exchange(ref _armed, 0) == 1)
+        await PauseIfMatchAsync(command, cancellationToken);
+        return result;
+    }
+
+    public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+        DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        await PauseIfMatchAsync(command, cancellationToken);
+        return result;
+    }
+
+    private async Task PauseIfMatchAsync(DbCommand command, CancellationToken cancellationToken)
+    {
+        if (matches(command.CommandText) && Interlocked.Exchange(ref _armed, 0) == 1)
         {
             _reached.TrySetResult();
             await _release.Task.WaitAsync(cancellationToken);
         }
-        return result;
     }
 }
 

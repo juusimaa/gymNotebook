@@ -88,12 +88,15 @@ builder.Services.AddSingleton(lifecycleOptions);
 builder.Services.AddSingleton(PrivacyNoticeCatalog.LoadEmbedded());
 
 // The clock the privacy endpoints read: which notice is current depends on the time (an
-// announced successor takes effect at its effectiveAt). Injected rather than calling
-// DateTimeOffset.UtcNow so tests can move time past that switch-over deterministically.
+// announced successor takes effect at its effectiveAt), and deletion deadlines count from
+// it. Injected rather than calling DateTimeOffset.UtcNow so tests can control time
+// deterministically.
 builder.Services.AddSingleton(TimeProvider.System);
 
-// The notebook export (NotebookExport.cs), scoped like the AppDbContext it reads through.
+// The notebook export (NotebookExport.cs) and account deletion (AccountDeletion.cs),
+// scoped like the AppDbContext they work through.
 builder.Services.AddScoped<NotebookExport>();
+builder.Services.AddScoped<AccountDeletion>();
 
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
@@ -1220,8 +1223,8 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
    .Produces(StatusCodes.Status404NotFound);
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
-// specs/001: the public notice and the account's acknowledgement state (user story 1) and
-// the notebook export (user story 3).
+// specs/001: the public notice and the account's acknowledgement state (user story 1), the
+// notebook export (user story 3) and account deletion (user story 4).
 // Not mapped at all while the feature flag is off, so the routes 404 (plan.md P25).
 if (privacyLifecycleEnabled)
 {

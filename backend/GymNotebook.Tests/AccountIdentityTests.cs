@@ -107,13 +107,13 @@ public class AccountIdentityTests(TwoHostGymNotebookFixture db)
     // R6 Q2d: account deletion is the only operation that removes a User row, because the
     // restore reconciliation treats a missing account as a deletion to re-apply. This scans
     // the API's source for anything that deletes users and fails unless it's in an allowed
-    // file. Nothing is allowed yet: the account deletion endpoint (US4) will add its file
-    // here, and any other path that removes users must revisit research R6 first.
+    // file. Only the account deletion itself (US4) is allowed; any other path that removes
+    // users must revisit research R6 first.
     [Fact]
     public void ApiSource_RemovesUserRows_OnlyInAccountDeletionCode()
     {
         // Arrange
-        string[] allowedFiles = [];
+        string[] allowedFiles = ["AccountDeletion.cs"];
         var apiDirectory = FindApiSourceDirectory();
 
         // Act: every C# file except generated migrations (which only drop/create schema).

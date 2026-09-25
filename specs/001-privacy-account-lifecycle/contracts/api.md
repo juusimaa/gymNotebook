@@ -54,6 +54,8 @@ Amendment 2026-09-25 (spec FR-029–FR-032). "Optional workout details" are `tit
 
 Return only after the database removal commits, the `deletion.committed` log line is written and the cancellation boundary succeeds. Body: `status: "deleted"`, `retentionBoundaryAt` (the conservative precommit retention origin, not the actual commit time), `backupsExpireBy` (no later than boundary +30 calendar days), `deletionEvidenceExpiresBy` (no later than boundary +31 days: the deletion log lines under the 30-day log retention, allowing for the provider purge lag noted in research R7), and `logRetentionNotice` explaining reviewed restricted logs expire within 30 days of their original collection. No per-log personal data or new session token. This minimal terminal outcome is authorized by the completed operation and does not reauthenticate the now-deleted User.
 
+Error outcomes, in the order they are checked (added at implementation, 2026-09-25): a missing or false `confirmDeletion`, or an empty password, gets 400 `invalid_request`; a wrong password gets 400 `password_verification_failed`; an exclusive wait over 15 s, or a failure before or during a commit the database reports as failed, gets 503 `temporarily_unavailable` with Retry-After (nothing was deleted); a commit whose outcome can't be determined gets 503 `deletion_outcome_unknown` with no Retry-After. None of these log `deletion.committed`, and only the last leaves an intent line without a matching committed or rolled-back line.
+
 If the response is lost, old-session retry receives 401 and the client says the session no longer authorizes access. It must not reconstruct this success response locally. Already delivered user files are outside service control.
 
 ## Export format version 1
