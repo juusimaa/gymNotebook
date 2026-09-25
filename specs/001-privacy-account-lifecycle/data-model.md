@@ -21,6 +21,8 @@ Keep existing field validation, normalization and ordering conventions. Bodyweig
 | PrivacyAccountId | UUID, non-null, unique, immutable, server generated | Non-reusable suppression identity independent of username and integer sequence |
 | AcknowledgedPrivacyNoticeVersion | Nullable bounded string, proposed max 64 | Latest current version acknowledged by Continue |
 | PrivacyNoticeAcknowledgedAt | Nullable timestamptz | When that acknowledgement was committed |
+| OptionalDetailsConsentVersion | Nullable bounded string, max 64; amendment 2026-09-25 (FR-029–FR-035) | Consent statement version the account consented to for optional workout details |
+| OptionalDetailsConsentedAt | Nullable timestamptz | When that consent was committed |
 | SignInSuspendedAt | Nullable timestamptz; approved 2026-09-24 (P3) | Set only by the restore fallback when a deletion's outcome is unknown (R6 Q2c); the timestamp records when. Login verifies the password first, then returns 403 `account_suspended`; `OnTokenValidated` also rejects it as a backstop, at no extra query |
 
 Both acknowledgement fields are null or both populated. Acknowledgement stores no consent flag. Accept only the current published version from trusted notice configuration, never arbitrary client text. Same-version retries preserve the existing timestamp. A new version replaces the latest pair; prior public notice wording remains in versioned operator artifacts, not personal history.
@@ -28,6 +30,26 @@ Both acknowledgement fields are null or both populated. Acknowledgement stores n
 Existing accounts receive UUIDs and null acknowledgement. New registration behaves as before, creating UUID/null fields server-side. Notice acknowledgement is included in export and deleted with User. PrivacyAccountId is exported as account identity, not as a credential. SignInSuspendedAt is a restricted security control value, excluded from export like TokenVersion. A suspended account cannot sign in to export, and its requests go through the contact path.
 
 The operator sets and clears SignInSuspendedAt by documented manual SQL in `docs/privacy/restore.md`; there is no API or admin screen. To resolve a suspension, the operator confirms the intent with the user through the contact path. If deletion was intended, the operator completes it using the restore runbook's deletion steps. Otherwise the operator clears the marker.
+
+### Optional-details consent (amendment 2026-09-25)
+
+"Optional workout details" are Workout `Title`, `Location`, `Notes` and `BodyweightKg` (spec FR-029). Exercise `Name` is outside the consent.
+
+- **Pair rule:** both consent fields are null, or both are populated, like the acknowledgement pair. Null means no consent. Refusal and withdrawal are not recorded: they leave the pair null.
+- **Grant:** accept only the current consent statement version from trusted configuration. A same-version retry keeps the existing timestamp.
+- **Withdrawal (FR-033):** one transaction, under the account's shared lifecycle access like other notebook writes. It sets the pair to null and runs `UPDATE workouts SET title = NULL, location = NULL, notes = NULL, bodyweight_kg = NULL WHERE user_id = @id`. It is idempotent: repeating it changes nothing. A concurrent export sees either the state before or after, never a mix.
+- **Enforcement (FR-032):** with the feature flag on and the pair null, a workout create or update carrying a non-empty optional detail is rejected before any change. Setting a detail to null or empty is always allowed.
+- **Transition pending:** derived, not stored. True when the pair is null and at least one of the account's workouts holds a non-null optional detail. After the transition deadline the operator's clearing step makes this false for every account.
+- **Existing accounts:** the migration adds the pair as null. It never seeds consent (spec FR-035).
+- **Export and deletion:** exported under `privacyRecords`, and deleted with User.
+
+## Consent statement version — repository artifact, not EF entity
+
+Fields: `version` (unique, immutable), `effectiveAt`, `publishedAt`, the statement `sections` (plain text, like the notice), and operator metadata (`owner`, `reviewDate`, `reviewEvidence`). Proposed location: `docs/privacy/consent/`, with an `index.json` naming the `current` version and every published version. It is embedded and validated at startup the same way as the notices (`PrivacyNoticeCatalog`). This amendment has one version. Changing what the statement covers needs its own specification change (FR-034), so there is no announced-successor mechanism.
+
+## Transition clearing — operator step, not EF entity
+
+At the transition deadline (30 calendar days after the flag is switched on, spec FR-035), the operator runs one documented SQL statement. It clears the optional details of every workout whose owner has no consent pair, and records only the number of accounts and workouts affected, in `docs/privacy/release-checklist.md`. This follows the suspension marker's precedent: operator SQL, no API or admin screen. A follow-up query must then show zero such workouts (SC-008).
 
 ## PrivacyNoticeVersion — repository artifact, not EF entity
 
@@ -57,7 +79,7 @@ The primary evidence is the preserved pre-restore Neon branch. It is not an enti
 
 ## Export document — transient value, not stored entity
 
-See [API contract](contracts/api.md) for the full schema. One JSON object includes formatVersion, snapshotAt, fieldGuide, account, exercises, workouts, workoutExercises, sets and privacyRecords. Empty collections remain explicit arrays; absent acknowledgement is null. No completed export or export-history row is persisted by this design.
+See [API contract](contracts/api.md) for the full schema. One JSON object includes formatVersion, snapshotAt, fieldGuide, account, exercises, workouts, workoutExercises, sets and privacyRecords. Empty collections remain explicit arrays; absent acknowledgement or optional-details consent is null. No completed export or export-history row is persisted by this design.
 
 Streams/buffers are request-owned and released on completion, cancellation, expiry or observed deletion. No disk spool or service-side URL is permitted by the initial design. If implementation requires persistence, revisit the design and prove deletion-time cleanup and the 24-hour maximum before enabling it.
 
@@ -76,7 +98,7 @@ The rights register's scope and numeric retention period need purpose-specific o
 
 ## Transactions and migration validation
 
-1. Backfill UUIDs with uniqueness enforced; keep existing keys and relationships unchanged. Never seed notice acknowledgement or consent. Ensure old backups predating this migration are retired before activation or handled by a reviewed compatible restore migration; do not generate a new UUID on restore and assume it matches old deletion evidence.
+1. Backfill UUIDs with uniqueness enforced; keep existing keys and relationships unchanged. Never seed notice acknowledgement or consent. The optional-details consent pair (amendment 2026-09-25) is added as null in its own reviewed migration. Ensure old backups predating this migration are retired before activation or handled by a reviewed compatible restore migration; do not generate a new UUID on restore and assume it matches old deletion evidence.
 2. Preserve all existing constraints/cascades. Review the generated migration for unrelated changes before applying it to real Postgres tests.
 3. Account operations take shared lifecycle access and freshly validate; deletion/password change take exclusive access. Reuse the existing transaction boundary in bulk writes. Account lock order precedes notebook-row operations.
 4. Deletion removes workouts/blocks/sets before exercises, then User/acknowledgement, in one transaction bracketed by the intent and committed log lines. Rollback restores all active data, not an empty usable account, and logs `deletion.rolled_back`.

@@ -9,6 +9,7 @@ Draft, 2026-09-24. Follow the existing privacy design preview in `docs/ui/README
 | /privacy | Public | Current notice with version/effective date, disclosures, contact/rights and announced changes; returning to login records nothing |
 | /account/privacy | Authenticated | Cover's “Privacy & account” entry; links to notice, export and deletion; available before notice acknowledgement |
 | /account/privacy/notice | Authenticated | Current notice gate with “Continue”; separate sign-out/leave and privacy controls |
+| /account/privacy/optional-details | Authenticated | Amendment 2026-09-25. The consent statement with "Allow" and "Not now" of equal prominence, or, when consent exists, its date and a "Withdraw" action. Reached from the account privacy screen and from the editor's opt-in entry |
 | /account/export | Authenticated | Contents explanation, current password and download action |
 | /account/delete | Authenticated | Consequences, optional export, cancellation, password and separate confirmation action |
 | /account/deleted | Public, transient completion | Render actual successful response state; direct navigation without it shows a neutral signed-out state, never a deletion claim |
@@ -18,6 +19,17 @@ Login's shared sign-in/registration screen links to the public notice before sub
 ## Notice transitions
 
 Fetch account privacy state alongside authentication. Null/old acknowledgement routes attempted notebook entry to the gate. Continue sends exactly the displayed current version; only success opens the intended safe same-origin notebook route. Reject external return URLs. A 409 reloads the newer notice; a network failure retains the gate and offers retry. Leaving or signing out does not acknowledge. A successful same-version acknowledgement persists across sessions, not just browser memory. No accept-policy checkbox or consent language.
+
+## Optional-details consent transitions
+
+Amendment 2026-09-25 (spec Story 6, FR-029–FR-035).
+
+- **Editor without consent:** the title, location, notes and bodyweight inputs are hidden. In their place is one labelled entry, "Add title, location, notes and bodyweight", which opens the consent screen and returns to the editor afterwards. Everything else in the editor works unchanged. The workout detail screen hides the same fields.
+- **Grant:** "Allow" sends exactly the displayed statement version. A 409 reloads the newer statement. Success returns to the entry point with the inputs shown. "Not now", back or leaving records nothing.
+- **Withdraw:** from the account privacy screen or the consent screen. A review step lists what is removed (all four fields on every workout), says the rest of the notebook stays, and offers export. It takes no more steps than granting and needs no password. Success shows the number of workouts cleared, and discards any open editor draft's details with a visible note. A lost response is retried; the result is the same.
+- **Transition question:** when `transitionPending` is true, the notebook gate shows it after the notice gate and before any notebook fetch. It shows how many workouts hold details, with "Allow" and "Don't allow" of equal prominence, plus an export link. "Don't allow" goes through the same review step as withdrawal. Leaving keeps it pending for the next visit. Cover, account, privacy and change-password stay reachable, as with the notice gate.
+- **Rejected save:** a 403 `optional_details_consent_required`, for example from a stale tab after withdrawal, keeps the draft, drops only its optional details with an explanation, and offers the opt-in entry. It is not a session-invalid event.
+- **No pressure:** never a pre-ticked box, a nag on later visits for accounts without details, or copy suggesting the notebook needs consent.
 
 ## Export transitions
 
@@ -41,4 +53,4 @@ On observed invalidation clear JWT, in-memory account/notebook/editor data, pend
 
 Every new route has loading, empty where relevant, error, retry and offline/network states. Use labelled password inputs, visible focus, logical tab order, accessible status/error announcements and focus restoration after navigation/failure. Do not trap focus or rely only on color. Completion/deletion messaging must remain understandable on mobile without exposing infrastructure implementation details.
 
-The owner records mobile and keyboard walkthroughs of notice/export/deletion, each discoverable and completable without assistance in under three minutes excluding downloads. Automated helper tests, source review and HTTP checks cannot substitute for this acceptance evidence.
+The owner records mobile and keyboard walkthroughs of notice/export/deletion and of granting and withdrawing optional-details consent, each discoverable and completable without assistance in under three minutes excluding downloads. Automated helper tests, source review and HTTP checks cannot substitute for this acceptance evidence.

@@ -10,6 +10,8 @@
 
 Add a public versioned privacy notice, account-level acknowledgement, password-verified JSON export and permanent account deletion. Preserve the current username/password, invite gate, JWT revocation, notebook model and UI conventions. Notice acknowledgement is never consent. Deliver maintained processing, supplier, retention, rights-request and restore records alongside implementation.
 
+**Amendment 2026-09-25 (spec FR-029–FR-035, Story 6):** the processing decision (T041/T042) found that workout title, location, notes and bodyweight need explicit consent. The feature therefore adds one narrow consent: a versioned statement, a consent pair on User, grant and withdrawal endpoints, server-side enforcement on workout writes, and a one-time transition question for accounts that already hold details. Withdrawal clears those details and keeps the rest of the notebook.
+
 The critical changes are a repeatable-read export, PostgreSQL coordination of account operations and response delivery, atomic active-data deletion, and restore reconciliation that uses the preserved pre-restore Neon branch, with minimal deletion log lines as fallback. Existing JWT validation rejects later requests after deletion but does not protect requests already running. A restored database alone cannot supply evidence of deletions made after its restore point, which is why the preserved branch or the logs are needed (research R6).
 
 See [research.md](research.md), [data-model.md](data-model.md), [API contract](contracts/api.md), [UI contract](contracts/ui.md), [operations contract](contracts/operations.md) and [quickstart.md](quickstart.md). Proposed APIs, schema and mechanisms require owner review under constitution Principle VII. Legal and provider evidence is a release dependency, not something technical research can approve.
@@ -30,7 +32,7 @@ See [research.md](research.md), [data-model.md](data-model.md), [API contract](c
 
 **Performance Goals**: SC-003/005: export and deletion each within 60 seconds for 1,000 workouts × 10 blocks × 10 sets under recorded normal load/connection. SC-004: each owner walkthrough flow under three minutes excluding download. Record actual resources, latency, payload size and peak memory; no invented user-count target.
 
-**Constraints**: Preserve ownership 404s and invalid-cursor 400s; no credential export/logging; no fabricated acknowledgement; all sessions invalidated on deletion; no silent truncation. Product limits: temporary exports ≤24 hours, backups ≤30 calendar days after deletion, identifying logs ≤30 days after collection, deletion evidence ≤31 days after deletion. Copy/restore cannot restart clocks. No consent flow without a reviewed specification amendment.
+**Constraints**: Preserve ownership 404s and invalid-cursor 400s; no credential export/logging; no fabricated acknowledgement; all sessions invalidated on deletion; no silent truncation. Product limits: temporary exports ≤24 hours, backups ≤30 calendar days after deletion, identifying logs ≤30 days after collection, deletion evidence ≤31 days after deletion. Copy/restore cannot restart clocks. No consent flow beyond the reviewed amendment (FR-029–FR-035); any other consent needs its own amendment.
 
 **Scale/Scope**: Five P1 stories; public notice and account privacy/export/delete flows; latest acknowledgement; coordinated account operations; operational records and restore validation. Existing training features retain their behavior.
 
@@ -118,6 +120,7 @@ Recorded after plan generation. Items marked as blocking must be resolved before
 | Q6 | R4 login: whether token issuance runs under the shared guard, so a login racing deletion cannot issue a token | Design decision | **Answered 2026-09-24:** no guard; stale login tokens fail the per-request check, proven by a race test ([research R4](research.md#r4--coordinate-operations-and-response-delivery)) | Project owner |
 | Q7 | R4 validation spike Part A (local) and Part B (deployed proxy, requires approval of disposable Azure resources) as defined in research R4 | Proof | No; becomes an early blocking task. Part B approved with conditions 2026-09-25 ([research R4](research.md#r4--coordinate-operations-and-response-delivery)) | Author; owner approves Part B |
 | Q8 | Controller/contact details, reviewed processing and consent conclusions, supplier evidence, and retention period/location for rights-request records. Also verify the deployed client address seen by the per-IP limiter (unverified finding, research R10) | Owner content | No; release gates below | Project owner/controller |
+| Q10 | Review of the amendment's proposals: the consent pair on User, `docs/privacy/consent/` as the statement artifact, the three new routes, the 403 `optional_details_consent_required` enforcement and its flag gating, the consent screen route, and operator SQL for transition clearing | Review | **Yes**, for the consent tasks (T085 onward) | Project owner |
 | Q9 | Review of the proposals: account UUID, endpoints, UI routes and additional storage. Itemized as P1–P28 in [checklists/proposal-review.md](checklists/proposal-review.md) | Review | **Answered 2026-09-24:** all items approved, with decisions recorded in the source documents | Project owner |
 
 **Recommended order:**
@@ -135,8 +138,9 @@ Performance tests, the isolated restore exercise and the owner's mobile/keyboard
 2. **Notice/account controls**: public versioned notice, latest acknowledgement, authenticated controls and deep-link-safe notebook gate. Privacy/contact/export/delete remain available without acknowledgement.
 3. **Lifecycle foundation**: reviewed migration, non-reusable account reference, coordination of existing login/password/write paths and personal response delivery. Include the reviewed suspension marker and the Q2d invariant test. Complete this foundation before enabling deletion.
 4. **Export**: field guide, deterministic snapshot, authenticated streaming, cancellation and retry states, no persistent artifacts.
-5. **Deletion/recovery**: password plus confirmation, atomic active-data removal, all-session invalidation, device cleanup and failure/restore exercises. Deletion log lines and the restore runbook ([operations contract](contracts/operations.md)) follow the direction chosen in research R6, proven by the isolated restore exercise.
-6. **Acceptance/release**: performance fixture, required checks, owner walkthrough, legal/provider evidence, retention boundary proof, isolated restore and aligned PLAN.md/README.md/docs/ui/operating records.
+5. **Optional-details consent** (amendment 2026-09-25): consent statement artifact, consent pair migration, grant/withdraw endpoints, flag-gated enforcement on workout writes, editor and consent screens, the transition question in the notebook gate, and the operator's clearing step at the transition deadline. Its own PR, after US1; export (US3) includes the consent record once both have landed.
+6. **Deletion/recovery**: password plus confirmation, atomic active-data removal, all-session invalidation, device cleanup and failure/restore exercises. Deletion log lines and the restore runbook ([operations contract](contracts/operations.md)) follow the direction chosen in research R6, proven by the isolated restore exercise.
+7. **Acceptance/release**: performance fixture, required checks, owner walkthrough, legal/provider evidence, retention boundary proof, isolated restore and aligned PLAN.md/README.md/docs/ui/operating records.
 
 These are suggested focused PR boundaries, not tasks or permission to create PRs. Each behavioral PR updates relevant documentation. Keep incomplete features disabled in production until prerequisites pass: automatic main deployment means merging enabled behavior would itself roll it out.
 
@@ -146,14 +150,14 @@ These are suggested focused PR boundaries, not tasks or permission to create PRs
 - **When disabled:** `/privacy/notice`, `/account/privacy`, `/account/export` and `/account/delete` are not mapped and return 404.
 - **Frontend:** it has no flag of its own. A 404 from `GET /account/privacy` means the feature is off, so the UI hides "Privacy & account" and skips the notice gate. Any other error shows the normal error state.
 - **Deployment:** the variable is a plain Container Apps environment value in `infra/`, set to `false` until the release gates pass. The implementing PR adds it to README.md and `.env.example`.
-- **Scope:** the flag covers the new routes and UI only. The migration (additive columns and UUID backfill) and the R4 endpoint filter ship unflagged, because they preserve behavior and tests prove them. This also allows guard overhead to be measured in production before any user-visible change.
+- **Scope:** the flag covers the new routes and UI only, with one exception: the optional-details enforcement on existing workout writes (amendment 2026-09-25) runs only with the flag on, so production keeps today's behaviour until then (owner-accepted interim risk). The migration (additive columns and UUID backfill) and the R4 endpoint filter ship unflagged, because they preserve behavior and tests prove them. This also allows guard overhead to be measured in production before any user-visible change.
 
 ## Release Gates and Evidence Owners
 
 | Gate | Owner | Required evidence | Current status |
 | --- | --- | --- | --- |
 | Plan/schema/API/UI review and constitution adoption | Project owner | Reviewed decisions and adoption date | Done 2026-09-25: constitution adopted (v1.0.1); plan/schema/API/UI reviewed as P1–P28 (Q9) |
-| Lawful basis, possible health data and consent decision | Controller with appropriate reviewer | Dated per-purpose conclusions; amendment if consent needed | Unverified; blocks affected processing |
+| Lawful basis, possible health data and consent decision | Controller with appropriate reviewer | Dated per-purpose conclusions; amendment if consent needed | Drafted 2026-09-25 in `docs/privacy/processing-decision.md`; P3 needs consent, amendment FR-029–FR-035 drafted; conclusions not yet signed |
 | Controller/contact/authority and complete notice | Project owner/controller | Final wording and tested monitored contact | Not supplied; blocks publication |
 | Hosting/database/logs/network/fonts/support recipients | Operator | Actual inventory, roles, agreements, locations, transfers and settings | Candidates only; blocks affected processing |
 | Proposed retention limits, including deletion log lines | Operator | Provider settings, configuration and disposal evidence at all deadlines | Guarantees not approved; unverified; blocks release |

@@ -7,7 +7,7 @@ Draft for owner review, 2026-09-24. These routes are proposed, not implemented. 
 - HTTPS in production; existing bearer JWT, CORS allow-list and invite gate remain. Ownership derives exclusively from the validated caller. New account operations accept no user ID/username target.
 - Personal responses and errors use `Cache-Control: no-store`; do not log bodies, passwords, authorization headers or export contents. Public notice content contains no personal account data.
 - Fresh validation under lifecycle coordination checks current account existence, token version and expiry. Invalid/missing/revoked/expired bearer: 401 with no personal data. New operation wrong-current-password: 400 `{ "code": "password_verification_failed" }`. Existing login/change-password semantics remain unchanged, except that an account with SignInSuspendedAt set (restore fallback, R6 Q2c) is rejected at login. Login verifies the password first: wrong password keeps the existing 401, and correct password returns 403 `{ "code": "account_suspended" }` so the UI can show the privacy contact path.
-- Invalid input: 400 `invalid_request`; current-notice mismatch: 409 `notice_version_changed`; rate limit/concurrent-export limit: 429 with Retry-After when available; recoverable precommit outage: 503 `temporarily_unavailable`; uncertain deletion commit: 503 `deletion_outcome_unknown`. Never expose exception details.
+- Invalid input: 400 `invalid_request`; current-notice mismatch: 409 `notice_version_changed`; current-consent-statement mismatch: 409 `consent_statement_changed`; optional workout detail without consent: 403 `optional_details_consent_required`; rate limit/concurrent-export limit: 429 with Retry-After when available; recoverable precommit outage: 503 `temporarily_unavailable`; uncertain deletion commit: 503 `deletion_outcome_unknown`. Never expose exception details.
 - Lifecycle coordination outcomes (research R4, Q5):
   - A bounded lock wait that times out returns 503 `temporarily_unavailable` with Retry-After. This covers deletion's exclusive wait and an ordinary request's shared wait.
   - A request whose fresh check under the lock finds the account deleted or the token revoked returns 401.
@@ -25,6 +25,9 @@ All routes below are mapped only when `PRIVACY_LIFECYCLE_ENABLED` is exactly `tr
 | GET /privacy/notice | Public, no body | 200 current notice document | No acknowledgement side effect; no account data; optional announced successor metadata |
 | GET /account/privacy | Bearer, no body | 200 account privacy state | Current notice version, latest acknowledgement, whether acknowledgement is needed |
 | PUT /account/privacy/acknowledgement | Bearer; `{ "noticeVersion": "…" }` | 200 updated acknowledgement | Current version only; same version idempotent; no consent flag |
+| GET /privacy/optional-details-statement | Public, no body | 200 current consent statement document | Amendment 2026-09-25. Same shape as the notice document without `announcedSuccessor`; no account data |
+| PUT /account/privacy/optional-details-consent | Bearer; `{ "statementVersion": "…" }` | 200 `{ statementVersion, consentedAt }` | Current version only, else 409 `consent_statement_changed`; same version idempotent and keeps the timestamp |
+| DELETE /account/privacy/optional-details-consent | Bearer, no body | 200 `{ clearedWorkouts }` | Withdrawal, and "Don't allow" in the transition question. One transaction clears the consent pair and every optional detail; idempotent, so a retry returns `clearedWorkouts: 0`. No password (FR-033) |
 | POST /account/export | Bearer; `{ "currentPassword": "…" }` | 200 JSON attachment stream | Fresh password; stable snapshot; cancellation on invalidation; never 202/public link |
 | POST /account/delete | Bearer; `{ "currentPassword": "…", "confirmDeletion": true }` | 200 deletion outcome response | Missing/false confirmation fails before mutation; password plus explicit user action |
 
@@ -36,7 +39,16 @@ Fields: `version` string, `effectiveAt` UTC instant, `publishedAt` UTC instant, 
 
 ### Account privacy state
 
-Fields: `currentNoticeVersion` string, `acknowledgement` null or `{ noticeVersion, acknowledgedAt }`, and `requiresAcknowledgement` boolean determined on the server. No password hash, token version or other revocation values. Acknowledgement response has the same acknowledgement shape; success means the version was acknowledged through Continue, not read or consented to. Public notice rendering never writes it.
+Fields: `currentNoticeVersion` string, `acknowledgement` null or `{ noticeVersion, acknowledgedAt }`, `requiresAcknowledgement` boolean determined on the server, and `optionalDetails` `{ currentStatementVersion, consent: null or { statementVersion, consentedAt }, transitionPending }`. `transitionPending` is true when there is no consent and the account still holds optional details (data-model.md); the UI asks the transition question only then. No password hash, token version or other revocation values. Acknowledgement response has the same acknowledgement shape; success means the version was acknowledged through Continue, not read or consented to. Public notice rendering never writes it.
+
+### Optional-details enforcement on existing workout routes
+
+Amendment 2026-09-25 (spec FR-029–FR-032). "Optional workout details" are `title`, `location`, `notes` and `bodyweightKg`.
+
+- **Where:** `POST /workouts` and `PATCH /workouts/{id}`, the only routes that write these fields. Exercise names are not covered.
+- **Rule:** with the feature flag on and no consent, a request that sets any optional detail to a non-empty value gets 403 `{ "code": "optional_details_consent_required" }`. Nothing from the request is stored; the whole request is rejected, never partially applied. Setting a detail to null or empty, or omitting it, is always allowed.
+- **Flag off:** no enforcement. Production keeps today's behaviour until the flag is switched on (owner-accepted interim risk, spec Clarifications). This is an exception to "the flag covers new routes only" in plan.md, and is tested in both states.
+- **Reads:** unchanged. Workouts return whatever is stored. Accounts without consent have no stored details, apart from pending-transition accounts, which the notebook gate stops before any notebook fetch.
 
 ### Deletion response
 
@@ -58,7 +70,7 @@ Headers: `Content-Type: application/json; charset=utf-8`, `Content-Disposition: 
 | workouts | Array of `{ id, userId, date, startedAt, endedAt, title, location, notes, bodyweightKg, createdAt }` |
 | workoutExercises | Array of `{ id, workoutId, exerciseId, position }` |
 | sets | Array of `{ id, workoutExerciseId, setNumber, weight, reps, isWarmup }` |
-| privacyRecords | `{ noticeAcknowledgement: null or { noticeVersion, acknowledgedAt } }` |
+| privacyRecords | `{ noticeAcknowledgement: null or { noticeVersion, acknowledgedAt }, optionalDetailsConsent: null or { statementVersion, consentedAt } }` |
 
 `exercises` and `workouts` order by id; blocks by workoutId, position, id; sets by workoutExerciseId, setNumber, id. Preserve stored position/setNumber rather than renumbering. All IDs are account-local export relationships to retained existing database IDs, not cross-account access permissions. Each reference resolves within this file; unused exercises remain present; repeated exercise blocks remain separate.
 
@@ -69,6 +81,7 @@ The field guide must state:
 - Nullable heading text remains null when absent, and stored Unicode text remains unchanged. Null endedAt means unfinished; it is not snapshotAt.
 - isWarmup is a boolean, reps is the recorded integer, positions and set numbers define their respective orders. isBodyweight is the exercise's current classification, not historical inferred bodyweight.
 - `noticeAcknowledgement` records latest Continue evidence only and is not consent. Null means no retained acknowledgement, not refusal.
+- `optionalDetailsConsent` records the consent for title, location, notes and bodyweight. Null means no current consent; refusals and withdrawals are not recorded.
 - `snapshotAt` identifies the snapshot query boundary; it is not a claim that every row was created then. Empty collections are `[]` and nullable values remain present as null.
 
 Exclude PasswordHash, passwords, TokenVersion, JWTs, secret configuration, derived NormalizedName, other-user records and restricted security control records. A broader access request involving security records gets separate operator review under FR-012, not automatic exclusion by this export contract. No export record/history is persisted. Additional feature-linked personal records cannot be introduced without updating this schema and deletion coverage.
