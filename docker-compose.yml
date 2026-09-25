@@ -38,6 +38,11 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: "${VITE_API_URL}"
+    # runtime-config.sh renders config.js from API_URL at container start and
+    # refuses to start without it (the Azure app sets it in Bicep). Reusing
+    # VITE_API_URL keeps one value in .env for the dev server and this container.
+    environment:
+      API_URL: "${VITE_API_URL}"
     ports:
       - "3000:80"
 
