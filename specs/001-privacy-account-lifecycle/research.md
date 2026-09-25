@@ -60,7 +60,7 @@ For personal responses, hold shared access through a bounded write/flush and che
   - An exclusive endpoint never holds the shared filter lock at the same time.
 - **Coverage test:** a test enumerates the endpoint data source and fails if any endpoint that requires authorization lacks the filter, unless it is on an explicit allow-list: export, change-password and delete, each with a documented reason. The lock tests prove that each allow-listed endpoint takes its own guard.
 - **`OnTokenValidated`:** its token-version check stays as an early rejection before any transaction or lock is taken.
-- **Connection pooling:** each guarded request holds one pooled connection for its duration, including the response write, which is bounded by the write timeout. Transaction-level advisory locks remain valid through Neon's transaction-mode pooler; confirm whether the production connection string uses the pooler endpoint.
+- **Connection pooling:** each guarded request holds one pooled connection for its duration, including the response write, which is bounded by the write timeout. Transaction-level advisory locks remain valid through Neon's transaction-mode pooler. **Confirmed (owner, 2026-09-25):** the production connection string uses the `-pooler` endpoint. Consequence: per-transaction settings such as `lock_timeout` and the deletion `statement_timeout` must be set with `SET LOCAL` inside the transaction, because a session-level `SET` would leak to other clients sharing the pooled server connection. Session-level advisory locks remain ruled out.
 - **Alternatives rejected:**
   - Middleware starts the response before commit, so it would need buffering or the same split, plus an export special case.
   - A per-handler helper cannot be verified from endpoint metadata.
@@ -99,9 +99,11 @@ For personal responses, hold shared access through a bounded write/flush and che
 | Export hard cap | 120 s, then abort the stream and dispose of the snapshot | 60 s is the target; the cap bounds the snapshot transaction |
 | Spike A1 pass criterion | p95 increase ≤ 10 ms locally at 20 concurrent clients; connection pool never exhausted | Deployed overhead is reported from measured round-trip time, not used as pass/fail |
 
-The cross-region figure is an estimate: the API runs in Azure swedencentral and Neon in aws-eu-central-1 (R7). Part B measures the actual round-trip time. Combining the lock acquisition and token-version check in one statement saves a round trip per guarded request.
+The cross-region figure is an estimate: the API runs in Azure swedencentral and Neon in aws-eu-central-1 (R7). Part B measures the actual round-trip time. Combining the lock acquisition and token-version check in one statement saves a round trip per guarded request. **Open (2026-09-25), settled by spike A6:** under READ COMMITTED a statement reads from a snapshot taken when it starts, so a single statement that waits on the lock while a deletion commits may still see the deleted user and pass the check. Two statements (lock, then check) avoid this; sending both in one `NpgsqlBatch` may keep the single round trip.
 
 **Validation spike:** Time-boxed, on a separate `spike/` branch. Spike code is not merged into feature code. Part A tests are kept as the start of the permanent R4 suite.
+
+**Implementation delegation (owner, 2026-09-25, constitution Principle III):** AI implements spike Part A (T008) in full, on the `spike/r4-cancellation` branch. The delegation covers only the spike: the prototype guards, the fake delete and export endpoints, the two-host fixture, the load harness and the A1–A6 tests. It does not cover T010–T027 or any other feature code. Spike code that is later kept, such as the fixture for T010 or tests for T012/T013, goes through ordinary owner review in the PR that adopts it.
 
 - **Part A — local (no extra authorization).** Testcontainers Postgres with two app hosts sharing one database.
   - A1: ordinary endpoints under load with and without the shared guard. Pass when the p95 latency increase stays within the Q4 bound (≤ 10 ms locally at 20 concurrent clients) and the connection pool is never exhausted.
@@ -109,11 +111,20 @@ The cross-region figure is an estimate: the API runs in Azure swedencentral and 
   - A3: a client that stops reading. Pass when the bounded write/flush times out, the guard is released and deletion proceeds.
   - A4: password change racing deletion. Pass when no stale token is emitted, no deadlock occurs and no conflicting lock is reacquired while exclusive access is held.
   - A5: existing explicit transactions join the lifecycle boundary without nesting.
+  - A6: a request that waited on the shared lock behind a committed deletion gets 401. Run it against a single-statement lock-and-check, two separate statements, and a two-statement `NpgsqlBatch`. Pass for a variant when it always returns 401; T019 uses a variant that passes.
 - **Part B — deployed proxy (requires owner approval of Azure resources).** A disposable Container Apps environment from `infra/`, with the same ingress settings as the API app (`transport: 'auto'`), torn down afterwards.
   - A test-only endpoint streams synthetic data (never personal data) in N delayed chunks, checking a revocation flag under a short shared guard before each chunk. A second endpoint sets the flag under exclusive access.
   - A `curl --no-buffer` client logs per-chunk byte counts, timestamps and how the stream ended.
   - The matrix covers HTTP/1.1 vs HTTP/2, normal vs `--limit-rate` slow clients, and one vs two replicas.
   - Measure bytes received after the revocation commits, whether an upstream abort ever reaches the client as a clean end of stream, whether ingress buffers before first byte, and whether ingress idle/request timeouts cut legitimate slow exports.
+  - **Approval (owner, 2026-09-25, T009): approved with conditions.**
+    - Deploy into a separate, disposable resource group, never the production one.
+    - Use a throwaway Neon branch as the database, never the production database.
+    - Use synthetic data only.
+    - The test-only endpoints exist only on the `spike/` branch and ship only in a spike-only image tag, never in a `main` or production image.
+    - Warm the app up before measuring round-trip time, because the API scales to zero and a cold start would skew the numbers.
+    - Tear down the resource group and the Neon branch the same day, and record the teardown with the results.
+    - Keep the two-replica rows even though production currently runs `maxReplicas: 1`, so R4 does not need re-proving if the API later scales out.
 - **Decision rule.** The final JSON closing bytes are written only after the final authorization check, so the proxy cannot complete an export the app did not finish. The open questions are the size of the partial-delivery window and whether truncation is always visible.
   - Pass: the window is bounded to about one chunk/ingress buffer, documented as the already-transmitted residual, and truncation always surfaces as a failed download. Approve R4 as written.
   - Fail: large buffering, or aborts delivered as clean completion. Revise R4 before implementation, for example with smaller chunks plus a client-verified end marker, or a non-streamed export.
