@@ -66,7 +66,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Check A1 against its pass criterion: p95 increase ≤ 10 ms locally at 20 concurrent clients, and the pool never exhausted.
   - Record the results, and any tuned Q4 values, in the Validation spike section of `specs/001-privacy-account-lifecycle/research.md`.
   - Spike code is not merged; A1–A5 tests may be kept for T012/T013.
-- [ ] T009 (owner) Approve or decline spike Part B's disposable Azure environment (research R4 → Part B), and record the decision in `specs/001-privacy-account-lifecycle/research.md`. Part B itself runs in T053 (US3).
+- [x] T009 (owner) Approve or decline spike Part B's disposable Azure environment (research R4 → Part B), and record the decision in `specs/001-privacy-account-lifecycle/research.md`. Part B itself runs in T053 (US3). **Done 2026-09-25:** approved with conditions (research R4 → Part B).
 
 ### Tests for the foundation (write first; they must fail)
 

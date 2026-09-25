@@ -114,6 +114,14 @@ The cross-region figure is an estimate: the API runs in Azure swedencentral and 
   - A `curl --no-buffer` client logs per-chunk byte counts, timestamps and how the stream ended.
   - The matrix covers HTTP/1.1 vs HTTP/2, normal vs `--limit-rate` slow clients, and one vs two replicas.
   - Measure bytes received after the revocation commits, whether an upstream abort ever reaches the client as a clean end of stream, whether ingress buffers before first byte, and whether ingress idle/request timeouts cut legitimate slow exports.
+  - **Approval (owner, 2026-09-25, T009): approved with conditions.**
+    - Deploy into a separate, disposable resource group, never the production one.
+    - Use a throwaway Neon branch as the database, never the production database.
+    - Use synthetic data only.
+    - The test-only endpoints exist only on the `spike/` branch and ship only in a spike-only image tag, never in a `main` or production image.
+    - Warm the app up before measuring round-trip time, because the API scales to zero and a cold start would skew the numbers.
+    - Tear down the resource group and the Neon branch the same day, and record the teardown with the results.
+    - Keep the two-replica rows even though production currently runs `maxReplicas: 1`, so R4 does not need re-proving if the API later scales out.
 - **Decision rule.** The final JSON closing bytes are written only after the final authorization check, so the proxy cannot complete an export the app did not finish. The open questions are the size of the partial-delivery window and whether truncation is always visible.
   - Pass: the window is bounded to about one chunk/ingress buffer, documented as the already-transmitted residual, and truncation always surfaces as a failed download. Approve R4 as written.
   - Fail: large buffering, or aborts delivered as clean completion. Revise R4 before implementation, for example with smaller chunks plus a client-verified end marker, or a non-streamed export.
