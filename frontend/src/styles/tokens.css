@@ -3,6 +3,39 @@
    reference these by variable; no hard-coded hexes outside this file. When the
    prototype's tokens change, this file changes in the same PR. */
 
+/* Typefaces from docs/ui/README.md: Cormorant Garamond for display and
+   headings (400 for the cover title, 600 for interface headings), Lora for
+   body. Self-hosted from public/fonts/ rather than loaded from Google Fonts, so
+   a page load sends no visitor IP or user agent to a third party (P28). The
+   files are Google's Latin subsets, and they are variable fonts, so one file
+   covers a weight range: that is why the five styles need only three files.
+   Both typefaces are SIL OFL 1.1; the license texts sit next to the files.
+   `font-display: swap` shows the Georgia fallback until the file arrives
+   rather than invisible text. */
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/cormorant-garamond-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/lora-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/lora-italic-latin.woff2') format('woff2');
+}
+
 :root {
   --color-bg: #f3f2f2;
   --color-surface: #eae9e9;
