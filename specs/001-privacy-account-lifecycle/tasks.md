@@ -103,7 +103,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Never seed acknowledgement.
   - Review the generated migration for unrelated schema changes before applying it (depends on T017).
 - [ ] T019 Implement the concrete lifecycle endpoint filter and guards in `backend/GymNotebook.Api/AccountLifecycle.cs`, with no interface (research R4 → Q3):
-  - Begin a transaction on the scoped `AppDbContext`, set `lock_timeout` to 5 s, and take `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)` combined with the token-version/existence check in one statement.
+  - Begin a transaction on the scoped `AppDbContext`, set `lock_timeout` to 5 s with `SET LOCAL` (production goes through the Neon pooler, research R4 → Connection pooling), and take `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)` combined with the token-version/existence check in one statement.
   - For reads, write the result under the lock within a 10 s write timeout, then commit.
   - For writes, commit, then write the response under a fresh delivery guard.
   - Map outcomes per Q5 (503/401). Comment the lock namespaces and why writes use two steps (depends on T008, T018).
