@@ -99,9 +99,11 @@ For personal responses, hold shared access through a bounded write/flush and che
 | Export hard cap | 120 s, then abort the stream and dispose of the snapshot | 60 s is the target; the cap bounds the snapshot transaction |
 | Spike A1 pass criterion | p95 increase ≤ 10 ms locally at 20 concurrent clients; connection pool never exhausted | Deployed overhead is reported from measured round-trip time, not used as pass/fail |
 
-The cross-region figure is an estimate: the API runs in Azure swedencentral and Neon in aws-eu-central-1 (R7). Part B measures the actual round-trip time. Combining the lock acquisition and token-version check in one statement saves a round trip per guarded request.
+The cross-region figure is an estimate: the API runs in Azure swedencentral and Neon in aws-eu-central-1 (R7). Part B measures the actual round-trip time. Combining the lock acquisition and token-version check in one statement saves a round trip per guarded request. **Open (2026-09-25), settled by spike A6:** under READ COMMITTED a statement reads from a snapshot taken when it starts, so a single statement that waits on the lock while a deletion commits may still see the deleted user and pass the check. Two statements (lock, then check) avoid this; sending both in one `NpgsqlBatch` may keep the single round trip.
 
 **Validation spike:** Time-boxed, on a separate `spike/` branch. Spike code is not merged into feature code. Part A tests are kept as the start of the permanent R4 suite.
+
+**Implementation delegation (owner, 2026-09-25, constitution Principle III):** AI implements spike Part A (T008) in full, on the `spike/r4-cancellation` branch. The delegation covers only the spike: the prototype guards, the fake delete and export endpoints, the two-host fixture, the load harness and the A1–A6 tests. It does not cover T010–T027 or any other feature code. Spike code that is later kept, such as the fixture for T010 or tests for T012/T013, goes through ordinary owner review in the PR that adopts it.
 
 - **Part A — local (no extra authorization).** Testcontainers Postgres with two app hosts sharing one database.
   - A1: ordinary endpoints under load with and without the shared guard. Pass when the p95 latency increase stays within the Q4 bound (≤ 10 ms locally at 20 concurrent clients) and the connection pool is never exhausted.
@@ -109,6 +111,7 @@ The cross-region figure is an estimate: the API runs in Azure swedencentral and 
   - A3: a client that stops reading. Pass when the bounded write/flush times out, the guard is released and deletion proceeds.
   - A4: password change racing deletion. Pass when no stale token is emitted, no deadlock occurs and no conflicting lock is reacquired while exclusive access is held.
   - A5: existing explicit transactions join the lifecycle boundary without nesting.
+  - A6: a request that waited on the shared lock behind a committed deletion gets 401. Run it against a single-statement lock-and-check, two separate statements, and a two-statement `NpgsqlBatch`. Pass for a variant when it always returns 401; T019 uses a variant that passes.
 - **Part B — deployed proxy (requires owner approval of Azure resources).** A disposable Container Apps environment from `infra/`, with the same ingress settings as the API app (`transport: 'auto'`), torn down afterwards.
   - A test-only endpoint streams synthetic data (never personal data) in N delayed chunks, checking a revocation flag under a short shared guard before each chunk. A second endpoint sets the flag under exclusive access.
   - A `curl --no-buffer` client logs per-chunk byte counts, timestamps and how the stream ended.

@@ -61,11 +61,12 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Validation spike (Q7)
 
-- [ ] T008 Run spike Part A locally on a `spike/r4-cancellation` branch, per research R4 → Validation spike, scenarios A1–A5:
+- [ ] T008 Run spike Part A locally on a `spike/r4-cancellation` branch, per research R4 → Validation spike, scenarios A1–A6:
   - Use two app hosts on one Testcontainers PostgreSQL.
   - Check A1 against its pass criterion: p95 increase ≤ 10 ms locally at 20 concurrent clients, and the pool never exhausted.
   - Record the results, and any tuned Q4 values, in the Validation spike section of `specs/001-privacy-account-lifecycle/research.md`.
   - Spike code is not merged; A1–A5 tests may be kept for T012/T013.
+  - **Delegated to AI (owner, 2026-09-25):** an explicit exception to this file's default that the author writes the code by hand. It covers the spike only, not the tasks that later reuse its code (research R4 → Implementation delegation).
 - [x] T009 (owner) Approve or decline spike Part B's disposable Azure environment (research R4 → Part B), and record the decision in `specs/001-privacy-account-lifecycle/research.md`. Part B itself runs in T053 (US3). **Done 2026-09-25:** approved with conditions (research R4 → Part B).
 
 ### Tests for the foundation (write first; they must fail)
@@ -103,7 +104,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Never seed acknowledgement.
   - Review the generated migration for unrelated schema changes before applying it (depends on T017).
 - [ ] T019 Implement the concrete lifecycle endpoint filter and guards in `backend/GymNotebook.Api/AccountLifecycle.cs`, with no interface (research R4 → Q3):
-  - Begin a transaction on the scoped `AppDbContext`, set `lock_timeout` to 5 s with `SET LOCAL` (production goes through the Neon pooler, research R4 → Connection pooling), and take `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)` combined with the token-version/existence check in one statement.
+  - Begin a transaction on the scoped `AppDbContext`, set `lock_timeout` to 5 s with `SET LOCAL` (production goes through the Neon pooler, research R4 → Connection pooling), and take `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)` followed by the token-version/existence check, using the lock-and-check variant that passed spike A6 (not necessarily one statement).
   - For reads, write the result under the lock within a 10 s write timeout, then commit.
   - For writes, commit, then write the response under a fresh delivery guard.
   - Map outcomes per Q5 (503/401). Comment the lock namespaces and why writes use two steps (depends on T008, T018).
