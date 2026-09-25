@@ -60,12 +60,12 @@ Two sessions on one date are two points, not one — the Pull-up series in the p
 
 ### Privacy and account lifecycle
 
-Screens for `specs/001-privacy-account-lifecycle/spec.md`. The notice screens (user story 1) are implemented behind `PRIVACY_LIFECYCLE_ENABLED`; export and deletion are still design previews in the prototype. The frontend has no flag of its own: when the privacy routes return 404, the links below are hidden and the gate is skipped.
+Screens for `specs/001-privacy-account-lifecycle/spec.md`. The notice screens (user story 1) and the export (user story 3) are implemented behind `PRIVACY_LIFECYCLE_ENABLED`; deletion is still a design preview in the prototype. The frontend has no flag of its own: when the privacy routes return 404, the links below are hidden and the gate is skipped.
 
-**Implemented (user story 1):**
+**Implemented (user stories 1 and 3):**
 
 - **Public notice, `/privacy`.** A "Privacy notice" link sits under the sign-in form, shown only when the API serves a notice. The screen shows the version and effective date, what changed in this version, and the notice's sections as plain text. It also shows any announced future version in a box with its effective date, summary and expandable full text. It works signed out, and reading it records nothing. "← Back" returns to sign-in, or to Privacy & account when signed in. Focus moves to the heading on load. A link to a section, such as `/privacy#notice-contact`, scrolls to it instead.
-- **Privacy & account, `/account/privacy`.** A "Privacy & account" link on the cover, on its own line below Change password and Sign out, shown only when the feature is on. The screen states whether the current notice version has been continued past, and when. It notes that continuing is not consent, and links to the notice and to its contact section. Export and deletion join this screen with user stories 3 and 4. It is reachable without acknowledging the notice.
+- **Privacy & account, `/account/privacy`.** A "Privacy & account" link on the cover, on its own line below Change password and Sign out, shown only when the feature is on. The screen states whether the current notice version has been continued past, and when. It notes that continuing is not consent, and links to the notice, to the export and to the notice's contact section. Deletion joins this screen with user story 4. It is reachable without acknowledging the notice.
 - **Notice gate, `/account/privacy/notice?returnTo=…`.** Shown before any notebook screen, whether reached through "Open the notebook" or a deep link to workouts, progress, exercises or an editor, when the account hasn't continued past the current version. The screen has:
   - the full notice;
   - a sticky footer: "Continue records the version shown to you. It does not record consent." plus **Continue to notebook**;
@@ -75,11 +75,16 @@ Screens for `specs/001-privacy-account-lifecycle/spec.md`. The notice screens (u
   - Continue sends exactly the version on screen and, on success, opens the page the user was heading for. Only same-origin notebook paths are honoured; anything else opens the sessions list.
   - If a newer version took effect meanwhile, the gate loads it and says so. A network or server failure keeps the gate, with an inline message and the button available to retry.
   - There is no checkbox and no "I agree".
+- **Export, `/account/export`.** "Take a copy", reached from Privacy & account's **Export my data**. It explains that one JSON file holds the account details, exercises, sessions, notes and sets with explanations of every field, and warns that the file is personal. The user enters the current password and chooses **Download my data**.
+  - **States:** idle; "Checking your password…" while the password is verified; "Preparing your file…" with an indeterminate progress bar while the file arrives, with **Cancel**; and complete, "Your file has been saved as gym-notebook-export.json. Your notebook has not changed.", with **Download again**. The status line is a polite live region.
+  - **The password field is cleared** as soon as the request is sent and is never stored, so every attempt, including a retry, asks for it again and gets a fresh snapshot.
+  - **Only a complete file is saved.** A cut-short or cancelled download saves nothing. The file is held in a temporary object URL that is revoked shortly after the save starts, or at once when the screen is left.
+  - **Errors** stay on the form (`role="alert"`) and return focus to the password field: a wrong password; too many attempts; an export already running; the notebook briefly busy (503); and anything else, "The export didn't finish, so no file was saved. Your notebook has not changed. Try again." A 401 means the session no longer works, so it signs out to the login screen.
 - **Every state:** loading ("Opening the notice…"), a load failure with **Try again**, and a "not available" state for when the feature is off. Errors use `role="alert"`, all controls are at least 44px, and focus moves to each screen's heading once it loads.
 
 **Design preview only (prototype):**
 
-- **Export:** The user sees the contents and privacy warning, enters a current password and downloads one *sample* JSON file with a field guide. An empty password or the literal `wrong` shows an inline verification error; a prototype link shows a recoverable export failure. No real account data is read.
+- **Export:** The same screen as the implemented one, but it downloads a *sample* file in the real format (version 1) instead of reading an account. An empty password or the literal `wrong` shows the inline verification error; a prototype link shows the recoverable failure.
 - **Deletion:** The review screen names the active information removed, sign-out across sessions, optional export, irreversibility, the proposed 30-day backup limit and the restricted security-log exception. It requires a separate password-confirmed action and offers cancellation. An empty password or `wrong` shows an inline error; a prototype link shows a recoverable failure. Success leads to a completion screen explaining backup and log expiry. No real account is deleted.
 - The prototype keeps acknowledgement in memory and has a control on the account privacy screen for previewing a revised notice version; reloading resets all demo state. Controller details, legal bases, processor/transfer information, contact details and provider retention settings remain review gates in the feature specification — neither the prototype nor the synthetic development notice is a publishable notice.
 
