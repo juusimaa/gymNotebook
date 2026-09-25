@@ -4,7 +4,7 @@ A learning project to build a digital replacement for a paper gym log/notebook: 
 
 ## Goals
 
-- Full-stack educational project — type as much code as possible by hand.
+- Full-stack educational project. Milestones 1–10 were typed by hand; since 2026-09-25 AI implements by default and the author learns by planning, reviewing and approving each change (constitution Principle III).
 - Backend in **C#** (new for this author — previous project used Python/FastAPI).
 - Mirror the successful patterns from the `docker-subscription-tracker` project: one container image each for backend and frontend, Docker Compose for local dev, PR-only workflow, eventual Azure deployment via Neon Postgres.
 

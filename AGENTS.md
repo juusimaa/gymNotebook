@@ -4,8 +4,10 @@
 
 Gym Notebook is a full-stack **learning project**: a digital replacement for a
 paper gym log (workouts → exercises → sets, with an e1RM progress chart). The
-explicit goal is for the author to write the code by hand and learn C# / ASP.NET
-Core along the way — see [PLAN.md](PLAN.md) for the design rationale, data
+goal is for the author to learn C# / ASP.NET Core along the way. Milestones
+1–10 were typed by hand; since 2026-09-25 AI implements by default and the
+author learns by planning, reviewing and approving every change — see
+[PLAN.md](PLAN.md) for the design rationale, data
 model, API contract and milestone log, and [README.md](README.md) for the
 "how do I run it" companion.
 
@@ -19,15 +21,13 @@ model, API contract and milestone log, and [README.md](README.md) for the
 
 ## How to work in this repo
 
-- **The user writes the implementation code.** This is a hand-typing learning
-  project, so don't generate or write code changes unless explicitly asked to
-  in that instance. Default instead to: explain the plan/design, point to the
-  relevant files or patterns, answer questions, and review code the user
-  writes. Non-code tasks — running `dotnet ef migrations add`, running tests
-  or builds, git/PR mechanics, research — are fine to do directly, since the
-  goal is about typing the *code* by hand, not the surrounding tooling. If
-  it's unclear whether something counts as code the user wants to type
-  themselves, ask rather than assume.
+- **AI implements by default.** Write the implementation code, tests,
+  migrations and tooling for the task at hand, after the plan below has been
+  presented. The exception: when the user says they will write a piece
+  themselves, don't write it — explain the design, point to the relevant
+  files or patterns, answer questions and review their code instead. The
+  user still reviews and approves every change, so keep the code readable
+  enough to learn from.
 - The default branch is `main`. Do project work on a separate Git branch;
   never commit directly to `main`.
 - Before writing or modifying project files, present a concise implementation
@@ -40,9 +40,8 @@ model, API contract and milestone log, and [README.md](README.md) for the
 
 ## Code conventions & review standards
 
-These apply when reviewing code the user writes, and — for the narrow cases
-where you do write code yourself (tests, migrations, tooling; see above) —
-when writing it.
+These apply both when writing code yourself and when reviewing code the user
+writes.
 
 - Make the smallest coherent change for the task; no unrelated refactoring.
 - Follow the architecture PLAN.md already chose: no layered

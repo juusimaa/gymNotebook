@@ -32,9 +32,10 @@ Sources: `AGENTS.md` — How to work, Code conventions; `PLAN.md` — Goals, Sta
 
 ### III. Keep Learning and Readability Central
 
-The author writing and understanding the code remains the default. AI MAY
-implement explicitly delegated, scoped code; that permission does not authorize
-unrelated implementation. Otherwise, explain, guide, and review. Code MUST be
+AI implements by default, within the plan presented for the task. When the
+author says they will write a piece of code themselves, AI MUST NOT write it and
+instead explains, guides, and reviews. The author reviews and approves every
+change, so understanding the code remains the learning goal. Code MUST be
 readable, with useful comments explaining intent, behavior, and non-obvious
 decisions; do not add redundant comments to obvious lines.
 
@@ -47,6 +48,9 @@ loading, empty, and error states.
 
 Sources: `AGENTS.md` — How to work, Code conventions; `PLAN.md` — Goals;
 `README.md` — introduction. Comment scope is also explicit in this constitution request.
+Amended in 2.0.0 (owner, 2026-09-25): the default changed from the author writing
+the code, with AI implementing only explicitly delegated scope, to AI implementing
+unless the author says otherwise.
 
 ### IV. Verify Against Real Behavior in Proportion to Risk
 
@@ -117,8 +121,8 @@ Generated plans and tasks MUST be treated as drafts requiring review before
 implementation. They must preserve established decisions and show unresolved
 questions instead of selecting new architecture, product behavior, APIs, data
 models, or UI rules. Generation alone is neither review nor implementation
-authorization. AI implementation remains subject to the scoped delegation in
-Principle III.
+authorization. Once reviewed, AI implementation follows Principle III: AI
+implements unless the author says they will write that part.
 
 Basis: explicit instruction in this constitution request, alongside the planning
 and learning workflow in `AGENTS.md`.
@@ -246,4 +250,4 @@ and patch for non-semantic clarification. Version 1.0.0 was the initial draft;
 ratification records the owner's adoption of this constitution, not an
 application release.
 
-**Version**: 1.0.1 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-09-25
+**Version**: 2.0.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-09-25

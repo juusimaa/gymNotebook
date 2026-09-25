@@ -8,7 +8,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 **Input**: Design documents from `/specs/001-privacy-account-lifecycle/`
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/](contracts/), [quickstart.md](quickstart.md), [checklists/proposal-review.md](checklists/proposal-review.md)
 
-**Status**: Generated 2026-09-24; reviewed and approved by the owner for implementation, 2026-09-25 (constitution Principle VII). Per Principle III, the author writes the implementation and tests by hand; these tasks do not authorize AI implementation.
+**Status**: Generated 2026-09-24; reviewed and approved by the owner for implementation, 2026-09-25 (constitution Principle VII). Per Principle III (constitution 2.0.0, 2026-09-25), AI implements these tasks by default unless the owner says they will write a part; the owner reviews every PR. The delegation notes below predate that change and are kept as a record.
 
 **Tests**: Required. The spec defines an Independent Test per story and SC-003–SC-006, and constitution Principle IV requires real-PostgreSQL integration tests. Write each story's tests first and confirm they fail before implementing.
 

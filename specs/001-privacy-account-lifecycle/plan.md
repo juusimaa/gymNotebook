@@ -42,7 +42,7 @@ Planning gates were checked before research and again against this design. Both 
 | --- | --- | --- |
 | I. Established architecture | Existing projects, EF and Minimal APIs | Pass: direct EF projections/transactions, plain entities and concrete helpers; no repository layers or unnecessary interfaces |
 | II. Focused changes | Clean feature branch; plan announced before setup | Pass: only feature planning documents generated; focused delivery boundaries below |
-| III. Learning/readability | User writes implementation by default | Pass: design/contracts only; implementation still requires hand-written checkpoints or scoped delegation |
+| III. Learning/readability | User writes implementation by default (constitution 1.x) | Pass: design/contracts only. Since constitution 2.0.0 (2026-09-25), AI implements the tasks unless the owner says they will write a part |
 | IV. Real behavior | Plan real-Postgres security/persistence checks | Pass: concurrency, rollback, restore and browser evidence remain distinct; no application checks claimed for this docs-only change |
 | V. Security/privacy | Preserve BCrypt/JWT, invite gate, CORS, ownership | Pass: fresh checks under coordination; no client-selected account; legal conclusions remain release gates |
 | VI. Documentation alignment | Read PLAN.md, README.md and current UI preview | Pass: require matching operating/API/UI updates with implementation; no unrelated stale-doc cleanup |

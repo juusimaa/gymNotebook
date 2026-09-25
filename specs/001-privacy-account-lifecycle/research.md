@@ -103,7 +103,7 @@ The cross-region figure is an estimate: the API runs in Azure swedencentral and 
 
 **Validation spike:** Time-boxed, on a separate `spike/` branch. Spike code is not merged into feature code. Part A tests are kept as the start of the permanent R4 suite.
 
-**Implementation delegation (owner, 2026-09-25, constitution Principle III):** AI implements spike Part A (T008) in full, on the `spike/r4-cancellation` branch. The delegation covers only the spike: the prototype guards, the fake delete and export endpoints, the two-host fixture, the load harness and the A1–A6 tests. It does not cover T010–T027 or any other feature code. Spike code that is later kept, such as the fixture for T010 or tests for T012/T013, goes through ordinary owner review in the PR that adopts it.
+**Implementation delegation (owner, 2026-09-25, constitution Principle III):** AI implements spike Part A (T008) in full, on the `spike/r4-cancellation` branch. The delegation covers only the spike: the prototype guards, the fake delete and export endpoints, the two-host fixture, the load harness and the A1–A6 tests. It does not cover T010–T027 or any other feature code. Spike code that is later kept, such as the fixture for T010 or tests for T012/T013, goes through ordinary owner review in the PR that adopts it. *Superseded the same day by constitution 2.0.0: AI now implements by default, so this scope limit no longer applies to T010–T027.*
 
 - **Part A — local (no extra authorization).** Testcontainers Postgres with two app hosts sharing one database.
   - A1: ordinary endpoints under load with and without the shared guard. Pass when the p95 latency increase stays within the Q4 bound (≤ 10 ms locally at 20 concurrent clients) and the connection pool is never exhausted.
