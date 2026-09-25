@@ -97,9 +97,21 @@ Repeat streamed tests through real Kestrel and the intended ingress/proxy, with 
    - Verify pre-UUID restore targets cannot silently bypass reconciliation, and that the Q2d invariant test fails if a new User-removing path is added.
 6. Exercise the monitored contact route without sending real personal data. Practice access/correction/deletion/restriction/objection/portability/complaint and broader security-record review. Record receipt, proportionate verification, calendar-month deadline, response or timely justified extension/refusal. Include end-of-month arithmetic and reviewed rights-register disposal.
 
+## 6a. Optional-details consent — SC-008
+
+Amendment 2026-09-25. Run with the flag on, then repeat step 4 with it off.
+
+1. With a new account, open the editor: title, location, notes and bodyweight are hidden and the opt-in entry is shown. Save a workout without them.
+2. Open the consent screen, choose "Not now": nothing is recorded (`GET /account/privacy` shows `consent: null`) and nothing is asked on the next visit. Choose "Allow": the pair is recorded with the displayed version, and the inputs appear.
+3. Enter details on several workouts, then withdraw. The review step lists what is removed and offers export. After confirming, every workout's four fields are null, every other record is unchanged, and the consent is null. Repeat the request: `clearedWorkouts: 0`.
+4. Without consent, send a workout create and an update carrying a non-empty note directly to the API: 403 `optional_details_consent_required`, nothing stored. With the flag off: accepted as today.
+5. Seed an existing account holding details and no consent: after the notice gate, the transition question appears before any notebook fetch, with the right workout count. Leave: it appears again next visit. "Allow" keeps the details; on a second seeded account, "Don't allow" clears them after the review step.
+6. Export a consenting and a non-consenting account: `privacyRecords.optionalDetailsConsent` matches. Delete the consenting account: the pair is gone with the User.
+7. Run the transition clearing SQL against a local copy with a pending account: its details are cleared, the recorded counts match, and the follow-up query finds zero details without consent.
+
 ## 6. Owner walkthrough and acceptance record — SC-004
 
-The project owner performs notice, export and deletion on mobile and keyboard-only desktop. Each flow must be discoverable/completable without assistance in under three minutes excluding download time. Record date, device/browser, steps, duration, pass/fail and evidence for each of the six flow/mode combinations. Confirm Continue is not consent and deletion explains active removal, backup expiry and original-clock log retention. Fix failures and repeat affected flows.
+The project owner performs notice, export, deletion and optional-details consent (grant and withdraw) on mobile and keyboard-only desktop. Each flow must be discoverable/completable without assistance in under three minutes excluding download time. Record date, device/browser, steps, duration, pass/fail and evidence for each of the six flow/mode combinations. Confirm Continue is not consent and deletion explains active removal, backup expiry and original-clock log retention. Fix failures and repeat affected flows.
 
 Keep an evidence table with SC-001–007, tester/reviewer, date, build/commit, environment, observed result and evidence link. Label source review, automated tests, HTTP/proxy tests, provider evidence, restore exercise and owner walkthrough separately. No code test substitutes for legal/provider approval or human walkthrough.
 

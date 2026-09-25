@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-24
 
-**Status**: Draft
+**Status**: Draft. Amended 2026-09-25: consent for optional workout details (FR-029–FR-035), under FR-007.
 
 **Input**: User description: "A good first use would be the GDPR-shaped ‘privacy and account lifecycle’ feature: privacy notice, consent decision, data export, account deletion, backup-retention rules, and processor inventory. It has genuine requirements and edge cases, rather than merely adding a screen."
 
@@ -18,6 +18,14 @@
 - Q: Should usability acceptance require five test participants, or a documented walkthrough by you as the project owner? → A: Require the project owner's recorded walkthrough of notice, export and deletion, including mobile and keyboard use; no participant recruitment. Automated security and data-correctness checks remain separate requirements.
 - Owner decision (2026-09-24, P3/Q5): When restore reconciliation cannot determine a deletion's outcome, that account's sign-in is suspended rather than erased or revived. Login then directs its owner to the privacy contact only after correct-password verification, so the suspension is not disclosed to others.
 - Owner decision: Approve the requirement that a restore cannot revive a deleted account and must fail closed when deletion reconciliation cannot be verified. Restore-evidence direction chosen 2026-09-24: pre-restore branch diff with a log fallback, no independent ledger (see research R6). That protocol and the retention guarantees are not approved pending failure-handling proof and an isolated restore exercise. The numerical retention limits in this draft remain proposed requirements.
+
+### Amendment 2026-09-25 — consent for optional workout details (FR-007, T042)
+
+- Owner decision (2026-09-25, processing decision P3, option B): workout title, location, notes and bodyweight may reveal health information. They are processed only with explicit consent under GDPR Art. 9(2)(a). T042 recorded that consent is required, so this processing is halted until this amendment is approved and implemented.
+- Owner decision (2026-09-25): withdrawing consent permanently clears those details from every workout and keeps the rest of the notebook. The owner first proposed deleting the whole account on withdrawal. That was rejected because losing the entire notebook is a detriment that would make the consent not freely given (Art. 7(3)–(4), EDPB Guidelines 05/2020). Account deletion (Story 4) stays available as a separate choice.
+- Owner decision (2026-09-25): exercise names stay outside consent. They are required, so making them depend on consent would break the notebook for anyone who refuses. The residual risk is recorded in the processing decision.
+- Owner decision (2026-09-25): interim period. Until the feature is enabled, production keeps accepting optional details as it does today. The owner accepts this risk for the small invite-only user base until the flag is switched on (T084). No unflagged change is shipped. The residual risk is recorded in the processing decision.
+- Owner decision (2026-09-25): the transition deadline is 30 calendar days after the feature is enabled.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -111,8 +119,30 @@ As the operator, I maintain a verifiable retention schedule and supplier invento
 4. **Given** an unknown provider retention setting, missing agreement, or unverified transfer arrangement, **When** rollout readiness is evaluated, **Then** the gap has an owner and blocks rollout of the affected processing until verified or removed.
 5. **Given** a supplier or purpose changes, **When** the operator proposes the change, **Then** the inventory, decision record, retention schedule, and notice are reconciled before the change takes effect.
 
+### User Story 6 - Choose whether to record optional workout details (Priority: P1)
+
+As a user, I can decide whether the service may store the optional details of my workouts (title, location, notes and bodyweight), knowing they can reveal health information. I can change my mind later without losing the rest of my notebook.
+
+**Why this priority**: The processing decision (Story 2) concluded that these details need explicit consent. They cannot be released with this feature until the consent flow exists, and existing entries need a lawful transition.
+
+**Independent Test**: With a fresh account, a consenting account and an existing account that already holds details, walk through grant, refusal, withdrawal, re-grant and the transition question. Check stored workouts, rejected writes and the export after each step.
+
+**Acceptance Scenarios**:
+
+1. **Given** an account without consent, **When** the user opens the workout editor, **Then** the optional detail inputs are hidden and a clearly labelled entry offers to enable them. The rest of the editor works unchanged.
+2. **Given** the consent screen, **When** it is shown, **Then** it presents the versioned consent statement with "Allow" and "Not now" of equal prominence and nothing preselected. Choosing "Allow" records the statement version and time and shows the detail inputs.
+3. **Given** the consent screen, **When** the user chooses "Not now" or leaves it, **Then** nothing is recorded, no details are stored and the notebook stays fully usable.
+4. **Given** an account without consent, **When** a create or update request carries a non-empty detail, **Then** the service rejects it with a distinguishable error and stores nothing from it. It never silently drops the detail.
+5. **Given** an account with consent, **When** the user withdraws it, **Then** they first see that every stored detail on every workout will be permanently removed, that the rest of the notebook stays, and an optional export. Confirming removes the consent record and all details in one step.
+6. **Given** withdrawal has completed, **When** the user later grants consent again, **Then** the detail inputs return empty. Nothing withdrawn is restored.
+7. **Given** an existing account holding details when the feature is enabled, **When** its owner next signs in, **Then** after the notice gate and before notebook access they are asked once whether to keep the details, with the number of affected workouts. "Allow" keeps them. "Don't allow" clears them after the same confirmation as withdrawal.
+
 ### Edge Cases
 
+- An existing account that holds details and never returns has its details cleared at the transition deadline (FR-035). No consent is inferred from silence or continued use.
+- A second tab, or an editor draft, still holding details after withdrawal cannot store them: the save is rejected (FR-032). The draft's details are discarded with a visible explanation, and the rest of the draft is kept.
+- An export running concurrently with withdrawal contains either all details and the consent record, or neither. It never contains a partial clearing.
+- A withdrawal whose response is lost is safe to retry and never reports clearing that did not happen.
 - Existing users have no historical notice acknowledgement or consent record; migration must not fabricate either.
 - Notes, exercise names, titles, and locations can contain personal or health information; export and deletion cover free text as well as numeric training data.
 - Missing bodyweight, nullable set weight, unfinished workouts, non-ASCII text, warm-up sets, repeated exercises, and local dates around midnight retain their meaning in exports.
@@ -156,6 +186,13 @@ As the operator, I maintain a verifiable retention schedule and supplier invento
 - **FR-026**: On their next signed-in visit, users who have not acknowledged the current privacy notice version MUST see it before notebook access, with a “Continue” action. Continuing MUST record the version shown for that account and permit notebook access; the same version MUST NOT be automatically shown again across sessions. Leaving without continuing MUST leave acknowledgement unchanged. A new notice version MUST repeat this flow. The recorded version is notice acknowledgement only, MUST be included in export and removed on account deletion, and MUST NOT be treated as consent. Historical acknowledgement or consent MUST NOT be invented. If the decision changes the permitted processing of existing data, the approved amendment in FR-007 MUST define its treatment before rollout; notice acknowledgement alone does not authorize that change.
 - **FR-027**: Product controls MUST show progress, completion, authentication failure and recoverable failure states without exposing private data or internal exception details. Authentication failure MUST NOT be misrepresented as successful export or deletion.
 - **FR-028**: Delivery MUST include reviewed notice content, processing decision, retention schedule, supplier inventory and restore procedure as maintained artifacts with an owner and review date. The relevant product, operating and UI documentation MUST be updated with the corresponding implementation; this specification alone does not establish compliance or operational readiness.
+- **FR-029**: Workout title, location, notes and bodyweight ("optional workout details") MUST be stored only for an account holding a consent record for the current consent statement. The consent covers this purpose only. It MUST be separate from notice acknowledgement (FR-026), registration and any other action. Exercise names are outside its scope (see Clarifications). Every other part of the notebook MUST work without consent.
+- **FR-030**: Consent MUST be given only by an explicit, affirmative action on a screen that shows the versioned consent statement. The statement MUST explain which details it covers, that they may reveal health information, that they are used only to show the user their own notebook (no analysis, profiling or sharing beyond the processors listed in the notice), and how to withdraw and what withdrawal removes. "Allow" and "Not now" MUST be equally prominent, with nothing preselected. Granting records only the statement version and time. The screen MUST be reachable from the account privacy screen and from where the details would be entered.
+- **FR-031**: Refusing, or leaving the consent screen, MUST record nothing and store no details. Accounts without stored details MUST NOT be asked automatically: they opt in from the editor or the account privacy screen, so refusal never leads to repeated prompts.
+- **FR-032**: Without current consent, the service MUST reject any workout create or update carrying a non-empty optional detail, with a distinguishable error, and store nothing from that request. Enforcement MUST be server-side; hiding inputs is not enough. Clients MUST hide the detail inputs and offer the opt-in entry instead.
+- **FR-033**: Withdrawal MUST be available from the account privacy screen and wherever consent status is shown, in no more steps than granting, and without password verification. Before confirming, the user MUST see what will be removed, that the rest of the notebook stays, and an optional export. Confirming MUST remove the consent record and clear every optional detail of the account in one atomic operation, coordinated with export and deletion like other lifecycle operations. It MUST be safe to retry. Cleared values in backups expire under FR-019. Re-granting later starts with no details.
+- **FR-034**: The consent statement MUST be a versioned repository artifact, like the notice, with prior wording kept for accountability. The consent record (statement version and time) MUST be included in the export and removed on account deletion. Changing what the statement covers or permits is outside this amendment and needs its own reviewed specification change, including the effect on existing consents.
+- **FR-035**: Existing-user transition. No consent MUST be fabricated for existing accounts. After the feature is enabled, an account that already holds optional details MUST be asked once, on its next signed-in visit, after the notice gate and before notebook access, whether to keep them (Story 6, scenario 7). An unanswered question stays pending on later visits. At the transition deadline, 30 calendar days after enabling, the operator MUST clear the details of every account still without consent and record only the number of accounts cleared. Until the feature is enabled, production keeps accepting optional details as today (owner-accepted interim risk, see Clarifications).
 
 ### Key Entities *(include if feature involves data)*
 
@@ -167,6 +204,8 @@ As the operator, I maintain a verifiable retention schedule and supplier invento
 - **Deletion evidence**: Minimal restricted information used to suppress a deleted account during restoration, with a bounded expiry; not a retained notebook.
 - **Retention rule**: Information category, purpose, triggering event, maximum duration, disposal behavior, owner and verification evidence.
 - **Supplier inventory entry**: Provider and role, purpose, information handled, processing locations, agreement and transfer evidence, retention/deletion arrangements and review ownership.
+- **Consent statement version**: Published wording, version and effective date of the optional-details consent; distinct from privacy notice versions.
+- **Optional-details consent**: The statement version and time an account gave consent, linked to the account; absent when refused or withdrawn. Refusals are not recorded.
 - **Rights request record**: Request type and receipt date, proportionate identity-verification outcome, deadline, response and closure; its own retention is reviewed under FR-018 without retaining request content indefinitely.
 
 ## Success Criteria *(mandatory)*
@@ -180,11 +219,12 @@ As the operator, I maintain a verifiable retention schedule and supplier invento
 - **SC-005**: All deletion acceptance cases pass, including multiple sessions, wrong passwords, cancellation, concurrent writes/exports and lost responses. Successful deletion of the reference notebook completes within 60 seconds and leaves zero active account or notebook records while preserving every control-account record. Any retained identifying operational/security logs meet the reviewed necessity, access restriction and original-expiry conditions in FR-019, and the deletion explanation discloses this exception.
 - **SC-006**: A restore exercise using a pre-deletion backup exposes zero deleted-account records after access is enabled. Verification evidence demonstrates enforcement of the 24-hour export, 30-day backup/log, and 31-day deletion-evidence limits, including boundary and expiry cases.
 - **SC-007**: Every published notice and operational artifact has an owner, version or review date and supporting evidence; all rights-request practice cases receive a response or a justified extension notice within the one-calendar-month deadline.
+- **SC-008**: Every Story 6 scenario and edge case passes. Zero optional details are stored for accounts without consent, both after any rejected write and after the transition deadline. Withdrawal clears 100% of the details of the reference notebook in SC-003 within 60 seconds, and leaves every other notebook record intact. The SC-004 walkthrough also covers granting and withdrawing consent on mobile and with the keyboard.
 
 ## Assumptions
 
 - This is a specification for new work, not a claim that the deployed service already meets the requirements or a certification of GDPR compliance. Owner review remains necessary before implementation under the project constitution.
-- **Consent scope confirmed by owner on 2026-09-24**: Document the lawful-basis decision and add no consent prompt unless the review establishes a need. No final lawful basis or health-data classification is asserted here.
+- **Consent scope confirmed by owner on 2026-09-24**: Document the lawful-basis decision and add no consent prompt unless the review establishes a need. No final lawful basis or health-data classification is asserted here. **Amended 2026-09-25:** the review established a need for optional workout details only (FR-029–FR-035). No other purpose uses consent.
 - The existing username/password account, invite gate, user ownership and session-revocation conventions remain. No email collection, email delivery, password reset, marketing, advertising or analytics is introduced.
 - The proposed 24-hour, 30-day and 31-day limits and performance targets are product requirements for review, not statutory GDPR periods or verified provider guarantees. Provider capability must be established during planning and operational validation; conflicts require an explicit specification change.
 - Microsoft Azure and Neon are initial inventory candidates supported by repository deployment context. Actual supplier roles, network providers, locations, agreements, subprocessors and retention settings require verification; this task performs no cloud audit.

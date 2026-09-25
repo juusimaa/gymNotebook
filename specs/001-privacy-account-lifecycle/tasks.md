@@ -191,7 +191,9 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Cover account administration, training/progress, free text/bodyweight, logs (including the deletion log lines, R6 Q2e), browser storage and discovered collection.
   - For each purpose, record necessity, lawful basis and rationale, the health-data assessment with any additional condition (FR-005), and the consent conclusion.
   - Record the reviewer, date and evidence.
+  - **Drafted 2026-09-25** on `docs/001-us2-processing-decision`: facts from the code and R7, with proposed conclusions awaiting the owner's decision and signature. P3 (free text and bodyweight): the owner chose option B, explicit consent, on 2026-09-25, which triggers T042.
 - [ ] T042 [US2] (owner) **Release gate.** If any purpose concludes that consent is required, stop that processing's rollout and raise a specification amendment under FR-007. Record the outcome in `docs/privacy/processing-decision.md`.
+  - **Outcome recorded 2026-09-25:** consent is required for P3 (bodyweight, title, location, notes), so that processing is halted until an FR-007 amendment is approved and implemented. Exercise names are still an open point.
 - [ ] T043 [US2] (owner) **Release gate.** Supply the controller identity, monitored privacy contact and supervisory authority (Q8), and write the reviewed notice content that replaces the synthetic version in `docs/privacy/notices/`. No placeholders may be published (FR-002, FR-025).
 
 **Checkpoint**: Every purpose has a dated conclusion, and no unresolved consent finding remains for released processing.
@@ -359,18 +361,58 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ---
 
+## Phase 7a: User Story 6 — Choose whether to record optional workout details (Priority: P1)
+
+**Goal**: Explicit, withdrawable consent for workout title, location, notes and bodyweight (spec amendment 2026-09-25, FR-029–FR-035). Withdrawal clears those details and keeps the rest of the notebook.
+
+**Independent Test**: Walk through grant, refusal, withdrawal, re-grant, rejected writes and the transition question with a fresh, a consenting and an existing account (quickstart §6a).
+
+**Blocked on** plan.md Q10 (owner review of the amendment's proposals). Depends on Phase 2 and US1 (the notebook gate). Independent of US3 and US4, except where T096 notes otherwise.
+
+### Tests for User Story 6
+
+- [ ] T085 [P] [US6] Add consent API tests in `backend/GymNotebook.Tests/OptionalDetailsConsentTests.cs`:
+  - `GET /privacy/optional-details-statement` is public, and the three routes return 404 with the flag off.
+  - `PUT` accepts only the current statement version (409 `consent_statement_changed` otherwise) and is idempotent, keeping the timestamp.
+  - `GET /account/privacy` reports `consent` and `transitionPending` correctly: no details; details without consent; consent.
+  - `DELETE` clears the pair and all four fields on every workout of the caller only (canary account untouched), leaves every other field and row unchanged, and returns `clearedWorkouts: 0` on repeat.
+- [ ] T086 [P] [US6] Add enforcement tests in `backend/GymNotebook.Tests/OptionalDetailsEnforcementTests.cs`:
+  - With the flag on and no consent, `POST /workouts` and `PATCH /workouts/{id}` carrying any non-empty optional detail get 403 `optional_details_consent_required` and store nothing, including the request's other fields.
+  - Null, empty or omitted details are accepted. Exercise names are never affected.
+  - With consent, all four fields are accepted as today.
+  - With the flag off, everything is accepted as today.
+- [ ] T087 [P] [US6] Add a withdrawal coordination test in `backend/GymNotebook.Tests/OptionalDetailsCoordinationTests.cs`: a workout save racing withdrawal ends either rejected or cleared, never with a detail stored after withdrawal commits. Use the existing barrier/`pg_locks` pattern, no sleeps.
+- [ ] T088 [P] [US6] Add Vitest tests for the gate decision (notice first, then the transition question only when `transitionPending`) and for dropping optional details from a draft, in `frontend/src/auth/noticeGate.test.ts` and `frontend/src/screens/newWorkoutDraft.test.ts`.
+
+### Implementation for User Story 6
+
+- [ ] T089 [US6] (owner) Write the consent statement content in `docs/privacy/consent/` (index plus one version), per FR-030. Real wording, not synthetic: it is shown to users with the notice's reviewed content (T043).
+- [ ] T090 [US6] Add `OptionalDetailsConsentVersion` and `OptionalDetailsConsentedAt` to `backend/GymNotebook.Api/User.cs` with a both-or-neither check constraint, and generate and review the migration. No backfill (depends on Q10).
+- [ ] T091 [US6] Embed and validate the consent statement at startup, reusing the `PrivacyNoticeCatalog` pattern, in `backend/GymNotebook.Api/OptionalDetailsConsentCatalog.cs` and `GymNotebook.Api.csproj` (depends on T089; a synthetic test version can stand in until then).
+- [ ] T092 [US6] Map the three routes and extend `GET /account/privacy` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`: flag-gated, lifecycle filter, `Cache-Control: no-store`. Withdrawal is one transaction with a single `ExecuteUpdateAsync` (makes T085 pass).
+- [ ] T093 [US6] Enforce consent in `POST /workouts` and `PATCH /workouts/{id}` in `backend/GymNotebook.Api/Program.cs`, only when the flag is on, before any change. Comment the owner-accepted interim behaviour with the flag off (makes T086–T087 pass).
+- [ ] T094 [P] [US6] Add the statement, grant and withdraw calls and the new account-state fields in `frontend/src/api/privacy.ts`, and map the 403 code in `frontend/src/api/client.ts`.
+- [ ] T095 [US6] Create the consent screen `/account/privacy/optional-details` in `frontend/src/screens/OptionalDetailsConsent.tsx`, including the withdrawal review step. Hide the four inputs and show the opt-in entry in `NewWorkout.tsx` and `WorkoutDetail.tsx`. Add the transition question to the notebook gate in `NoticeGate.tsx`/`requireNoticeAcknowledged.ts`. Link from `AccountPrivacy.tsx` (depends on T094; makes T088 pass).
+- [ ] T096 [US6] Include `privacyRecords.optionalDetailsConsent` in the export: in T049 if US3 is not yet merged, otherwise here with a T044 test update. Account deletion removes the pair with User, so no US4 change is needed.
+- [ ] T097 [US6] (operator) Write the transition clearing SQL and its follow-up zero-count query in `docs/privacy/retention.md`, and add a dated step to `docs/privacy/release-checklist.md` for running it 30 days after T084.
+- [ ] T098 [US6] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the editor opt-in, the consent screen and the transition question, and record US6 in `PLAN.md` and the notice's information section (FR-002: optional information and the consequence of not giving it).
+
+**Checkpoint**: With the flag on locally, quickstart §6a passes and T085–T088 pass. With the flag off, workout writes behave as today.
+
+---
+
 ## Phase 8: Polish & Release
 
 **Purpose**: Cross-cutting acceptance evidence, documentation alignment and the controlled production switch.
 
-- [ ] T078 [P] Create `docs/privacy/release-checklist.md` with owner, date, evidence reference and status for: a line confirming no exceptional retention beyond the FR-019/FR-020 limits was discovered, or the reviewed amendment if one was (FR-021); and SC-001–SC-007 and each release gate in plan.md.
+- [ ] T078 [P] Create `docs/privacy/release-checklist.md` with owner, date, evidence reference and status for: a line confirming no exceptional retention beyond the FR-019/FR-020 limits was discovered, or the reviewed amendment if one was (FR-021); and SC-001–SC-008 and each release gate in plan.md.
 - [ ] T079 [P] Update `README.md` with how to run the new privacy tests, the export performance fixture and the local flag setup. Update `PLAN.md` with the milestone log entry for this feature.
 - [ ] T080 Run all required checks: `dotnet format backend/GymNotebook.sln --verify-no-changes` and `dotnet test backend/GymNotebook.sln`, then `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` and `npm run build` in `frontend/`.
 - [ ] T081 (operator) **Release gate.** Run the reference export and deletion once in a disposable deployed environment with the real Neon cross-region path, using the T053 Part B environment if approved (analysis U1):
   - Record client connection, regions, measured round-trip time, duration, payload size and peak memory.
   - This run, not the local tests, is the SC-003 and SC-005 evidence; record it in `docs/privacy/release-checklist.md`.
   - Tear the environment down afterwards.
-- [ ] T082 (owner) **Release gate.** Complete and record the owner walkthrough of the notice, export and deletion on mobile and keyboard-only desktop, with each flow under three minutes excluding download (SC-004), in `docs/privacy/release-checklist.md`.
+- [ ] T082 (owner) **Release gate.** Complete and record the owner walkthrough of the notice, export, deletion and optional-details consent (grant and withdraw) on mobile and keyboard-only desktop, with each flow under three minutes excluding download (SC-004), in `docs/privacy/release-checklist.md`.
 - [ ] T083 (owner) **Release gate.** Complete the rights-request practice cases within the calendar-month deadline (SC-007), and record them in `docs/privacy/release-checklist.md`.
 - [ ] T084 (owner) Once every release gate in plan.md and `docs/privacy/release-checklist.md` has evidence, change `PRIVACY_LIFECYCLE_ENABLED` to `true` in `infra/modules/container-app-api.bicep` through a reviewed PR, and verify the deployed feature with the flag on.
 
@@ -386,6 +428,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 - **US2 (Phase 4)**: No code dependency; owner work can start immediately and run alongside everything. Its gates (T042, T043) block release.
 - **US3 (Phase 5)**: Depends on Phase 2. T053 depends on T009 and on a deployable export.
 - **US4 (Phase 6)**: Depends on Phase 2. The optional export link in T065 is soft-linked to US3; deletion works without it.
+- **US6 (Phase 7a)**: Depends on Phase 2, US1 and owner review Q10. T089 needs T043's reviewed notice. T096 is coordinated with US3.
 - **US5 (Phase 7)**: T069–T073 can start any time. T074 depends on US4 (T061) and T072.
 - **Polish (Phase 8)**: T081–T084 depend on all stories and release gates; T081 also uses the T053 environment if Part B was approved.
 
@@ -394,7 +437,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 - Tests are written first and fail before implementation.
 - Schema, then backend helpers, then endpoints, then the frontend API, then screens, then documentation alignment.
 - Each story's documentation update (PLAN.md/docs/ui) lands in the same PR as its behavior (Principle VI).
-- Every new screen task (T034–T036, T054, T065, T066) includes the accessibility rules in contracts/ui.md → Invalidation and accessibility (FR-001):
+- Every new screen task (T034–T036, T054, T065, T066, T095) includes the accessibility rules in contracts/ui.md → Invalidation and accessibility (FR-001):
   - labelled password inputs, visible focus and a logical tab order;
   - accessible status and error announcements;
   - focus restoration after navigation or failure;
@@ -412,6 +455,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 6. US3
 7. US4
 8. US5 infrastructure and documents
+8a. US6 consent (T085–T098)
 9. Release evidence and the flag switch
 
 ---
@@ -443,7 +487,7 @@ T041 processing-decision.md   T070 suppliers.md   T071 retention.md   T072 resto
 
 ### Incremental Delivery
 
-US1 → US3 → US4 → US5, each merged with the flag off and validated locally with it on. US2 and the operator documents proceed in parallel. The flag flips only in T084.
+US1 → US3 → US4 → US6 → US5, each merged with the flag off and validated locally with it on. US2 and the operator documents proceed in parallel. The flag flips only in T084.
 
 ---
 
