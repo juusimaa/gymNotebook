@@ -173,6 +173,32 @@ public sealed class TwoHostGymNotebookFixture : IAsyncLifetime
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
+    // Sessions holding the export lock for userId (NotebookExport.ExportLockNamespace):
+    // one while an export runs, zero once it has ended in any way.
+    public async Task<int> CountExportLocksAsync(int userId)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND granted AND classid = @ns::oid AND objid = @id::oid AND objsubid = 2",
+            connection);
+        command.Parameters.AddWithValue("ns", (long)NotebookExport.ExportLockNamespace);
+        command.Parameters.AddWithValue("id", (long)userId);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    // Sessions sitting in an open transaction with nothing running: what a snapshot or guard
+    // that was never ended would look like after an aborted export.
+    public async Task<int> CountIdleInTransactionAsync()
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT count(*) FROM pg_stat_activity WHERE state LIKE 'idle in transaction%' AND pid <> pg_backend_pid()",
+            connection);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
     // Blocks until at least `count` sessions are waiting on the lifecycle lock for userId:
     // the proof that a request has reached its lock wait before the test acts.
     public async Task WaitForLockWaitersAsync(int userId, int count, TimeSpan? timeout = null)
@@ -275,6 +301,32 @@ public sealed class CommitBarrier : DbTransactionInterceptor
             _reached.TrySetResult();
             await _release.Task;
         }
+    }
+}
+
+// Pauses the host's first EF query whose SQL contains `fragment`, before it runs, until
+// the test releases it: for example between two of the export's table queries. The wait
+// honours the query's cancellation token, so the export's own time limit still ends it.
+// Armed once; later queries pass straight through.
+public sealed class QueryBarrier(string fragment) : DbCommandInterceptor
+{
+    private int _armed = 1;
+    private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Task Reached => _reached.Task;
+
+    public void Release() => _release.TrySetResult();
+
+    public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+    {
+        if (command.CommandText.Contains(fragment, StringComparison.Ordinal) && Interlocked.Exchange(ref _armed, 0) == 1)
+        {
+            _reached.TrySetResult();
+            await _release.Task.WaitAsync(cancellationToken);
+        }
+        return result;
     }
 }
 

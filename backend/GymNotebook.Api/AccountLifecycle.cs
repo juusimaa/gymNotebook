@@ -41,12 +41,24 @@ public sealed class LifecycleOptions
     // How long deletion and password change wait for exclusive access.
     public int ExclusiveLockTimeoutMs { get; set; } = 15000;
 
+    // Rows per keyset batch in the export; each batch is one chunk with its own delivery
+    // guard, so this is also how far an export can get past a deletion (at most one chunk).
+    public int ExportBatchSize { get; set; } = 1000;
+
+    // The export's hard cap. SC-003's target is 60 s; this bounds how long the snapshot
+    // transaction can stay open whatever the client or the database does.
+    public int ExportMaxDurationMs { get; set; } = 120000;
+
     public void Validate()
     {
         if (WriteTimeoutMs >= ExclusiveLockTimeoutMs)
         {
             throw new InvalidOperationException(
                 "Lifecycle:WriteTimeoutMs must be below Lifecycle:ExclusiveLockTimeoutMs, or a stalled response write could outlast every deletion's lock wait.");
+        }
+        if (ExportBatchSize <= 0 || ExportMaxDurationMs <= 0)
+        {
+            throw new InvalidOperationException("Lifecycle:ExportBatchSize and Lifecycle:ExportMaxDurationMs must be positive.");
         }
     }
 }
@@ -71,7 +83,8 @@ public sealed class AccountLifecycleGuardMetadata;
 public static class AccountLifecycle
 {
     // First key of the two-int advisory lock: a namespace, so these locks can never collide
-    // with any other advisory lock the app takes (R3's export limit will have its own).
+    // with any other advisory lock the app takes (the export limit has its own,
+    // NotebookExport.ExportLockNamespace).
     // The value spells "LIFE" in ASCII, which makes it recognizable in pg_locks.
     public const int LockNamespace = 0x4C494645;
 
@@ -104,21 +117,34 @@ public static class AccountLifecycle
     public static Task<GuardOutcome> AcquireExclusiveAsync(AppDbContext db, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
         AcquireAsync(db, "pg_advisory_xact_lock", userId, tokenVersion, lockTimeoutMs, ct);
 
-    // Takes the lock inside the context's current transaction, then freshly reads the
-    // account's token version. Everything is sent as one NpgsqlBatch (one round trip), but
-    // as *separate statements*: under READ COMMITTED each statement reads from a snapshot
-    // taken when it starts, so a single "lock and check" statement that waited on the lock
-    // while a deletion committed would still see the deleted user and pass (spike A6). The
-    // separate check statement starts after the lock is granted and sees the deletion.
-    private static async Task<GuardOutcome> AcquireAsync(AppDbContext db, string lockFunction, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct)
+    // Shared access on a connection the caller opened itself, outside any AppDbContext.
+    // The export needs this (research R3/R4): its snapshot transaction occupies the
+    // request's context for the whole download, so its initialization and per-chunk
+    // delivery guards run on separate, short READ COMMITTED transactions.
+    public static Task<GuardOutcome> AcquireSharedAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
+        AcquireAsync(connection, transaction, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, ct);
+
+    private static Task<GuardOutcome> AcquireAsync(AppDbContext db, string lockFunction, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct)
     {
         var transaction = db.Database.CurrentTransaction
             ?? throw new InvalidOperationException("The lifecycle guard must run inside a transaction: its lock is released when that transaction ends.");
 
         // The raw Npgsql objects behind EF's transaction, so the guard runs on the same
         // connection and in the same transaction as the handler's own queries.
-        var connection = (NpgsqlConnection)db.Database.GetDbConnection();
-        await using var batch = new NpgsqlBatch(connection, (NpgsqlTransaction)transaction.GetDbTransaction());
+        return AcquireAsync(
+            (NpgsqlConnection)db.Database.GetDbConnection(), (NpgsqlTransaction)transaction.GetDbTransaction(),
+            lockFunction, userId, tokenVersion, lockTimeoutMs, ct);
+    }
+
+    // Takes the lock inside the given transaction, then freshly reads the account's token
+    // version. Everything is sent as one NpgsqlBatch (one round trip), but as *separate
+    // statements*: under READ COMMITTED each statement reads from a snapshot taken when it
+    // starts, so a single "lock and check" statement that waited on the lock while a
+    // deletion committed would still see the deleted user and pass (spike A6). The
+    // separate check statement starts after the lock is granted and sees the deletion.
+    private static async Task<GuardOutcome> AcquireAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string lockFunction, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct)
+    {
+        await using var batch = new NpgsqlBatch(connection, transaction);
 
         // SET LOCAL, never SET: production goes through Neon's transaction-mode pooler,
         // where a session-level SET would leak to whichever client gets this server

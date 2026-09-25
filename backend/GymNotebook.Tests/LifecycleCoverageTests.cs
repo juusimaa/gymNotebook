@@ -14,8 +14,9 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
 {
     // Endpoints that take their own guard instead of the shared filter, each with the
     // reason. The lock tests (ChangePassword*, LifecycleCoordinationTests and the US3/US4
-    // suites) prove each of these really does take its own guard. Export and delete don't
-    // exist yet; listing them now means they can't be added without passing this review.
+    // suites; ExportCoordinationTests for export) prove each of these really does take its
+    // own guard. Delete doesn't exist yet; listing it now means it can't be added without
+    // passing this review.
     private static readonly Dictionary<string, string> _allowList = new()
     {
         ["POST /account/export"] = "Own snapshot guards: a short initialization guard, then a delivery guard per chunk outside the REPEATABLE READ snapshot (research R3/R4).",
@@ -65,6 +66,7 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
         Assert.Contains("PUT /workouts/{id:int}/exercises", guarded);
         Assert.Contains("POST /workouts/{id:int}/sets", guarded);
         Assert.DoesNotContain("POST /auth/change-password", guarded);
+        Assert.DoesNotContain("POST /account/export", guarded);
 
         // US1's account privacy routes (T031), mapped because this host has the flag on.
         Assert.Contains("PUT /account/privacy/acknowledgement", guarded);
