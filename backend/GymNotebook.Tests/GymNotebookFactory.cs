@@ -53,6 +53,11 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // an accident of what's unset on a given machine.
         builder.UseSetting("INVITE_CODE", "");
 
+        // Same reasoning: the privacy lifecycle feature is off for every test using this
+        // factory, whatever the runner's environment says. Tests that need it on use
+        // PrivacyEnabledGymNotebookFactory.
+        builder.UseSetting("PRIVACY_LIFECYCLE_ENABLED", "false");
+
         // Program.cs throws at startup if this is missing, so it has to be here for the
         // same reason Jwt:Secret is. Two origins with a space after the comma, so every
         // test in CorsTests exercises the split-and-trim in Program.cs rather than only

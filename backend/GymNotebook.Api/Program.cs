@@ -42,6 +42,14 @@ var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
 // makes sure it's set in Azure.
 var inviteCode = builder.Configuration["INVITE_CODE"];
 
+// Production switch for the privacy and account lifecycle feature (specs/001, plan.md
+// P25). Main deploys automatically, so unfinished privacy routes must be able to merge
+// without going live. Deliberately the opposite of INVITE_CODE: a missing, empty or
+// misspelled value fails closed (feature off), and only the exact string "true" turns it
+// on — "True", "1" or "yes" do not, so a typo can never enable it by accident. Nothing
+// reads this yet; the new routes will be mapped only when it's true.
+var privacyLifecycleEnabled = builder.Configuration["PRIVACY_LIFECYCLE_ENABLED"] == "true";
+
 // Comma-separated origins the browser may call this API from — the Vite dev server now, the
 // deployed frontend URL later. An origin is scheme + host + port with no trailing slash
 // (http://localhost:5173/ silently matches nothing), and it's localhost even inside Compose:

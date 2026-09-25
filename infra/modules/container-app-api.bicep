@@ -94,6 +94,13 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
                 name: 'CORS_ORIGINS'
                 value: corsOrigins
               }
+              {
+                // Privacy/account lifecycle feature switch (specs/001, P25). Plain value,
+                // not a secret. Stays 'false' until every release gate has evidence; the
+                // flip to 'true' is its own reviewed PR (tasks.md T084).
+                name: 'PRIVACY_LIFECYCLE_ENABLED'
+                value: 'false'
+              }
             ],
             [
               {

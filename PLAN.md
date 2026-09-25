@@ -211,6 +211,7 @@ Jwt__Secret=replace-me-with-a-generated-key
 Jwt__ExpiryMinutes=30
 INVITE_CODE=
 CORS_ORIGINS=http://localhost:5173
+PRIVACY_LIFECYCLE_ENABLED=false
 VITE_API_URL=http://localhost:8080
 ```
 
@@ -233,7 +234,7 @@ The variable *names* are identical everywhere — the app reads `INVITE_CODE` an
 | `INVITE_CODE` | `.env`, gitignored | Container Apps **secret**, via `secretref` |
 | `Jwt__Secret` | `.env` (user-secrets before milestone 2) | Container Apps **secret** |
 | `ConnectionStrings__Default` | `.env`, points at the `db` service | Container Apps **secret** — it embeds Neon's password |
-| `CORS_ORIGINS`, `Jwt__ExpiryMinutes` | `.env` | plain env value — not sensitive |
+| `CORS_ORIGINS`, `Jwt__ExpiryMinutes`, `PRIVACY_LIFECYCLE_ENABLED` | `.env` | plain env value — not sensitive |
 
 Three rules that come with this:
 
