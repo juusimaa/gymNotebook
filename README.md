@@ -147,7 +147,7 @@ frontend/
   src/screens/         Login, Cover, ChangePassword — one .tsx (+ .css) per screen
   src/styles/          tokens.css (design tokens lifted from the prototype) + base.css
   src/routes.tsx       route table; main.tsx mounts the RouterProvider
-  Dockerfile           multi-stage: node builds, nginx serves dist/ (nginx.conf: SPA fallback)
+  Dockerfile           multi-stage: node builds, nginx serves dist/ (nginx.conf: SPA fallback, access log off)
   eslint.config.js     typescript-eslint (type-checked) + react-hooks + prettier
 docs/ui/               UI specification and a clickable HTML prototype
 .github/workflows/     test.yml — backend and frontend jobs: format checks + tests
