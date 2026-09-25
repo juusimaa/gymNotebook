@@ -8,7 +8,7 @@ import './Privacy.css'
 // /account/privacy — "Privacy & account", reached from the cover (specs/001
 // contracts/ui.md). Under the auth guard but outside the notice gate, so it
 // stays usable before the current notice is acknowledged; opening it records
-// nothing. Export and deletion join this screen with user stories 3 and 4.
+// nothing. Deletion joins this screen with user story 4.
 
 function formatDate(instant: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(
@@ -131,6 +131,16 @@ export default function AccountPrivacy() {
         </p>
         <Link to="/privacy" className="btn btn-secondary btn-block">
           Read the privacy notice
+        </Link>
+      </section>
+
+      <section className="privacy-block" aria-labelledby="privacy-export">
+        <h3 id="privacy-export">Export your notebook</h3>
+        <p>
+          Get one JSON file with your account, exercises, sessions and sets.
+        </p>
+        <Link to="/account/export" className="btn btn-secondary btn-block">
+          Export my data
         </Link>
       </section>
 

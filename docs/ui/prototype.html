@@ -397,7 +397,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   setExportPassword = (e) => this.setState({ exportPassword: e.target.value, exportError: "" });
   failExport = (e) => {
     if (e) e.preventDefault();
-    this.setState({ exportError: "The export could not be prepared. Your notebook has not changed. Try again.", exportDone: false });
+    this.setState({ exportError: "The export didn't finish, so no file was saved. Your notebook has not changed. Try again.", exportDone: false });
   };
   downloadSampleExport = (e) => {
     if (e) e.preventDefault();
@@ -406,39 +406,43 @@ document.addEventListener('DOMContentLoaded', async function() {
       this.setState({ exportError: "Check your current password and try again.", exportDone: false });
       return;
     }
+    // Same shape as the real export (format version 1, specs/001 contracts/api.md):
+    // flat arrays linked by ids, with an abbreviated field guide. Sample data only.
     const sampleExercises = EXERCISES.map((x, i) => ({
-      id: i + 1, name: x.name, isBodyweight: x.bodyweight, createdAt: "2026-09-01T10:00:00Z"
+      id: i + 1, userId: 1, name: x.name, isBodyweight: x.bodyweight, createdAt: "2026-09-01T10:00:00+00:00"
     }));
+    const sampleDate = (w) => String(w.date[0]) + "-" + String(w.date[1]).padStart(2, "0") + "-" + String(w.date[2]).padStart(2, "0");
     const sampleTime = (w, clock) => clock
-      ? String(w.date[0]) + "-" + String(w.date[1]).padStart(2, "0") + "-" + String(w.date[2]).padStart(2, "0") + "T" + clock.replace(".", ":") + ":00+03:00"
+      ? new Date(sampleDate(w) + "T" + clock.replace(".", ":") + ":00+03:00").toISOString().replace(".000Z", "+00:00")
       : null;
+    const blocks = [];
+    const sets = [];
+    DATA.forEach((w) => w.blocks.forEach((b, bi) => {
+      const blockId = w.id * 100 + bi + 1;
+      blocks.push({ id: blockId, workoutId: w.id, exerciseId: sampleExercises.find((x) => x.name === b.name).id, position: bi });
+      b.sets.forEach((set, si) => sets.push({ id: w.id * 10000 + bi * 100 + si + 1, workoutExerciseId: blockId, setNumber: si + 1, weight: set[0], reps: set[1], isWarmup: set[2] }));
+    }));
     const sample = {
       formatVersion: 1,
       snapshotAt: new Date().toISOString(),
       fieldGuide: {
-        date: "Calendar date chosen for the workout (YYYY-MM-DD)",
-        timestamps: "ISO 8601 timestamps; workout times in this sample use the Helsinki September offset (+03:00)",
-        bodyweightKg: "Kilograms; null means not logged",
-        weightKg: "Kilograms; null means no weight logged",
-        exerciseId: "Links an ordered exercise block to an exercise in the exercises list",
-        position: "Order of exercise blocks within a workout",
-        order: "Order of sets within an exercise block"
+        about: "Sample export from the design prototype. The real file explains every field; see specs/001 contracts/api.md.",
+        conventions: ["Instants are ISO-8601 in UTC.", "date is the stored local calendar day (YYYY-MM-DD).", "weight and bodyweightKg are kilograms; null means not recorded.", "Ids link records within this file."]
       },
-      account: { id: 1, username: "sample-user", createdAt: "2026-09-01T10:00:00Z", noticeAcknowledgement: { version: "Preview " + this.state.noticeVersion, shownAt: new Date().toISOString() } },
+      account: { id: 1, privacyAccountId: "00000000-0000-4000-8000-000000000001", username: "sample-user", createdAt: "2026-09-01T10:00:00+00:00" },
       exercises: sampleExercises,
       workouts: DATA.map((w) => ({
-        id: w.id,
-        date: String(w.date[0]) + "-" + String(w.date[1]).padStart(2, "0") + "-" + String(w.date[2]).padStart(2, "0"),
+        id: w.id, userId: 1, date: sampleDate(w),
         startedAt: sampleTime(w, w.time), endedAt: sampleTime(w, w.end),
         title: w.title, location: w.loc, notes: w.notes, bodyweightKg: w.bw,
-        createdAt: sampleTime(w, w.time),
-        exerciseBlocks: w.blocks.map((b, bi) => ({
-          id: w.id * 100 + bi + 1,
-          exerciseId: sampleExercises.find((x) => x.name === b.name).id,
-          position: bi + 1,
-          sets: b.sets.map((set, si) => ({ id: w.id * 10000 + bi * 100 + si + 1, order: si + 1, weightKg: set[0], reps: set[1], isWarmup: set[2] }))
-        }))
-      }))
+        createdAt: sampleTime(w, w.time)
+      })),
+      workoutExercises: blocks,
+      sets: sets,
+      privacyRecords: {
+        noticeAcknowledgement: this.state.noticeSeen ? { noticeVersion: "preview-" + this.state.noticeVersion, acknowledgedAt: new Date().toISOString() } : null,
+        optionalDetailsConsent: null
+      }
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
@@ -556,15 +560,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
           <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Your information</div>
           <h2 style="font-family:var(--font-heading);font-size:34px;font-weight:400;margin:10px 0 12px">Take a copy</h2>
-          <p style="font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Download one JSON file containing your account details, exercises, sessions, notes and sets. The file explains its fields and preserves each exercise's place in a session.</p>
+          <p style="font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Download one JSON file containing your account details, exercises, sessions, notes and sets. The file explains its fields and keeps each exercise's place in a session.</p>
           <div style="border-top:1px solid var(--color-accent);margin:22px 0 18px"></div>
           <label style="display:flex;flex-direction:column;gap:7px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)">Current password
             <input class="input" type="password" autocomplete="current-password" value="{{ exportPassword }}" sc-camel-on-change="{{ setExportPassword }}" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
           </label>
-          <p style="font-size:12px;line-height:1.55;color:var(--color-neutral-600);margin:10px 0 20px">The file downloads to your device. Keep it somewhere private. This prototype downloads sample data only.</p>
+          <p style="font-size:12px;line-height:1.55;color:var(--color-neutral-600);margin:10px 0 20px">The file downloads to your device and contains personal information. Keep it somewhere private. This prototype downloads sample data only.</p>
           <sc-if value="{{ hasExportError }}" hint-placeholder-val="{{ false }}"><p role="alert" style="font-size:13px;line-height:1.55;color:#9b382b">{{ exportError }}</p></sc-if>
-          <sc-if value="{{ exportDone }}" hint-placeholder-val="{{ false }}"><p role="status" style="font-size:13px;line-height:1.55;color:var(--color-accent-700)">Sample JSON downloaded. Your notebook has not changed.</p></sc-if>
-          <button class="btn btn-primary" sc-camel-on-click="{{ downloadSampleExport }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">Download sample JSON</button>
+          <sc-if value="{{ exportDone }}" hint-placeholder-val="{{ false }}"><p role="status" style="font-size:13px;line-height:1.55;color:var(--color-accent-700)">Your file has been saved as gym-notebook-sample-export.json. Your notebook has not changed.</p></sc-if>
+          <button class="btn btn-primary" sc-camel-on-click="{{ downloadSampleExport }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">Download my data</button>
           <div style="margin-top:18px;font-size:11px;color:var(--color-neutral-600)">Prototype control · <a href="#" sc-camel-on-click="{{ failExport }}">Simulate unavailable export</a></div>
         </div>
       </div>

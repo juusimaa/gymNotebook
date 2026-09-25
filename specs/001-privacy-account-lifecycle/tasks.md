@@ -227,7 +227,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - No persistent export copy remains after an abort.
   - The 120 s cap aborts the stream.
 - [x] T047 [P] [US3] Add a performance test with the reference fixture (1,000 workouts × 10 blocks × 10 sets = 100,000 sets) in `backend/GymNotebook.Tests/ExportPerformanceTests.cs`. Record duration, payload size and peak memory, targeting ≤ 60 s. This is a regression check; the SC-003 evidence comes from the deployed run (analysis U1).
-- [ ] T048 [P] [US3] Add Vitest tests for the download helper (object URL created only for a complete response and revoked on finish/cancel; abort handling) in `frontend/src/api/download.test.ts`.
+- [x] T048 [P] [US3] Add Vitest tests for the download helper (object URL created only for a complete response and revoked on finish/cancel; abort handling) in `frontend/src/api/download.test.ts`.
 
 ### Implementation for User Story 3
 
@@ -244,15 +244,21 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Flag-gated, on the filter allow-list, with the auth and sensitive rate-limit policies.
   - Require JSON, and don't trim passwords.
   - Headers: `Content-Disposition: attachment; filename="gym-notebook-export.json"` and `Cache-Control: no-store` (depends on T049, T050).
-- [ ] T052 [US3] Add `exportNotebook` with `AbortSignal` support and a download helper in `frontend/src/api/privacy.ts` and `frontend/src/api/download.ts` (makes T048 pass).
+- [x] T052 [US3] Add `exportNotebook` with `AbortSignal` support and a download helper in `frontend/src/api/privacy.ts` and `frontend/src/api/download.ts` (makes T048 pass).
 - [ ] T053 [US3] (operator) **Release gate.** Run spike Part B if approved in T009. Deploy a disposable Container Apps environment from `infra/`, run the curl matrix (HTTP/1.1 vs HTTP/2, fast vs `--limit-rate`, one vs two replicas), measure the real round-trip time, then tear it down. Record the results and the pass/fail decision rule outcome in `specs/001-privacy-account-lifecycle/research.md`. If it fails, revise R4 before release.
-- [ ] T054 [US3] Create the export screen `/account/export` in `frontend/src/screens/ExportData.tsx`, with its route in `frontend/src/routes.tsx`:
+- [x] T054 [US3] Create the export screen `/account/export` in `frontend/src/screens/ExportData.tsx`, with its route in `frontend/src/routes.tsx`:
   - States: idle, verifying, receiving (indeterminate progress), complete, and recoverable failure.
   - Clear the password after submission.
   - Offer retry on failure (depends on T052).
-- [ ] T055 [US3] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the export screen and states, and record US3 in `PLAN.md`.
+- [x] T055 [US3] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the export screen and states, and record US3 in `PLAN.md`.
 
 **Checkpoint**: With the flag on locally, quickstart §2 passes and T044–T048 pass.
+
+**Done 2026-09-25** on `feat/001-us3-export-api` and `feat/001-us3-export-ui`, with T053 still open:
+- T044–T048 pass, and the full backend (166) and frontend suites pass.
+- **T047:** the reference export first took about 60 s locally. With stale table statistics, the sets query's join was planned from the workouts and probed every block on every batch. Sets are now paged through their blocks' ids, and the export takes about 0.4 s (9.7 MiB).
+- **Contract addition:** a concurrent export gets 429 `{ "code": "export_in_progress" }` (contracts/api.md).
+- The owner still has to record the browser walkthrough of quickstart §2.
 
 ---
 

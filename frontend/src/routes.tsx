@@ -4,6 +4,7 @@ import { requireNoticeAcknowledged } from './auth/requireNoticeAcknowledged.ts'
 import AccountPrivacy from './screens/AccountPrivacy.tsx'
 import ChangePassword from './screens/ChangePassword.tsx'
 import Cover from './screens/Cover.tsx'
+import ExportData from './screens/ExportData.tsx'
 import Login from './screens/Login.tsx'
 import NoticeGate from './screens/NoticeGate.tsx'
 import PrivacyNotice from './screens/PrivacyNotice.tsx'
@@ -30,8 +31,8 @@ import EditExercise from './screens/EditExercise.tsx'
 // pathless layout whose loader is the privacy notice gate (specs/001
 // contracts/ui.md): it runs before any notebook screen renders — and so before
 // any notebook fetch — on "Open the notebook" and on every deep link. The
-// cover, change-password and privacy screens stay outside it, reachable
-// without acknowledging the notice.
+// cover, change-password and privacy screens (the export included) stay
+// outside it, reachable without acknowledging the notice.
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/privacy', element: <PrivacyNotice /> },
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
       { path: '/change-password', element: <ChangePassword /> },
       { path: '/account/privacy', element: <AccountPrivacy /> },
       { path: '/account/privacy/notice', element: <NoticeGate /> },
+      { path: '/account/export', element: <ExportData /> },
       {
         id: 'notebook',
         loader: requireNoticeAcknowledged,
