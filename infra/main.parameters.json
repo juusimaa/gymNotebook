@@ -16,6 +16,12 @@
     },
     "createdAt": {
       "value": "2026-09-22T14:27:26.9194710+03:00"
+    },
+    "frontendCustomDomain": {
+      "value": "gymnotebook.fit"
+    },
+    "frontendCustomDomainCertificateName": {
+      "value": "gymnotebook.fit-cae-gymn-260923060158"
     }
   }
 }
