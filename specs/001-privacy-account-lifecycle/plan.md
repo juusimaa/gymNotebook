@@ -158,7 +158,7 @@ These are suggested focused PR boundaries, not tasks or permission to create PRs
 | Hosting/database/logs/network/fonts/support recipients | Operator | Actual inventory, roles, agreements, locations, transfers and settings | Candidates only; blocks affected processing |
 | Proposed retention limits, including deletion log lines | Operator | Provider settings, configuration and disposal evidence at all deadlines | Guarantees not approved; unverified; blocks release |
 | Restore safety and evidence mechanism | Operator | Preserved-branch diff and log-fallback exercises, crash-point proof and isolated restore exercise | Fail-closed outcome approved; direction chosen 2026-09-24; not yet proven |
-| In-flight cancellation and concurrency | Author/reviewer | Two-host Postgres tests and real HTTP/proxy evidence | Not implemented; validation spike defined in research R4 (Q7) |
+| In-flight cancellation and concurrency | Author/reviewer | Two-host Postgres tests and real HTTP/proxy evidence | Spike Part A passed 2026-09-25 (research R4); Part B pending (T053); not implemented |
 | Usability, correctness and performance | Project owner | SC-001–007 evidence per quickstart | Not performed |
 
 No live cloud audit, provider-contract review, legal approval or browser QA was performed by this planning command.

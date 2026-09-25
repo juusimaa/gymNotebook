@@ -61,11 +61,12 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Validation spike (Q7)
 
-- [ ] T008 Run spike Part A locally on a `spike/r4-cancellation` branch, per research R4 → Validation spike, scenarios A1–A6:
+- [x] T008 Run spike Part A locally on a `spike/r4-cancellation` branch, per research R4 → Validation spike, scenarios A1–A6:
   - Use two app hosts on one Testcontainers PostgreSQL.
   - Check A1 against its pass criterion: p95 increase ≤ 10 ms locally at 20 concurrent clients, and the pool never exhausted.
   - Record the results, and any tuned Q4 values, in the Validation spike section of `specs/001-privacy-account-lifecycle/research.md`.
   - Spike code is not merged; A1–A5 tests may be kept for T012/T013.
+  - **Done 2026-09-25:** passed; results and findings in research R4 → Part A results.
   - **Delegated to AI (owner, 2026-09-25):** an explicit exception to this file's default that the author writes the code by hand. It covers the spike only, not the tasks that later reuse its code (research R4 → Implementation delegation).
 - [x] T009 (owner) Approve or decline spike Part B's disposable Azure environment (research R4 → Part B), and record the decision in `specs/001-privacy-account-lifecycle/research.md`. Part B itself runs in T053 (US3). **Done 2026-09-25:** approved with conditions (research R4 → Part B).
 
@@ -107,6 +108,8 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Begin a transaction on the scoped `AppDbContext`, set `lock_timeout` to 5 s with `SET LOCAL` (production goes through the Neon pooler, research R4 → Connection pooling), and take `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)` followed by the token-version/existence check, using the lock-and-check variant that passed spike A6 (not necessarily one statement).
   - For reads, write the result under the lock within a 10 s write timeout, then commit.
   - For writes, commit, then write the response under a fresh delivery guard.
+  - Commit only when the handler returns a 2xx; any other result rolls back (spike A5).
+  - Keep the write timeout below the exclusive wait: it is the only bound on a stalled read's shared hold (spike A3).
   - Map outcomes per Q5 (503/401). Comment the lock namespaces and why writes use two steps (depends on T008, T018).
 - [ ] T020 Attach the filter to the `/exercises` and `/workouts` groups and to `/auth/me` in `backend/GymNotebook.Api/Program.cs`. Do **not** attach it to `/auth/change-password`: exclusive endpoints own their transaction (analysis I1) (depends on T019).
 - [ ] T021 Remove the explicit `BeginTransactionAsync` calls from PUT `/workouts/{id}/exercises` and POST `/workouts/{id}/sets` in `backend/GymNotebook.Api/Program.cs`. Keep their intermediate `SaveChangesAsync` calls, and update the comments explaining that the filter now owns the transaction (depends on T020).

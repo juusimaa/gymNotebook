@@ -30,7 +30,7 @@ Under a short shared initialization guard on a separate READ COMMITTED connectio
 
 ## R4 — Coordinate operations and response delivery
 
-**Status:** Candidate design, not owner-approved. The locks and export cancellation change existing authenticated endpoints, so implementation waits on the validation spike below: a local part (A) and a separately authorized deployed-proxy part (B). Approval follows only if both pass their pre-agreed criteria. Q3–Q6 are decided below; the remaining open item is the Q7 validation spike, tracked in [plan.md → Open Design Questions](plan.md#open-design-questions).
+**Status:** Candidate design, not owner-approved. The locks and export cancellation change existing authenticated endpoints, so implementation waits on the validation spike below: a local part (A) and a separately authorized deployed-proxy part (B). Approval follows only if both pass their pre-agreed criteria. Q3–Q6 are decided below. Spike Part A passed on 2026-09-25 (results below); the remaining open item is Part B of the Q7 validation spike, tracked in [plan.md → Open Design Questions](plan.md#open-design-questions).
 
 **Decision:** Use PostgreSQL transaction advisory locks in a dedicated account namespace keyed by existing User.Id. Ordinary authenticated operations acquire shared access and freshly check account identity, token version and expiry. Deletion and password changes acquire exclusive access. Login does not take the guard (Q6 below): a token issued in a race is rejected on first use by the per-request check. Existing explicit transactions join the lifecycle boundary rather than creating nested transactions.
 
@@ -129,6 +129,26 @@ The cross-region figure is an estimate: the API runs in Azure swedencentral and 
   - Pass: the window is bounded to about one chunk/ingress buffer, documented as the already-transmitted residual, and truncation always surfaces as a failed download. Approve R4 as written.
   - Fail: large buffering, or aborts delivered as clean completion. Revise R4 before implementation, for example with smaller chunks plus a client-verified end marker, or a non-streamed export.
 - Record results, the ingress configuration tested and the date here before changing Status.
+
+**Part A results (2026-09-25): passed.** Branch `spike/r4-cancellation` (commit `964204b`, not merged). Two app hosts on one Testcontainers PostgreSQL 17, run on a developer laptop. Streaming scenarios ran on real Kestrel over loopback, because TestServer has no socket buffers. The full spike suite (22 tests) passed on repeated runs, and the existing suite (115 tests) still passes with the spike switched off.
+
+| Scenario | Result | Evidence |
+| --- | --- | --- |
+| A1: overhead | **Pass.** p95 increase at 20 concurrent clients: +0.7–1.5 ms for `GET /workouts` and +1.7–3.3 ms for `POST /workouts/{id}/sets` (which adds the delivery guard), against the ≤ 10 ms bound. No errors, and the pool (capped at 20) was never exhausted | 3 runs of 3,000 requests per host and operation. The batch variant was about 0.7–1 ms faster than two separate statements |
+| A2: deletion during export | **Pass.** A deletion committed between chunks returned 200 within 15–24 ms. The export aborted at the next check ("before chunk 3"), no bytes reached the client after the commit, the stream never ended with the closing bytes, and the client saw an `IOException`. No transaction was left idle. A deletion arriving while a chunk guard was held queued behind it, then completed, and the export aborted at the following chunk | Barrier hooks plus `pg_locks` and `pg_stat_activity` checks |
+| A3: client stops reading | **Pass.** A stalled export holds no lifecycle lock while blocked, so deletion completed in under 50 ms, and the write timeout then ended the export (1 s configured, fired at about 1.01 s). A stalled guarded read of a multi-MB response did hold shared access. Deletion waited and completed once the write timeout released it (1.5 s configured: completed at 1.55 s; the Q4 value of 10 s: completed at 10.05 s) | Kestrel's default `MinResponseDataRate` did not end the stalled write: with a 30 s write timeout, deletion reached its 15 s wait and got 503 |
+| A4: password change vs deletion | **Pass.** No stale token was emitted. A deletion committing between the password change's commit and its delivery made the change return 401 without a token. 30 staggered concurrent rounds covered both orderings (25 password-first, 5 deletion-first): never both 200, no deadlock, no 5xx | Across two hosts |
+| A5: existing transactions | **Pass**, with a required filter rule (below). Nested `BeginTransactionAsync` throws, which confirms T021. Both handlers work when joining the filter's transaction, and a mid-handler 400 still rolls back whole | Checked that the rollback test fails when the filter commits on a 400: the old blocks were lost |
+| A6: lock-check variants | **Single statement fails**, as predicted. A request that waited behind a committed deletion passed the guard, then returned 500 on `/auth/me` and `200 []` on `/workouts` for the deleted account. **Two statements and the batch both return 401** | Deterministic: the test waits until the request is visibly queued in `pg_locks`, then commits the deletion |
+
+**Findings that T019–T022 must carry:**
+
+- **Lock check:** use two statements or a two-statement `NpgsqlBatch`, never a single statement (A6). The batch passes and is faster. Putting `SET LOCAL lock_timeout` into the same batch would save one more round trip; the spike did not test that.
+- **Commit only on success:** the filter must commit only when the handler returns a 2xx, and let disposal roll back anything else (A5). `PUT /workouts/{id}/exercises` returns 400 after intermediate saves, and its own transaction used to roll that back.
+- **Write timeout below the exclusive wait:** the app's write timeout is the only bound on a stalled read's shared hold (A3). It must stay below deletion's exclusive wait. Q4's 10 s and 15 s satisfy this, and the spike did not change any Q4 value.
+- **Write cancellation:** cancelling a Kestrel write aborts the whole connection, so `RequestAborted` also fires. Code that needs to tell a write timeout from a client disconnect must check the timer's own token.
+- **Password change:** run BCrypt verification and hashing before taking exclusive access, and re-check `token_version` under the lock. Read the user with `AsNoTracking()`, because `OnTokenValidated`'s `FindAsync` leaves a tracked, possibly stale `User` in the request's context.
+- **Deployed overhead** (reported, not pass/fail): the guard adds about 3 round trips to a read with two statements, or about 2 with the batch. A write adds about double that, because of the delivery guard. At the estimated 25–30 ms cross-region round trip (Q4), that is roughly 50–90 ms per read and 100–180 ms per write. Part B's measured round-trip time replaces this estimate.
 
 ## R5 — Removal and identity
 
