@@ -1,3 +1,12 @@
+<!--
+Sync Impact Report
+- Version change: 1.0.0 → 1.0.1
+- Modified principles: none
+- Added sections: none
+- Removed sections: none
+- Follow-up TODOs: none; the ratification date is now established
+- Review note: remove this temporary report before committing
+-->
 # GymNotebook Constitution
 
 ## Core Principles
@@ -242,10 +251,8 @@ artifacts do not amend the constitution implicitly.
 
 For this Spec Kit artifact, use semantic versioning: major for incompatible
 principle changes/removals, minor for added or materially expanded principles,
-and patch for non-semantic clarification. Version 1.0.0 denotes the initial
-constitution draft, not a new application release or a claim of owner approval.
+and patch for non-semantic clarification. Version 1.0.0 was the initial draft;
+ratification records the owner's adoption of this constitution, not an
+application release.
 
-TODO(RATIFICATION_DATE): record the adoption date after owner review; no prior
-ratification date is established by the source documents.
-
-**Version**: 1.0.0 | **Ratified**: pending owner review | **Last Amended**: 2026-09-24
+**Version**: 1.0.1 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-09-25
