@@ -20,6 +20,7 @@ public class ExerciseHistoryTests(GymNotebookFactory factory) : IClassFixture<Gy
             Username = $"user-{Guid.NewGuid():N}",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-horse-battery-staple"),
             TokenVersion = 0,
+            PrivacyAccountId = Guid.NewGuid(),
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();

@@ -34,6 +34,7 @@ public class SetsTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFa
             Username = UniqueUsername(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-horse-battery-staple"),
             TokenVersion = 0,
+            PrivacyAccountId = Guid.NewGuid(),
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();

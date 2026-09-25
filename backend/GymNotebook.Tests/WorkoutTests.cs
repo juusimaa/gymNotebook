@@ -33,6 +33,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
             Username = UniqueUsername(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-horse-battery-staple"),
             TokenVersion = 0,
+            PrivacyAccountId = Guid.NewGuid(),
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
