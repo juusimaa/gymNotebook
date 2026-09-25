@@ -20,6 +20,12 @@ param frontendContainerImage string = 'mcr.microsoft.com/azuredocs/containerapps
 // Phase 2 supplies the frontend's HTTPS origin after Phase 1 reveals its FQDN.
 param corsOrigins string = 'https://localhost.invalid'
 
+// The frontend's public hostname and the environment's managed certificate for
+// it. See container-app-frontend.bicep for why the certificate is referenced,
+// not created. Leave both empty to deploy without a custom domain.
+param frontendCustomDomain string = ''
+param frontendCustomDomainCertificateName string = ''
+
 @secure()
 param neonConnectionString string
 
@@ -82,6 +88,8 @@ module frontend './modules/container-app-frontend.bicep' = {
     managedEnvironmentId: managedEnvironment.outputs.id
     containerImage: frontendContainerImage
     apiUrl: 'https://${api.outputs.fqdn}'
+    customDomainName: frontendCustomDomain
+    customDomainCertificateName: frontendCustomDomainCertificateName
     tags: tags
   }
 }
