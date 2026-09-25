@@ -71,18 +71,57 @@ interface RequestOptions {
   body?: unknown
   // Lets a caller cancel the request, e.g. a download the user walks away from.
   signal?: AbortSignal
+  // Who handles a 401 (specs/001 contracts/ui.md → Invalidation). "session", the
+  // default: the session is over, so the app-wide handler (auth/invalidation.ts)
+  // signs out before the ApiError reaches the caller. "local": the caller owns
+  // it. Change-password needs that because its wrong-current-password answer is
+  // also a 401, and account deletion because its 401 must never be read as
+  // "deleted" and gets its own message.
+  unauthorized?: 'session' | 'local'
+  // Whether the request can change stored data, for the warning shown after a
+  // 401 on a write: the change may already be saved (research R4, Q5). Anything
+  // but GET counts unless the caller says otherwise (the export is a POST that
+  // only reads).
+  changesData?: boolean
+}
+
+// What the app-wide handler learns about a 401 that ended the session.
+export interface SessionEnded {
+  changesData: boolean
+}
+
+let sessionEndedHandler: ((event: SessionEnded) => void) | null = null
+
+// Registered once at startup by auth/invalidation.ts. A setter rather than an
+// import, because invalidation.ts itself imports from this file.
+export function onSessionEnded(
+  handler: ((event: SessionEnded) => void) | null,
+): void {
+  sessionEndedHandler = handler
+}
+
+// Every request between fetch and the end of reading its body, so an
+// invalidation can abort them all: nothing personal arrives after sign-out.
+const inFlight = new Set<AbortController>()
+
+export function abortPendingRequests(): void {
+  for (const controller of [...inFlight]) {
+    controller.abort()
+  }
 }
 
 // The one fetch wrapper every api/*.ts file goes through: base URL, JSON in,
-// bearer token when there is one, non-2xx turned into a thrown ApiError. Returns
-// the raw Response, for the one caller that reads the body itself (the notebook
-// export download); everything else uses request() below.
-// Deliberately thin — no retries, no timeout, no global 401 handling (that's the
-// route guard's job in PR 4), so each of those stays a decision made in one place.
-export async function send(
+// bearer token when there is one, non-2xx turned into a thrown ApiError. `read`
+// turns the response into the result while the request is still tracked (and
+// abortable), so a caller that reads a long body itself — the notebook export —
+// can still be cut off by a sign-out; everything else uses request() below.
+// Deliberately thin — no retries, no timeout — so each of those stays a
+// decision made in one place.
+export async function send<T>(
   path: string,
-  init: RequestOptions = {},
-): Promise<Response> {
+  init: RequestOptions,
+  read: (response: Response) => Promise<T>,
+): Promise<T> {
   const headers: Record<string, string> = {}
 
   // Only when there's a body: a GET carrying Content-Type is a "non-simple"
@@ -96,38 +135,69 @@ export async function send(
     headers.Authorization = `Bearer ${token}`
   }
 
-  const response = await fetch(baseUrl + path, {
-    method: init.method ?? 'GET',
-    headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    signal: init.signal,
-  })
-
-  if (!response.ok) {
-    throw new ApiError(response.status, await readErrorCode(response))
+  // Our own controller, so abortPendingRequests() can cancel this request; the
+  // caller's signal, if any, is forwarded to it.
+  const controller = new AbortController()
+  if (init.signal?.aborted) {
+    controller.abort(init.signal.reason)
   }
-  return response
+  init.signal?.addEventListener(
+    'abort',
+    () => controller.abort(init.signal?.reason),
+    {
+      once: true,
+    },
+  )
+  inFlight.add(controller)
+
+  const method = init.method ?? 'GET'
+  try {
+    const response = await fetch(baseUrl + path, {
+      method,
+      headers,
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      // Only a request that carried a token can have been signed out; login's
+      // 401 is just a wrong password.
+      if (
+        response.status === 401 &&
+        token !== null &&
+        (init.unauthorized ?? 'session') === 'session'
+      ) {
+        sessionEndedHandler?.({
+          changesData: init.changesData ?? method !== 'GET',
+        })
+      }
+      throw new ApiError(response.status, await readErrorCode(response))
+    }
+    return await read(response)
+  } finally {
+    inFlight.delete(controller)
+  }
 }
 
 // send() plus the JSON response body.
 //
 // `<T>` is a generic: the caller names the response type it expects
 // (`request<AuthResponse>(...)`) and gets a Promise of that back.
-export async function request<T>(
+export function request<T>(
   path: string,
   init: RequestOptions = {},
 ): Promise<T> {
-  const response = await send(path, init)
+  return send(path, init, async (response) => {
+    // 204 has no body; response.json() on it rejects. Milestone 9's delete
+    // routes return it, so handle it now rather than debug it then.
+    if (response.status === 204) {
+      return undefined as T
+    }
 
-  // 204 has no body; response.json() on it rejects. Milestone 9's delete routes
-  // return it, so handle it now rather than debug it then.
-  if (response.status === 204) {
-    return undefined as T
-  }
-
-  // No runtime check that the JSON matches T — we own both ends of this API and
-  // the response records are the contract, so a schema library would be paying
-  // for a guarantee the OpenAPI document already gives. This cast is that
-  // decision made explicit.
-  return (await response.json()) as T
+    // No runtime check that the JSON matches T — we own both ends of this API
+    // and the response records are the contract, so a schema library would be
+    // paying for a guarantee the OpenAPI document already gives. This cast is
+    // that decision made explicit.
+    return (await response.json()) as T
+  })
 }

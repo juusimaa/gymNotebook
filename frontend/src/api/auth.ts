@@ -57,6 +57,8 @@ export function me(): Promise<MeResponse> {
 
 // The backend bumps token_version and returns a fresh token; the caller must
 // store it before navigating anywhere, or the guard's next /auth/me is a 401.
+// Its 401 means "current password is wrong", so it stays with the screen
+// rather than signing the user out (unauthorized: 'local').
 
 export function changePassword(
   body: ChangePasswordRequest,
@@ -64,5 +66,6 @@ export function changePassword(
   return request<AuthResponse>('/auth/change-password', {
     method: 'POST',
     body,
+    unauthorized: 'local',
   })
 }

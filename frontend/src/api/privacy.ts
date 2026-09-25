@@ -1,8 +1,8 @@
 import { ApiError, request, send } from './client'
 import { readCompleteJson } from './download'
 
-// Wire types and calls for the privacy routes (specs/001 user stories 1 and 3,
-// contracts/api.md), one per record in backend/GymNotebook.Api.
+// Wire types and calls for the privacy routes (specs/001 user stories 1, 3 and
+// 4, contracts/api.md), one per record in backend/GymNotebook.Api.
 //
 // The frontend has no feature flag of its own (plan.md P25): the backend maps
 // these routes only when PRIVACY_LIFECYCLE_ENABLED is "true", so a 404 here
@@ -93,16 +93,72 @@ export const EXPORT_FILE_NAME = 'gym-notebook-export.json'
 // 503 "temporarily_unavailable"; with fetch's own error when the connection
 // broke; and with an AbortError when `signal` aborts. `onReceiving` fires once
 // the password was accepted and the file has started arriving. The password is
-// sent as typed and kept nowhere, so a retry always asks for it again.
-export async function exportNotebook(
+// sent as typed and kept nowhere, so a retry always asks for it again. The body
+// is read inside send(), so a sign-out anywhere aborts the download too.
+export function exportNotebook(
   currentPassword: string,
   options: { signal?: AbortSignal; onReceiving?: () => void } = {},
 ): Promise<Blob> {
-  const response = await send('/account/export', {
+  return send(
+    '/account/export',
+    {
+      method: 'POST',
+      body: { currentPassword },
+      signal: options.signal,
+      // A POST that only reads: a 401 here can't have left a half-saved change.
+      changesData: false,
+    },
+    (response) => {
+      options.onReceiving?.()
+      return readCompleteJson(response)
+    },
+  )
+}
+
+// The success body of POST /account/delete (contracts/api.md → Deletion
+// response): only dates and one sentence, nothing about the account.
+export interface DeletionOutcome {
+  status: 'deleted'
+  // UTC instants as ISO-8601 strings. The boundary is when retention started
+  // counting, just before the deletion committed.
+  retentionBoundaryAt: string
+  backupsExpireBy: string
+  deletionEvidenceExpiresBy: string
+  logRetentionNotice: string
+}
+
+// POST /account/delete (user story 4). Resolves only when the deletion has
+// committed. Rejects with ApiError 400 "password_verification_failed" for a
+// wrong password, 429 for too many attempts, 503 "temporarily_unavailable" when
+// nothing was deleted and a retry is safe, 503 "deletion_outcome_unknown" when
+// the server couldn't tell, 401 when this session no longer works — which never
+// proves the deletion happened, so the screen handles it itself
+// (unauthorized: 'local') — and with fetch's own error when the connection
+// broke, whose outcome is unknown too. Never retried automatically: the
+// password is sent once and kept nowhere.
+export function deleteAccount(
+  currentPassword: string,
+): Promise<DeletionOutcome> {
+  return request<DeletionOutcome>('/account/delete', {
     method: 'POST',
-    body: { currentPassword },
-    signal: options.signal,
+    body: { currentPassword, confirmDeletion: true },
+    unauthorized: 'local',
   })
-  options.onReceiving?.()
-  return readCompleteJson(response)
+}
+
+// Checks that a value (the completion screen's router state, which is only
+// `unknown` to TypeScript) really is a deletion outcome, so that screen can
+// never claim a deletion from anything else.
+export function isDeletionOutcome(value: unknown): value is DeletionOutcome {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const record = value as Record<string, unknown>
+  return (
+    record.status === 'deleted' &&
+    typeof record.retentionBoundaryAt === 'string' &&
+    typeof record.backupsExpireBy === 'string' &&
+    typeof record.deletionEvidenceExpiresBy === 'string' &&
+    typeof record.logRetentionNotice === 'string'
+  )
 }

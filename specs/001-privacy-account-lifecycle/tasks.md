@@ -292,7 +292,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - An exclusive wait over 15 s gets 503.
   - Re-registering the username gets a new UUID and inherits nothing.
 - [x] T059 [P] [US4] Add a performance test deleting the 100,000-set reference account within 60 s, recording wait and commit durations separately, in `backend/GymNotebook.Tests/DeletionPerformanceTests.cs`. This is a regression check; the SC-005 evidence comes from the deployed run (analysis U1).
-- [ ] T060 [P] [US4] Add Vitest tests for invalidation handling in `frontend/src/auth/invalidation.test.ts`:
+- [x] T060 [P] [US4] Add Vitest tests for invalidation handling in `frontend/src/auth/invalidation.test.ts`:
   - It clears the token and app-owned state and aborts pending requests.
   - It notifies same-origin tabs.
   - Back/forward-cache restores revalidate.
@@ -309,22 +309,29 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Flag-gated, with the auth and sensitive rate-limit policies.
   - Require JSON with `confirmDeletion: true`.
   - Return the minimal outcome body with `retentionBoundaryAt`, `backupsExpireBy`, `deletionEvidenceExpiresBy` and `logRetentionNotice`, and no token (depends on T061).
-- [ ] T063 [US4] Implement global invalidation handling in `frontend/src/auth/invalidation.ts` and wire it into `frontend/src/api/client.ts` (makes T060 pass):
+- [x] T063 [US4] Implement global invalidation handling in `frontend/src/auth/invalidation.ts` and wire it into `frontend/src/api/client.ts` (makes T060 pass):
   - On an observed 401, clear the token, notebook/draft state, pending fetches and export object URLs.
   - Notify other tabs through the existing storage key/event.
   - Revalidate on `pageshow` restores.
   - A 400 `password_verification_failed` stays local to the form.
-- [ ] T064 [P] [US4] Add `deleteAccount` and the deletion outcome types in `frontend/src/api/privacy.ts`.
-- [ ] T065 [US4] Create the deletion screen `/account/delete` in `frontend/src/screens/DeleteAccount.tsx` (depends on T064):
+- [x] T064 [P] [US4] Add `deleteAccount` and the deletion outcome types in `frontend/src/api/privacy.ts`.
+- [x] T065 [US4] Create the deletion screen `/account/delete` in `frontend/src/screens/DeleteAccount.tsx` (depends on T064):
   - Show the consequences, the optional export link, the backup deadline, the deletion-evidence expiry and the restricted log exception.
   - Keep a separate password and confirmation step.
   - Disable resubmission while pending.
   - Handle outcomes: 503 retry copy, uncertain-outcome contact copy, and a 401 that never certifies deletion.
-- [ ] T066 [US4] Create the completion screen `/account/deleted` in `frontend/src/screens/AccountDeleted.tsx`. It renders only the actual success state; direct navigation shows a neutral signed-out state. Register both routes in `frontend/src/routes.tsx`.
-- [ ] T067 [US4] Add the Q5 duplicate-retry warning copy for the re-sign-in state after a 401 on a write, in `frontend/src/api/authErrors.ts` or the affected screen, and document it in `docs/ui/README.md`.
-- [ ] T068 [US4] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the deletion flow and states, and record US4 in `PLAN.md`.
+- [x] T066 [US4] Create the completion screen `/account/deleted` in `frontend/src/screens/AccountDeleted.tsx`. It renders only the actual success state; direct navigation shows a neutral signed-out state. Register both routes in `frontend/src/routes.tsx`.
+- [x] T067 [US4] Add the Q5 duplicate-retry warning copy for the re-sign-in state after a 401 on a write, in `frontend/src/api/authErrors.ts` or the affected screen, and document it in `docs/ui/README.md`.
+- [x] T068 [US4] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the deletion flow and states, and record US4 in `PLAN.md`.
 
 **Checkpoint**: With the flag on locally, quickstart §3–§4 pass and T056–T060 pass.
+
+**Done 2026-09-25** on `feat/001-us4-deletion-api` and `feat/001-us4-deletion-ui`:
+- T056–T060 pass, as do the full backend (215) and frontend suites.
+- **T061** lives in its own `AccountDeletion.cs` rather than `AccountLifecycle.cs`, so the Q2d scan's allow-list names exactly the deletion code. It verifies the password before the exclusive lock, like change-password and the export; the token-version check under the lock is what catches a password change in between.
+- **Contract addition:** the error outcomes and the order they are checked in (contracts/api.md → Deletion response).
+- **T059:** the 100,000-set reference deletion took 0.27 s locally (0.09 s delete and commit).
+- A local browser run with the flag on (Playwright, throwaway database) covered the deletion flow, the second tab signing out, direct `/account/deleted`, and the Q5 warning after a 401 on a write. The owner still has to record the quickstart §3 walkthrough.
 
 ---
 

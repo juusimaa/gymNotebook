@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { login, register } from '../api/auth'
-import { describeAuthError } from '../api/authErrors'
+import { describeAuthError, INTERRUPTED_WRITE_NOTICE } from '../api/authErrors'
 import { getPrivacyNotice } from '../api/privacy'
+import {
+  clearInterruptedWrite,
+  hasInterruptedWrite,
+} from '../auth/invalidation'
 import { setToken } from '../auth/token'
 import './Login.css'
 
@@ -29,6 +33,11 @@ export default function Login() {
   // Disables both buttons while a request is in flight, so a double-tap can't
   // spend two of the ten-per-minute auth rate-limit slots.
   const [submitting, setSubmitting] = useState(false)
+
+  // Arrived here because the session ended while a change was being saved
+  // (auth/invalidation.ts): say it may already be saved. Read, not cleared,
+  // during render — StrictMode renders twice — and cleared once signed in.
+  const [interruptedWrite] = useState(hasInterruptedWrite)
 
   // The public privacy notice link (FR-001: readable before registering).
   // Shown only once GET /privacy/notice has answered with a notice — a 404
@@ -57,7 +66,7 @@ export default function Login() {
           ? await login({ username, password })
           : await register({ username, password, inviteCode })
       setToken(token)
-      // PR 4 turns "/" into the cover; today it's the placeholder heading.
+      clearInterruptedWrite()
       void navigate('/')
     } catch (err) {
       // `err` is `unknown` in a catch — TypeScript won't assume it's an Error —
@@ -81,6 +90,11 @@ export default function Login() {
       <p className="muted login-intro">
         Sign in to open your notebook. New here? An invite code is required.
       </p>
+      {interruptedWrite && (
+        <p className="form-message" role="status">
+          {INTERRUPTED_WRITE_NOTICE}
+        </p>
+      )}
 
       {/* preventDefault stops the browser's own submit — a full-page GET with the
           fields in the query string. `void` on the async call tells the

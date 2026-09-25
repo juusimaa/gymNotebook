@@ -1,9 +1,11 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router'
 import { requireAuth } from './auth/requireAuth.ts'
 import { requireNoticeAcknowledged } from './auth/requireNoticeAcknowledged.ts'
+import AccountDeleted from './screens/AccountDeleted.tsx'
 import AccountPrivacy from './screens/AccountPrivacy.tsx'
 import ChangePassword from './screens/ChangePassword.tsx'
 import Cover from './screens/Cover.tsx'
+import DeleteAccount from './screens/DeleteAccount.tsx'
 import ExportData from './screens/ExportData.tsx'
 import Login from './screens/Login.tsx'
 import NoticeGate from './screens/NoticeGate.tsx'
@@ -18,8 +20,9 @@ import EditExercise from './screens/EditExercise.tsx'
 // The route table, one entry per screen in docs/ui/README.md. Data-mode router
 // (createBrowserRouter) rather than <BrowserRouter><Routes>, for the loader below.
 //
-// /login and /privacy (the public notice) are the only screens outside the
-// guard. Everything else sits under one
+// /login, /privacy (the public notice) and /account/deleted (the completion
+// screen after a deletion, when there's no account left to be signed in to)
+// are the only screens outside the guard. Everything else sits under one
 // pathless layout route: no path of its own, a loader (requireAuth) that runs
 // before render and on every navigation beneath it, and a bare <Outlet /> that
 // renders whichever child matched. Screens read the signed-in user with
@@ -31,11 +34,12 @@ import EditExercise from './screens/EditExercise.tsx'
 // pathless layout whose loader is the privacy notice gate (specs/001
 // contracts/ui.md): it runs before any notebook screen renders — and so before
 // any notebook fetch — on "Open the notebook" and on every deep link. The
-// cover, change-password and privacy screens (the export included) stay
-// outside it, reachable without acknowledging the notice.
+// cover, change-password and privacy screens (export and deletion included)
+// stay outside it, reachable without acknowledging the notice.
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/privacy', element: <PrivacyNotice /> },
+  { path: '/account/deleted', element: <AccountDeleted /> },
   {
     id: 'auth',
     loader: requireAuth,
@@ -50,6 +54,7 @@ export const router = createBrowserRouter([
       { path: '/account/privacy', element: <AccountPrivacy /> },
       { path: '/account/privacy/notice', element: <NoticeGate /> },
       { path: '/account/export', element: <ExportData /> },
+      { path: '/account/delete', element: <DeleteAccount /> },
       {
         id: 'notebook',
         loader: requireNoticeAcknowledged,

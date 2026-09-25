@@ -8,7 +8,7 @@ import './Privacy.css'
 // /account/privacy — "Privacy & account", reached from the cover (specs/001
 // contracts/ui.md). Under the auth guard but outside the notice gate, so it
 // stays usable before the current notice is acknowledged; opening it records
-// nothing. Deletion joins this screen with user story 4.
+// nothing. It links to the notice, the export and account deletion.
 
 function formatDate(instant: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(
@@ -141,6 +141,18 @@ export default function AccountPrivacy() {
         </p>
         <Link to="/account/export" className="btn btn-secondary btn-block">
           Export my data
+        </Link>
+      </section>
+
+      <section className="privacy-block" aria-labelledby="privacy-delete">
+        <h3 id="privacy-delete">Delete your account</h3>
+        <p>
+          Permanently remove your account and notebook, and sign out every
+          session. The next screen explains what goes and what remains for a
+          limited time before anything is deleted.
+        </p>
+        <Link to="/account/delete" className="btn btn-secondary btn-block">
+          Delete my account
         </Link>
       </section>
 
