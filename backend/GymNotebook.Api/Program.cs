@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -69,6 +70,11 @@ if (corsOrigins is not { Length: > 0 })
 var rateLimitPermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit", 10);
 var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSeconds", 60);
 
+// The per-account bucket for password-verified account operations (specs/001 P12): 10
+// attempts per 60 s per account. Same override pattern, so tests can shrink or widen it.
+var sensitivePermitLimit = builder.Configuration.GetValue("SensitiveRateLimit:PermitLimit", 10);
+var sensitiveWindowSeconds = builder.Configuration.GetValue("SensitiveRateLimit:WindowSeconds", 60);
+
 // Lock and write timeouts for account-lifecycle coordination (see AccountLifecycle.cs).
 // The class's defaults are what production runs with; tests shorten them. Validated at
 // boot because a wrong ordering (write timeout ≥ exclusive wait) fails only under load.
@@ -85,6 +91,9 @@ builder.Services.AddSingleton(PrivacyNoticeCatalog.LoadEmbedded());
 // announced successor takes effect at its effectiveAt). Injected rather than calling
 // DateTimeOffset.UtcNow so tests can move time past that switch-over deterministically.
 builder.Services.AddSingleton(TimeProvider.System);
+
+// The notebook export (NotebookExport.cs), scoped like the AppDbContext it reads through.
+builder.Services.AddScoped<NotebookExport>();
 
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
@@ -194,6 +203,40 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromSeconds(rateLimitWindowSeconds),
                 QueueLimit = 0,
             }));
+
+    // The per-account limit on password-verified account operations (specs/001 P12,
+    // research R10), for endpoints marked with SensitiveOperationMetadata. It has to be the
+    // global limiter rather than a second named policy: the middleware applies only one
+    // named policy per endpoint, and these endpoints keep "auth" as well. Every other
+    // endpoint gets the no-op limiter. The key is the validated "sub" claim — never anything
+    // the client sends — and it's always there: authorization has already turned away
+    // unauthenticated requests by the time this middleware runs.
+    //
+    // Like "auth", the counters live in process, so the real bound is this limit times the
+    // number of running instances: one normally, two during a revision overlap. An exact
+    // aggregate bound with more replicas would need a shared limiter.
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        httpContext.GetEndpoint()?.Metadata.GetMetadata<SensitiveOperationMetadata>() is null
+            ? RateLimitPartition.GetNoLimiter("")
+            : RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = sensitivePermitLimit,
+                    Window = TimeSpan.FromSeconds(sensitiveWindowSeconds),
+                    QueueLimit = 0,
+                }));
+
+    // Tell a rejected caller when the window resets (contracts/api.md: 429 "with
+    // Retry-After when available"). Fixed-window leases always carry it.
+    options.OnRejected = (context, _) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+        }
+        return ValueTask.CompletedTask;
+    };
 });
 
 // One policy for every endpoint, so it's the *default* policy and app.UseCors() below
@@ -1177,7 +1220,8 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
    .Produces(StatusCodes.Status404NotFound);
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
-// specs/001 user story 1: the public notice and the account's acknowledgement state.
+// specs/001: the public notice and the account's acknowledgement state (user story 1) and
+// the notebook export (user story 3).
 // Not mapped at all while the feature flag is off, so the routes 404 (plan.md P25).
 if (privacyLifecycleEnabled)
 {

@@ -208,30 +208,30 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Tests for User Story 3
 
-- [ ] T044 [P] [US3] Add export correctness tests in `backend/GymNotebook.Tests/ExportTests.cs`:
+- [x] T044 [P] [US3] Add export correctness tests in `backend/GymNotebook.Tests/ExportTests.cs`:
   - Field-by-field comparison against a seeded account A with canary account B, covering Unicode, decimals, local dates, nulls, ordering and foreign keys.
   - An unused exercise and repeated blocks are present.
   - An empty account exports empty arrays and a null acknowledgement.
   - There are zero credentials, `TokenVersion` or `SignInSuspendedAt` values and zero B values.
   - The headers match contracts/api.md.
-- [ ] T045 [P] [US3] Add export authorization tests in `backend/GymNotebook.Tests/ExportAuthTests.cs`:
+- [x] T045 [P] [US3] Add export authorization tests in `backend/GymNotebook.Tests/ExportAuthTests.cs`:
   - A wrong password gets 400 `password_verification_failed` with no file.
   - An expired or revoked token gets 401.
   - More than 10 attempts in 60 s gets 429.
   - A second concurrent export for the same account gets 429 through the export-namespace lock (P12), including from a second host.
   - Non-JSON gets 415.
   - With the flag off, the route returns 404.
-- [ ] T046 [P] [US3] Add export consistency and cancellation tests in `backend/GymNotebook.Tests/ExportCoordinationTests.cs`:
+- [x] T046 [P] [US3] Add export consistency and cancellation tests in `backend/GymNotebook.Tests/ExportCoordinationTests.cs`:
   - A barrier between table queries while another connection edits a workout still yields one pre-change snapshot.
   - Deletion, token expiry or a password change mid-stream aborts delivery within one chunk.
   - No persistent export copy remains after an abort.
   - The 120 s cap aborts the stream.
-- [ ] T047 [P] [US3] Add a performance test with the reference fixture (1,000 workouts × 10 blocks × 10 sets = 100,000 sets) in `backend/GymNotebook.Tests/ExportPerformanceTests.cs`. Record duration, payload size and peak memory, targeting ≤ 60 s. This is a regression check; the SC-003 evidence comes from the deployed run (analysis U1).
+- [x] T047 [P] [US3] Add a performance test with the reference fixture (1,000 workouts × 10 blocks × 10 sets = 100,000 sets) in `backend/GymNotebook.Tests/ExportPerformanceTests.cs`. Record duration, payload size and peak memory, targeting ≤ 60 s. This is a regression check; the SC-003 evidence comes from the deployed run (analysis U1).
 - [ ] T048 [P] [US3] Add Vitest tests for the download helper (object URL created only for a complete response and revoked on finish/cancel; abort handling) in `frontend/src/api/download.test.ts`.
 
 ### Implementation for User Story 3
 
-- [ ] T049 [US3] Implement the export in `backend/GymNotebook.Api/NotebookExport.cs`, with the field guide from contracts/api.md (depends on T019):
+- [x] T049 [US3] Implement the export in `backend/GymNotebook.Api/NotebookExport.cs`, with the field guide from contracts/api.md (depends on T019):
   - A short initialization guard on a separate READ COMMITTED connection verifies the password and token and establishes the snapshot.
   - One read-only REPEATABLE READ snapshot transaction captures `snapshotAt` from the database clock and takes `pg_try_advisory_xact_lock(<export namespace>, userId)`, returning 429 if it is held.
   - Enumerate with keyset batches of 1,000 rows, streamed through `Utf8JsonWriter`.
@@ -239,8 +239,8 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Enforce the 120 s cap.
   - Write the closing JSON bytes only after the final authorization check.
   - Dispose of the snapshot on any abort.
-- [ ] T050 [US3] Add a per-account sensitive-operation rate-limit policy (10 attempts per 60 s, no queue, partitioned by validated user ID, in process) in `backend/GymNotebook.Api/Program.cs`. Comment the documented per-instance bound (P12).
-- [ ] T051 [US3] Map `POST /account/export` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`:
+- [x] T050 [US3] Add a per-account sensitive-operation rate-limit policy (10 attempts per 60 s, no queue, partitioned by validated user ID, in process) in `backend/GymNotebook.Api/Program.cs`. Comment the documented per-instance bound (P12).
+- [x] T051 [US3] Map `POST /account/export` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`:
   - Flag-gated, on the filter allow-list, with the auth and sensitive rate-limit policies.
   - Require JSON, and don't trim passwords.
   - Headers: `Content-Disposition: attachment; filename="gym-notebook-export.json"` and `Cache-Control: no-store` (depends on T049, T050).

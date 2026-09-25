@@ -118,6 +118,7 @@ DELETE /workouts/{id}/sets/{setId}
 GET    /privacy/notice                    -- public: the current notice + any announced successor; records nothing
 GET    /account/privacy                   -- current notice version, the caller's acknowledgement, requiresAcknowledgement
 PUT    /account/privacy/acknowledgement   -- { noticeVersion }: current version only (409 notice_version_changed otherwise)
+POST   /account/export                    -- { currentPassword }: the whole notebook as one streamed JSON attachment
 ```
 
 Sets are nested under `/workouts/{id}` since a set only exists in the context of one workout — this also means the "does this workout belong to the caller" authorization check happens once at the parent route. `WorkoutExercise` deliberately does *not* surface as its own `/workouts/{id}/exercises/{blockId}/sets` path: three levels of nesting to express one entity the user never names is a worse API than one the server keeps consistent on their behalf.
@@ -167,6 +168,8 @@ A token is checked when a request arrives, but a deletion or password change can
 ### Rate limiting
 
 `POST /auth/login` and `POST /auth/register` are rate-limited per IP using the built-in `Microsoft.AspNetCore.RateLimiting` middleware (a fixed window is sufficient). Without it, a username-and-password login endpoint on a public URL is an open invitation to credential stuffing, and the invite code protects registration from *signups*, not from being hammered. In-process counters are the accepted limitation: with one backend replica that's correct, and if this ever scales out, the limiter needs shared state — the same trade-off subscription-tracker recorded and deferred.
+
+The password-verified account operations (`POST /account/export` now, account deletion next) keep that per-IP policy and add a **per-account** bucket: 10 attempts per 60 s, keyed by the validated `sub` claim (specs/001 P12, `SensitiveRateLimit:*` configuration). The middleware applies only one named policy per endpoint, so the per-account bucket is the *global* limiter, which counts only endpoints marked with `SensitiveOperationMetadata` and lets everything else through. Rejections carry `Retry-After`. It is in process like the rest, so its real bound is the limit times the number of running instances.
 
 ### Deliberately out of scope
 
@@ -340,6 +343,14 @@ git config core.hooksPath .githooks
     - **Acknowledgement is one idempotent `UPDATE … WHERE version IS DISTINCT FROM`.** A repeated Continue keeps the first timestamp, and two sessions continuing at once can't overwrite each other's time. Only the current version is accepted; the server never stores a version string it didn't publish, and there is no consent field anywhere.
     - **The gate is a route loader.** The notebook screens sit under a second pathless layout whose loader (`requireNoticeAcknowledged`) runs before they render, and so before they fetch. It redirects to `/account/privacy/notice?returnTo=…`, and the gate honours `returnTo` only for same-origin notebook paths. The cover, change-password and privacy screens sit outside it, so they work without acknowledging. The frontend has no flag of its own: a 404 from the privacy routes hides the cover and login links and skips the gate.
     - The notice text today is synthetic development content, clearly labelled. Replacing it with reviewed wording is a release gate (T043).
+
+    **User story 3, the notebook export** (tasks T044–T055), is in progress behind the flag; the API (`NotebookExport.cs`) is done:
+    - **One snapshot, many short guards.** Every table is read in one read-only `REPEATABLE READ` transaction, so an edit made mid-download can't produce a half-before, half-after file. That transaction never holds the account's lifecycle lock, because a download can take a minute and deletion must not wait that long. Instead each chunk of 1,000 rows is preceded by a *delivery guard* on its own short connection (shared lock, token version, token expiry), released before the bytes are written. A deletion, password change or expiry stops the stream at the next chunk.
+    - **The snapshot is taken under an initialization guard.** The password is verified first (BCrypt stays outside any lock), then a guard on a separate connection is held while the snapshot's first statement runs. So the snapshot is known to show the account as it was when the caller was authorized.
+    - **A cut stream never looks finished.** The closing brace goes out only with the last chunk, after the last guard; every failure after the first byte aborts the connection instead of ending the response. A 120 s cap bounds the snapshot whatever the client does.
+    - **One export per account**, across instances: the snapshot's first statement also takes `pg_try_advisory_xact_lock` in a separate "export" namespace, and a second export gets 429 `export_in_progress`. PostgreSQL releases it on commit, rollback or a dropped connection.
+    - **Keyset batches, and sets paged through their blocks.** Joining sets to workouts in one keyset query left the plan to table statistics; with stale ones the 100,000-set reference export took 60 s locally. Reading one page of block ids first and then `workout_exercise_id = ANY(…)` uses the sets index regardless, and the same export takes under a second.
+    - The file carries its own field guide (`ExportFieldGuide.cs`); a test fails if a field is exported without an explanation. `optionalDetailsConsent` is always null until user story 6 adds the consent columns (T096).
 
 Containers come *second*, not first. This is the one lesson subscription-tracker wrote down explicitly about its own milestone 1: starting without Docker "avoids debugging Docker networking and SQL at the same time." That applies with more force here, since C# and EF Core are both new — a connection that won't open should have one candidate explanation, not three. Migrations are wired up in milestone 1 rather than alongside the domain model, for the other reason that project recorded: it started with `create_all()`, discovered that adding a non-null `user_id` to an existing table isn't something `create_all()` can do, and had to drop the database to move forward.
 

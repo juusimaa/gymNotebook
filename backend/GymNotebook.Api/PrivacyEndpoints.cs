@@ -111,6 +111,33 @@ public static class PrivacyEndpoints
            .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
            .Produces(StatusCodes.Status401Unauthorized)
            .Produces<ErrorResponse>(StatusCodes.Status409Conflict);
+
+        // User story 3: the notebook export. Deliberately *not* under the lifecycle filter
+        // (it's on LifecycleCoverageTests' allow-list): the filter would hold shared access
+        // for the whole download, and deletion must be able to cut in between chunks.
+        // NotebookExport takes its own initialization and per-chunk delivery guards instead.
+        //
+        // Rate limits: the existing per-IP "auth" policy, as for login, plus the per-account
+        // limit that SensitiveOperationMetadata opts into (Program.cs). The body binds only
+        // from JSON: any other Content-Type gets 415 and malformed JSON 400 from Minimal
+        // APIs itself, before the handler runs.
+        app.MapPost("/account/export", (ExportRequest request, NotebookExport export, HttpContext http) =>
+            export.RunAsync(request, http))
+           .RequireAuthorization()
+           .AddEndpointFilter(NoStore)
+           .RequireRateLimiting("auth")
+           .WithMetadata(new SensitiveOperationMetadata())
+           .WithName("ExportNotebook")
+           .WithTags("Privacy")
+           .WithSummary("Downloads a copy of the caller's notebook")
+           .WithDescription("Verifies the current password, then streams the whole notebook as one JSON file (format version 1) read from a single database snapshot, with an embedded field guide. The stream is cut, never completed, if the account is deleted, the password changed or the token expires during the download.")
+           .Accepts<ExportRequest>("application/json")
+           .Produces(StatusCodes.Status200OK, contentType: "application/json")
+           .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+           .Produces(StatusCodes.Status401Unauthorized)
+           .Produces(StatusCodes.Status415UnsupportedMediaType)
+           .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests)
+           .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
     }
 
     // AsNoTracking: OnTokenValidated has already loaded and tracked this User, before the
