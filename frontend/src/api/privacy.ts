@@ -1,6 +1,7 @@
-import { ApiError, request } from './client'
+import { ApiError, request, send } from './client'
+import { readCompleteJson } from './download'
 
-// Wire types and calls for the privacy notice routes (specs/001 user story 1,
+// Wire types and calls for the privacy routes (specs/001 user stories 1 and 3,
 // contracts/api.md), one per record in backend/GymNotebook.Api.
 //
 // The frontend has no feature flag of its own (plan.md P25): the backend maps
@@ -78,4 +79,30 @@ export function acknowledgeNotice(
     method: 'PUT',
     body: { noticeVersion },
   })
+}
+
+// The export's fixed file name; the server sends the same one in
+// Content-Disposition, which a cross-origin fetch can't read without extra CORS
+// configuration, so the client names the file itself.
+export const EXPORT_FILE_NAME = 'gym-notebook-export.json'
+
+// POST /account/export (user story 3): the whole notebook as one JSON file.
+// Resolves only with a complete file (see readCompleteJson). Rejects with
+// ApiError 400 "password_verification_failed" for a wrong password, 401 when the
+// session no longer works, 429 for too many attempts or "export_in_progress",
+// 503 "temporarily_unavailable"; with fetch's own error when the connection
+// broke; and with an AbortError when `signal` aborts. `onReceiving` fires once
+// the password was accepted and the file has started arriving. The password is
+// sent as typed and kept nowhere, so a retry always asks for it again.
+export async function exportNotebook(
+  currentPassword: string,
+  options: { signal?: AbortSignal; onReceiving?: () => void } = {},
+): Promise<Blob> {
+  const response = await send('/account/export', {
+    method: 'POST',
+    body: { currentPassword },
+    signal: options.signal,
+  })
+  options.onReceiving?.()
+  return readCompleteJson(response)
 }

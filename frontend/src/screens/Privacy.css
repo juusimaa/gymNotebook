@@ -97,3 +97,29 @@
   margin-top: var(--space-6);
   font-size: 13px;
 }
+
+/* The export screen (/account/export). */
+.export-intro {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.export-form {
+  border-top: 1px solid var(--color-accent);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+}
+.export-note,
+.export-progress,
+.export-done {
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+}
+.export-done {
+  color: var(--color-accent-700);
+}
+/* Indeterminate: no value attribute, so the browser animates it. */
+.export-progress-bar {
+  width: 100%;
+  accent-color: var(--color-accent);
+}

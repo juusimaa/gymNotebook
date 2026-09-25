@@ -69,19 +69,20 @@ interface RequestOptions {
   // Anything JSON.stringify can serialise. `unknown` rather than `object` so a
   // caller must mean it; the wire types in api/auth.ts etc. are what give it shape.
   body?: unknown
+  // Lets a caller cancel the request, e.g. a download the user walks away from.
+  signal?: AbortSignal
 }
 
-// The one fetch wrapper every api/*.ts file goes through: base URL, JSON in and
-// out, bearer token when there is one, non-2xx turned into a thrown ApiError.
+// The one fetch wrapper every api/*.ts file goes through: base URL, JSON in,
+// bearer token when there is one, non-2xx turned into a thrown ApiError. Returns
+// the raw Response, for the one caller that reads the body itself (the notebook
+// export download); everything else uses request() below.
 // Deliberately thin — no retries, no timeout, no global 401 handling (that's the
 // route guard's job in PR 4), so each of those stays a decision made in one place.
-//
-// `<T>` is a generic: the caller names the response type it expects
-// (`request<AuthResponse>(...)`) and gets a Promise of that back.
-export async function request<T>(
+export async function send(
   path: string,
   init: RequestOptions = {},
-): Promise<T> {
+): Promise<Response> {
   const headers: Record<string, string> = {}
 
   // Only when there's a body: a GET carrying Content-Type is a "non-simple"
@@ -99,11 +100,24 @@ export async function request<T>(
     method: init.method ?? 'GET',
     headers,
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: init.signal,
   })
 
   if (!response.ok) {
     throw new ApiError(response.status, await readErrorCode(response))
   }
+  return response
+}
+
+// send() plus the JSON response body.
+//
+// `<T>` is a generic: the caller names the response type it expects
+// (`request<AuthResponse>(...)`) and gets a Promise of that back.
+export async function request<T>(
+  path: string,
+  init: RequestOptions = {},
+): Promise<T> {
+  const response = await send(path, init)
 
   // 204 has no body; response.json() on it rejects. Milestone 9's delete routes
   // return it, so handle it now rather than debug it then.
