@@ -76,57 +76,59 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Tests for the foundation (write first; they must fail)
 
-- [ ] T010 [P] Add a two-host fixture sharing one PostgreSQL container, for concurrency tests, in `backend/GymNotebook.Tests/TwoHostGymNotebookFixture.cs`.
-- [ ] T011 [P] Add a coverage test in `backend/GymNotebook.Tests/LifecycleCoverageTests.cs`. It enumerates the endpoint data source and fails if any endpoint requiring authorization lacks the lifecycle filter, except for the explicit allow-list, each entry carrying a documented reason: `POST /account/export` (own snapshot guards), `POST /auth/change-password` and `POST /account/delete` (own exclusive transaction, research R4 → analysis I1).
-- [ ] T012 [P] Add read-coordination tests in `backend/GymNotebook.Tests/LifecycleCoordinationTests.cs`:
+- [x] T010 [P] Add a two-host fixture sharing one PostgreSQL container, for concurrency tests, in `backend/GymNotebook.Tests/TwoHostGymNotebookFixture.cs`.
+- [x] T011 [P] Add a coverage test in `backend/GymNotebook.Tests/LifecycleCoverageTests.cs`. It enumerates the endpoint data source and fails if any endpoint requiring authorization lacks the lifecycle filter, except for the explicit allow-list, each entry carrying a documented reason: `POST /account/export` (own snapshot guards), `POST /auth/change-password` and `POST /account/delete` (own exclusive transaction, research R4 → analysis I1).
+- [x] T012 [P] Add read-coordination tests in `backend/GymNotebook.Tests/LifecycleCoordinationTests.cs`:
   - A read holds shared access through its response write.
   - A request waiting behind a committed deletion gets 401.
   - A shared-lock wait over 5 s gets 503 `temporarily_unavailable` with `Retry-After`.
   - Use explicit barriers, not sleeps.
-- [ ] T013 [P] Add write-coordination tests in `backend/GymNotebook.Tests/LifecycleWriteDeliveryTests.cs`:
+- [x] T013 [P] Add write-coordination tests in `backend/GymNotebook.Tests/LifecycleWriteDeliveryTests.cs`:
   - A write that commits and whose delivery guard then fails (deletion or password change first) gets 401 with no body.
   - PUT `/workouts/{id}/exercises` and POST `/workouts/{id}/sets` still roll back whole on failure inside the filter's transaction.
-- [ ] T014 [P] Add login race tests in `backend/GymNotebook.Tests/LoginRaceTests.cs` (Q6). A token issued while a deletion commits, and a token issued while a password change commits, each get 401 on their first guarded request.
-- [ ] T015 [P] Add suspension tests in `backend/GymNotebook.Tests/SuspensionTests.cs` (P3, Q5):
+- [x] T014 [P] Add login race tests in `backend/GymNotebook.Tests/LoginRaceTests.cs` (Q6). A token issued while a deletion commits, and a token issued while a password change commits, each get 401 on their first guarded request.
+- [x] T015 [P] Add suspension tests in `backend/GymNotebook.Tests/SuspensionTests.cs` (P3, Q5):
   - Wrong password on a suspended account gets the existing 401.
   - Correct password gets 403 `{ "code": "account_suspended" }`.
   - A token for a suspended account is rejected by `OnTokenValidated`.
-- [ ] T016 [P] Add migration and registration tests in `backend/GymNotebook.Tests/AccountIdentityTests.cs`:
+- [x] T016 [P] Add migration and registration tests in `backend/GymNotebook.Tests/AccountIdentityTests.cs`:
   - Existing users are backfilled with distinct UUIDs and null acknowledgement.
   - New registration generates a UUID server-side.
   - A reused username gets a different `PrivacyAccountId`.
 
 ### Implementation for the foundation
 
-- [ ] T017 Add the User fields to `backend/GymNotebook.Api/User.cs` and configure them in `backend/GymNotebook.Api/Data/AppDbContext.cs`. Quoted constraints from data-model.md:
+- [x] T017 Add the User fields to `backend/GymNotebook.Api/User.cs` and configure them in `backend/GymNotebook.Api/Data/AppDbContext.cs`. Quoted constraints from data-model.md:
   - `PrivacyAccountId`: "UUID, non-null, unique, immutable, server generated".
   - `AcknowledgedPrivacyNoticeVersion`: "Nullable bounded string, proposed max 64".
   - `PrivacyNoticeAcknowledgedAt`: "Nullable timestamptz".
   - `SignInSuspendedAt`: "Nullable timestamptz".
   - "Both acknowledgement fields are null or both populated."
-- [ ] T018 Generate the migration with `dotnet ef migrations add` in `backend/GymNotebook.Api/Migrations/`:
+- [x] T018 Generate the migration with `dotnet ef migrations add` in `backend/GymNotebook.Api/Migrations/`:
   - Backfill genuine UUIDs for existing rows with uniqueness enforced.
   - Never seed acknowledgement.
   - Review the generated migration for unrelated schema changes before applying it (depends on T017).
-- [ ] T019 Implement the concrete lifecycle endpoint filter and guards in `backend/GymNotebook.Api/AccountLifecycle.cs`, with no interface (research R4 → Q3):
+- [x] T019 Implement the concrete lifecycle endpoint filter and guards in `backend/GymNotebook.Api/AccountLifecycle.cs`, with no interface (research R4 → Q3):
   - Begin a transaction on the scoped `AppDbContext`, set `lock_timeout` to 5 s with `SET LOCAL` (production goes through the Neon pooler, research R4 → Connection pooling), and take `pg_advisory_xact_lock_shared(<lifecycle namespace>, userId)` followed by the token-version/existence check, using the lock-and-check variant that passed spike A6 (not necessarily one statement).
   - For reads, write the result under the lock within a 10 s write timeout, then commit.
   - For writes, commit, then write the response under a fresh delivery guard.
   - Commit only when the handler returns a 2xx; any other result rolls back (spike A5).
   - Keep the write timeout below the exclusive wait: it is the only bound on a stalled read's shared hold (spike A3).
   - Map outcomes per Q5 (503/401). Comment the lock namespaces and why writes use two steps (depends on T008, T018).
-- [ ] T020 Attach the filter to the `/exercises` and `/workouts` groups and to `/auth/me` in `backend/GymNotebook.Api/Program.cs`. Do **not** attach it to `/auth/change-password`: exclusive endpoints own their transaction (analysis I1) (depends on T019).
-- [ ] T021 Remove the explicit `BeginTransactionAsync` calls from PUT `/workouts/{id}/exercises` and POST `/workouts/{id}/sets` in `backend/GymNotebook.Api/Program.cs`. Keep their intermediate `SaveChangesAsync` calls, and update the comments explaining that the filter now owns the transaction (depends on T020).
-- [ ] T022 Add the concrete exclusive-guard helper (for example `AcquireExclusiveAsync`, 15 s wait, returning 503 `temporarily_unavailable` on timeout) to `backend/GymNotebook.Api/AccountLifecycle.cs`. Change `/auth/change-password` in `backend/GymNotebook.Api/Program.cs` to own its transaction through that helper, never while holding the shared filter lock. After commit, deliver the new token under a fresh shared guard that validates the new token version, suppressing a stale token if a deletion or another change wins (research R4) (depends on T019).
-- [ ] T023 Generate `PrivacyAccountId` server-side at registration in `backend/GymNotebook.Api/Program.cs` (depends on T017).
-- [ ] T024 Add the suspension behavior in `backend/GymNotebook.Api/Program.cs`:
+- [x] T020 Attach the filter to the `/exercises` and `/workouts` groups and to `/auth/me` in `backend/GymNotebook.Api/Program.cs`. Do **not** attach it to `/auth/change-password`: exclusive endpoints own their transaction (analysis I1) (depends on T019).
+- [x] T021 Remove the explicit `BeginTransactionAsync` calls from PUT `/workouts/{id}/exercises` and POST `/workouts/{id}/sets` in `backend/GymNotebook.Api/Program.cs`. Keep their intermediate `SaveChangesAsync` calls, and update the comments explaining that the filter now owns the transaction (depends on T020).
+- [x] T022 Add the concrete exclusive-guard helper (for example `AcquireExclusiveAsync`, 15 s wait, returning 503 `temporarily_unavailable` on timeout) to `backend/GymNotebook.Api/AccountLifecycle.cs`. Change `/auth/change-password` in `backend/GymNotebook.Api/Program.cs` to own its transaction through that helper, never while holding the shared filter lock. After commit, deliver the new token under a fresh shared guard that validates the new token version, suppressing a stale token if a deletion or another change wins (research R4) (depends on T019).
+- [x] T023 Generate `PrivacyAccountId` server-side at registration in `backend/GymNotebook.Api/Program.cs` (depends on T017).
+- [x] T024 Add the suspension behavior in `backend/GymNotebook.Api/Program.cs`:
   - In login, after BCrypt verification succeeds, return 403 `{ "code": "account_suspended" }` when `SignInSuspendedAt` is set.
   - In `OnTokenValidated`, reject a suspended account as a backstop, using the row it already loads (depends on T017).
-- [ ] T025 [P] Map 403 `account_suspended` at login to copy pointing to the privacy contact in `frontend/src/api/authErrors.ts`, and extend `frontend/src/api/authErrors.test.ts`.
-- [ ] T026 Add the Q2d invariant test to `backend/GymNotebook.Tests/AccountIdentityTests.cs`. It fails if any code path other than account deletion removes User rows, for example a source scan that allows only the deletion code to remove `Users` (depends on T016).
-- [ ] T027 Record the lifecycle coordination foundation in `PLAN.md` (a milestone/design entry) and note the per-request connection hold in `README.md` (Principle VI).
+- [x] T025 [P] Map 403 `account_suspended` at login to copy pointing to the privacy contact in `frontend/src/api/authErrors.ts`, and extend `frontend/src/api/authErrors.test.ts`.
+- [x] T026 Add the Q2d invariant test to `backend/GymNotebook.Tests/AccountIdentityTests.cs`. It fails if any code path other than account deletion removes User rows, for example a source scan that allows only the deletion code to remove `Users` (depends on T016).
+- [x] T027 Record the lifecycle coordination foundation in `PLAN.md` (a milestone/design entry) and note the per-request connection hold in `README.md` (Principle VI).
 
 **Checkpoint**: All existing tests pass with the filter attached. T011–T016 and T026 pass. The migration has been reviewed.
+
+**Done 2026-09-25** on `feat/001-lifecycle-foundation`: the full backend suite (115 tests, 22 of them new) passes with the filter attached, and the generated migration was reviewed. Its only hand edit is the `gen_random_uuid()` backfill, replacing EF's all-zero default, which would have broken the unique index.
 
 ---
 

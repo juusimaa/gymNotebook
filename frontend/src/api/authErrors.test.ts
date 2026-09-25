@@ -16,6 +16,14 @@ describe('describeAuthError', () => {
     expect(describeAuthError(new ApiError(status))).toBe(message)
   })
 
+  // Login's 403 for a suspended account carries a code; register's invite-code
+  // 403 doesn't. The same status must produce different copy.
+  it('maps a 403 account_suspended to the privacy contact path', () => {
+    expect(describeAuthError(new ApiError(403, 'account_suspended'))).toBe(
+      'Sign-in is paused for this account. Please contact the privacy contact to resolve it',
+    )
+  })
+
   // A status we don't map still means the server answered — the message must say
   // so, and carry the number, rather than blame the network.
   it('names the status for an unexpected server answer', () => {

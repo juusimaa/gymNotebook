@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace GymNotebook.Api.Data;
 
@@ -31,6 +32,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // Let Postgres stamp the row at insert time — one clock for every row, and
             // EF Core omits the column from the INSERT when the C# value is still default.
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
+
+            // Unique so two accounts can never share a privacy identity, even across a
+            // username being registered again. Throw-after-save makes EF refuse to write
+            // a changed value, backing up the entity's init-only setter at runtime.
+            entity.HasIndex(u => u.PrivacyAccountId).IsUnique();
+            entity.Property(u => u.PrivacyAccountId)
+                .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+
+            // Notice versions are short identifiers from trusted configuration, never
+            // client text; 64 is the bound data-model.md proposes.
+            entity.Property(u => u.AcknowledgedPrivacyNoticeVersion).HasMaxLength(64);
+
+            // "Both acknowledgement fields are null or both populated" (data-model.md),
+            // enforced by the database so no code path can store half an acknowledgement.
+            entity.ToTable(t => t.HasCheckConstraint(
+                "ck_users_privacy_notice_acknowledgement_pair",
+                "(acknowledged_privacy_notice_version IS NULL) = (privacy_notice_acknowledged_at IS NULL)"));
         });
 
         modelBuilder.Entity<Workout>(entity =>

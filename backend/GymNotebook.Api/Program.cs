@@ -69,6 +69,13 @@ if (corsOrigins is not { Length: > 0 })
 var rateLimitPermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit", 10);
 var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSeconds", 60);
 
+// Lock and write timeouts for account-lifecycle coordination (see AccountLifecycle.cs).
+// The class's defaults are what production runs with; tests shorten them. Validated at
+// boot because a wrong ordering (write timeout ≥ exclusive wait) fails only under load.
+var lifecycleOptions = builder.Configuration.GetSection("Lifecycle").Get<LifecycleOptions>() ?? new LifecycleOptions();
+lifecycleOptions.Validate();
+builder.Services.AddSingleton(lifecycleOptions);
+
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
 // for it and disposed when the response is done. EF Core itself is database-agnostic;
@@ -130,9 +137,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 // should no longer work, even though it hasn't expired. Fail() overrides the
                 // otherwise-successful validation, which is what turns this into the normal
                 // 401 anything requiring authorization already returns for bad credentials.
+                // Guarded routes re-check this under the lifecycle lock (AccountLifecycle.cs);
+                // this earlier check stays so a stale token is rejected before any
+                // transaction or lock is taken.
                 if (user is null || user.TokenVersion.ToString() != tvClaim)
                 {
                     context.Fail("Token has been revoked.");
+                    return;
+                }
+
+                // A backstop for suspended accounts (specs/001 research R6 Q2c), at no extra
+                // query since the row is already loaded. Login already refuses them, and
+                // tokens from before a restore die with the signing-key rotation; this
+                // covers anything that slips past both.
+                if (user.SignInSuspendedAt is not null)
+                {
+                    context.Fail("Account sign-in is suspended.");
                 }
             },
         };
@@ -343,6 +363,10 @@ auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, Cance
         Username = request.Username,
         PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
         TokenVersion = 0,
+        // Generated here, never accepted from the client (specs/001 data-model.md). A
+        // random (v4) UUID rather than a time-ordered v7 on purpose: this id appears in
+        // deletion log lines, and it shouldn't reveal when the account was created.
+        PrivacyAccountId = Guid.NewGuid(),
     };
 
     // CreatedAt is deliberately left unset: EF Core recognizes the CLR default value on a
@@ -381,14 +405,25 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
         return Results.Unauthorized();
     }
 
+    // Checked only *after* the password verified (specs/001 research R4 → Q5), so the
+    // suspension is revealed only to someone who already knows the password; a wrong
+    // password still gets the generic 401 above. The code lets the UI show the privacy
+    // contact path. Login takes no lifecycle lock (Q6): suspension is only ever set while
+    // ingress is disabled, and a token issued in a race is rejected on first use anyway.
+    if (user.SignInSuspendedAt is not null)
+    {
+        return Results.Json(new ErrorResponse("account_suspended"), statusCode: StatusCodes.Status403Forbidden);
+    }
+
     var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
     return Results.Ok(new AuthResponse(token));
 }).WithName("LoginUser")
    .WithSummary("Logs in a user")
-   .WithDescription("Authenticates a user with the given username and password. Returns a JWT token for authentication.")
+   .WithDescription("Authenticates a user with the given username and password. Returns a JWT token for authentication. A suspended account gets 403 with code account_suspended, but only after a correct password.")
    .Produces<AuthResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status401Unauthorized)
+   .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
    .RequireRateLimiting("auth");
 
 // The smallest possible protected route. ClaimsPrincipal is another parameter Minimal
@@ -403,8 +438,9 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
 {
     var userId = ParseUserId(user);
 
-    // SingleAsync, not SingleOrDefaultAsync: OnTokenValidated has just loaded this row to
-    // compare token_version, so a miss here is a bug, not a 404 — same reasoning as ParseUserId.
+    // SingleAsync, not SingleOrDefaultAsync: the lifecycle filter has just confirmed, under
+    // its lock, that this row exists — and a deletion can't commit while the lock is held —
+    // so a miss here is a bug, not a 404. Same reasoning as ParseUserId.
     var username = await db.Users
         .Where(u => u.Id == userId)
         .Select(u => u.Username)
@@ -413,6 +449,7 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
     return Results.Ok(new MeResponse(userId, username));
 })
    .RequireAuthorization()
+   .RequireAccountLifecycle()
    .WithName("GetCurrentUser")
    .WithSummary("Returns the authenticated user's id and username")
    .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked. The username is what the frontend shows on the cover page.")
@@ -421,44 +458,89 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
 
 // Requires a valid token *and* the current password: a stolen token alone shouldn't be
 // enough to change the password and lock the real owner out.
-auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+//
+// Revoking every token is an account-lifecycle operation, so this endpoint takes
+// *exclusive* access (specs/001 research R4) in a transaction it owns, and is not under
+// the shared-access LifecycleFilter — holding shared access while asking for exclusive
+// would be a lock upgrade, which deadlocks two concurrent callers (analysis I1).
+auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, LifecycleOptions lifecycle, HttpContext http, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
     {
         return Results.BadRequest();
     }
 
-    var userId = ParseUserId(caller);
-    var user = await db.Users.FindAsync([userId], ct);
+    var (userId, tokenVersion) = AccountLifecycle.ReadClaims(caller);
 
-    // Same 401 as login for a wrong current password. The `user is null` branch is
-    // defensive — OnTokenValidated already rejects tokens for users that no longer exist —
-    // but FindAsync returns a nullable, so the compiler wants it handled either way.
+    // AsNoTracking: OnTokenValidated's FindAsync already tracks this User, and a tracked
+    // query would hand back that instance — loaded before any lock, so possibly stale.
+    var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct);
+
+    // Same 401 as login for a wrong current password. The `user is null` branch covers an
+    // account deleted since OnTokenValidated looked.
     if (user is null || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
     {
         return Results.Unauthorized();
     }
 
-    // Both changes go out in the one SaveChangesAsync, so either the new hash and the
-    // version bump both land or neither does. The bump is what revokes every token
-    // issued so far (see PLAN.md, Auth section); the fresh token minted below carries the
-    // new version, so the caller who made the change isn't logged out by it.
-    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-    user.TokenVersion++; // invalidate all existing tokens
-    await db.SaveChangesAsync(ct);
+    // BCrypt is deliberately slow, so verifying and hashing happen *before* taking the
+    // exclusive lock, keeping the time every other request of this account waits short.
+    // A concurrent change in between shows up under the lock as a token-version mismatch.
+    var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+    var newVersion = tokenVersion + 1;
 
+    await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+    {
+        var outcome = await AccountLifecycle.AcquireExclusiveAsync(db, userId, tokenVersion, lifecycle.ExclusiveLockTimeoutMs, ct);
+        if (outcome != GuardOutcome.Ok)
+        {
+            return AccountLifecycle.ToResult(outcome, http);
+        }
+
+        // The new hash and the version bump land together or not at all. The bump is what
+        // revokes every token issued so far (see PLAN.md, Auth section); the fresh token
+        // minted below carries the new version, so the caller isn't logged out by it.
+        await db.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.PasswordHash, newHash)
+                .SetProperty(u => u.TokenVersion, newVersion), ct);
+        await transaction.CommitAsync(CancellationToken.None);
+    }
+
+    // Delivery guard, only after the exclusive transaction has fully ended (so shared
+    // access is never requested while exclusive is held). If a deletion or another password
+    // change won in the meantime, the new version is no longer current and the stale token
+    // is not emitted — 401 instead (spike A4).
+    await using (var delivery = await db.Database.BeginTransactionAsync(ct))
+    {
+        var outcome = await AccountLifecycle.AcquireSharedAsync(db, userId, newVersion, lifecycle.SharedLockTimeoutMs, ct);
+        if (outcome != GuardOutcome.Ok)
+        {
+            return Results.Unauthorized();
+        }
+        await delivery.CommitAsync(CancellationToken.None);
+    }
+
+    // `user` is an untracked copy, so updating it changes nothing in the database; it only
+    // lets the token factory mint a token with the version that was just committed.
+    user.TokenVersion = newVersion;
     var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
     return Results.Ok(new AuthResponse(token));
 })
    .RequireAuthorization()
    .WithName("ChangePassword")
    .WithSummary("Changes the authenticated user's password")
-   .WithDescription("Updates the authenticated user's password after verifying the current password.")
+   .WithDescription("Updates the authenticated user's password after verifying the current password. Returns 503 temporarily_unavailable if the account is busy with another lifecycle operation.")
    .Produces<AuthResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
-   .Produces(StatusCodes.Status401Unauthorized);
+   .Produces(StatusCodes.Status401Unauthorized)
+   .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
-var exercises = app.MapGroup("/exercises").RequireAuthorization();
+// Every /exercises and /workouts route runs under the account-lifecycle filter (shared
+// access plus a fresh account check, see AccountLifecycle.cs). Applied to the whole group
+// so a route added later can't forget it; LifecycleCoverageTests enforces the same.
+var exercises = app.MapGroup("/exercises").RequireAuthorization().RequireAccountLifecycle();
 
 exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
@@ -643,7 +725,7 @@ exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, Cl
    .Produces<ExerciseResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status404NotFound);
 
-var workouts = app.MapGroup("/workouts").RequireAuthorization();
+var workouts = app.MapGroup("/workouts").RequireAuthorization().RequireAccountLifecycle();
 
 workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
@@ -873,16 +955,20 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
         return Results.BadRequest();
     }
 
-    // An explicit transaction rather than the usual one-SaveChangesAsync-is-one-transaction
-    // trick, because this handler genuinely needs several saves: WorkoutExercise has no
-    // Exercise *navigation property* (just the raw ExerciseId), so EF Core has no way to
-    // fix up the foreign key of a block whose exercise was created in this same request —
-    // the new Exercise has to reach the database and get its id before the block can point
-    // at it. Saving as we go inside one transaction keeps PLAN.md's rule (the bulk write
-    // rolls back whole, never half-applies) while still letting each new exercise be
-    // visible to the next block's lookup, which is what makes the same new name appearing
-    // twice in one payload resolve to one Exercise row instead of two.
-    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    // This handler genuinely needs several saves: WorkoutExercise has no Exercise
+    // *navigation property* (just the raw ExerciseId), so EF Core has no way to fix up the
+    // foreign key of a block whose exercise was created in this same request — the new
+    // Exercise has to reach the database and get its id before the block can point at it.
+    // Saving as we go also lets each new exercise be visible to the next block's lookup,
+    // which is what makes the same new name appearing twice in one payload resolve to one
+    // Exercise row instead of two.
+    //
+    // PLAN.md's rule still holds — the bulk write rolls back whole, never half-applies —
+    // because every save below runs inside the transaction the lifecycle filter opened for
+    // this request (AccountLifecycle.cs). The filter commits only when this handler returns
+    // a 2xx, so the 400 in the loop below, or any exception, rolls back the saves before
+    // it. The handler used to open its own transaction; EF can't nest one inside the
+    // filter's, so it joins that one instead.
 
     // Replace means the old blocks go, all of them. Their SetEntry rows go with them
     // through the database-level cascade configured in AppDbContext, so there's no reason
@@ -937,7 +1023,6 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
     }
 
     await db.SaveChangesAsync(ct);
-    await transaction.CommitAsync(ct);
 
     var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
 
@@ -975,8 +1060,8 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
 
     // Same reasoning as the PUT above: the exercise and the block each need to exist in
     // the database before the next step can reference them by id, and a failure partway
-    // through should not leave an empty block behind.
-    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    // through should not leave an empty block behind. The lifecycle filter's transaction
+    // provides that: it commits only if this handler returns its 201.
 
     var exercise = await GetOrCreateExerciseAsync(db, userId, request.ExerciseName, ct);
     var block = await GetOrCreateBlockAsync(db, workout.Id, exercise.Id, ct);
@@ -999,7 +1084,6 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
 
     db.SetEntries.Add(set);
     await db.SaveChangesAsync(ct);
-    await transaction.CommitAsync(ct);
 
     // 201 with no Location header, deliberately: there is no GET /workouts/{id}/sets/{setId}
     // for one to point at, and inventing a URL that 404s is worse than omitting the header.
@@ -1166,7 +1250,8 @@ static async Task<List<WorkoutExerciseResponse>> GetWorkoutExercisesAsync(AppDbC
 // that display text keeps the user's own casing and spacing.
 //
 // Saving here rather than leaving the new row for the caller's SaveChangesAsync is
-// deliberate, and the reason both callers open a transaction first: WorkoutExercise
+// deliberate, and why both callers rely on the lifecycle filter's transaction to keep
+// their several saves all-or-nothing: WorkoutExercise
 // references its exercise by a bare ExerciseId with no navigation property, so the id has
 // to be real before a block can be built around it. The save also makes a name created
 // earlier in the same request visible to this lookup, which is what stops one payload
