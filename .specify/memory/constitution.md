@@ -1,12 +1,3 @@
-<!--
-Sync Impact Report
-- Version change: 1.0.0 → 1.0.1
-- Modified principles: none
-- Added sections: none
-- Removed sections: none
-- Follow-up TODOs: none; the ratification date is now established
-- Review note: remove this temporary report before committing
--->
 # GymNotebook Constitution
 
 ## Core Principles
