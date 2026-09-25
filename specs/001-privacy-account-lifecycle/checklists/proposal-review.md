@@ -112,9 +112,37 @@
 - [x] **P28 — Google Fonts.** Either self-host Cormorant Garamond and Lora, which removes the third-party request, or keep them and cover the request in the FR-004 processing decision and the notice.
   **Decision:** Self-host in a separate PR before this feature, 2026-09-24: five `.woff2` files plus the OFL license in `frontend/public/fonts/`, `@font-face` rules, and the Google links removed. No npm dependency. See research R8.
 
+## Amendment 2026-09-25 — optional-details consent (Q10)
+
+The proposals made by the consent amendment (spec FR-029–FR-035). This is [plan.md → Open Design Questions](../plan.md#open-design-questions) item Q10, and it blocks tasks T085 onward. Same rules as above.
+
+- [x] **P29 — Consent pair on User.** Add `OptionalDetailsConsentVersion` (bounded string, max 64) and `OptionalDetailsConsentedAt` to User. Both are null or both are set, enforced by a check constraint. Refusal and withdrawal are not recorded; they leave the pair null. No backfill: existing accounts start without consent. The pair is exported under `privacyRecords` and deleted with User.
+  Source: [data-model.md → Optional-details consent](../data-model.md#optional-details-consent-amendment-2026-09-25).
+  **Decision:** Approved as written, 2026-09-25.
+- [x] **P30 — Consent statement as its own repository artifact.** A versioned statement in `docs/privacy/consent/` (an index plus one file per version), separate from the privacy notice, embedded and validated at startup like the notices. There is no announced-successor mechanism: changing what the statement covers needs its own spec change (FR-034).
+  Source: [data-model.md → Consent statement version](../data-model.md#consent-statement-version--repository-artifact-not-ef-entity).
+  **Decision:** Approved as written, 2026-09-25.
+- [x] **P31 — Three routes and the term "optional details".** `GET /privacy/optional-details-statement` (public), `PUT /account/privacy/optional-details-consent` (grant; current version only, else 409 `consent_statement_changed`; idempotent) and `DELETE /account/privacy/optional-details-consent` (withdraw, and "Don't allow"; returns `clearedWorkouts`; idempotent; no password). `GET /account/privacy` gains an `optionalDetails` block. "Optional details" is the name used in URLs, code, columns and the export.
+  Source: [contracts/api.md → Endpoints](../contracts/api.md#endpoints).
+  **Decision:** Approved as written, 2026-09-25.
+- [x] **P32 — Enforcement on workout writes.** Without consent, `POST /workouts` and `PATCH /workouts/{id}` carrying a non-empty title, location, notes or bodyweight get 403 `optional_details_consent_required`. The whole request is rejected, never partially applied. Null, empty or omitted details are always accepted. Exercise names are not covered.
+  Source: [contracts/api.md → Optional-details enforcement](../contracts/api.md#optional-details-enforcement-on-existing-workout-routes).
+  **Decision:** Approved as written, 2026-09-25.
+- [x] **P33 — Enforcement only with the flag on.** An exception to "the flag covers new routes only": with the flag off, workout writes behave exactly as today, matching the owner-accepted interim risk. Tested in both states.
+  Source: [plan.md → Production disablement](../plan.md#phase-1--design-and-delivery-boundaries).
+  **Decision:** Approved as written, 2026-09-25.
+- [x] **P34 — UI: consent screen, editor opt-in and transition question.** A new route `/account/privacy/optional-details` for grant and withdrawal, with a review step before withdrawal. The editor and workout detail hide the four fields behind one "Add title, location, notes and bodyweight" entry. The notebook gate asks the transition question after the notice, only when `transitionPending` is true.
+  Source: [contracts/ui.md → Optional-details consent transitions](../contracts/ui.md#optional-details-consent-transitions).
+  **Decision:** Approved as written, 2026-09-25.
+- [x] **P35 — Transition clearing by operator SQL.** At the deadline, 30 days after the flag is switched on, the operator runs one documented SQL statement that clears the details of accounts without consent, records only the counts in the release checklist, and confirms zero remain. No background job, API or admin screen, following P3's precedent.
+  Source: [data-model.md → Transition clearing](../data-model.md#transition-clearing--operator-step-not-ef-entity).
+  **Decision:** Approved as written, 2026-09-25.
+
 ## Outcome
 
 **Q9 completed 2026-09-24:** all items P1–P28 are approved; the ones with decisions are recorded in their source documents.
+
+**Q10 completed 2026-09-25:** all items P29–P35 are approved as written.
 
 
 When every item is ticked, or has a **Decision** that has been applied to the source documents, mark Q9 answered in plan.md and run `/speckit.tasks`, then `/speckit.analyze`.
