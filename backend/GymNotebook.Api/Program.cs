@@ -61,6 +61,11 @@ if (corsOrigins is not { Length: > 0 })
 var rateLimitPermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit", 10);
 var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSeconds", 60);
 
+// SPIKE (T008, research R4): off unless Spike:R4:Enabled is set. See SpikeR4.cs.
+var spikeR4 = builder.Configuration.GetSection("Spike:R4").Get<SpikeR4Options>() ?? new SpikeR4Options();
+builder.Services.AddSingleton(spikeR4);
+builder.Services.AddSingleton<SpikeHooks>();
+
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
 // for it and disposed when the response is done. EF Core itself is database-agnostic;
@@ -391,7 +396,7 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
 // The username comes from the row, not the token: the JWT carries only "sub" (the id)
 // and "tv", and adding a name claim would mean a token outliving a rename. One indexed
 // lookup by primary key is cheap, and the cover page needs the name to greet its owner.
-auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>
+var meEndpoint = auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>
 {
     var userId = ParseUserId(user);
 
@@ -410,6 +415,12 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
    .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked. The username is what the frontend shows on the cover page.")
    .Produces<MeResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status401Unauthorized);
+
+// SPIKE (T008): the R4 lifecycle filter on the shared-access routes, when enabled.
+if (spikeR4.Guard)
+{
+    meEndpoint.AddEndpointFilter<LifecycleFilter>();
+}
 
 // Requires a valid token *and* the current password: a stolen token alone shouldn't be
 // enough to change the password and lock the real owner out.
@@ -451,6 +462,10 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
    .Produces(StatusCodes.Status401Unauthorized);
 
 var exercises = app.MapGroup("/exercises").RequireAuthorization();
+if (spikeR4.Guard)
+{
+    exercises.AddEndpointFilter<LifecycleFilter>();
+}
 
 exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
@@ -636,6 +651,10 @@ exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, Cl
    .Produces(StatusCodes.Status404NotFound);
 
 var workouts = app.MapGroup("/workouts").RequireAuthorization();
+if (spikeR4.Guard)
+{
+    workouts.AddEndpointFilter<LifecycleFilter>();
+}
 
 workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
@@ -874,7 +893,9 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
     // rolls back whole, never half-applies) while still letting each new exercise be
     // visible to the next block's lookup, which is what makes the same new name appearing
     // twice in one payload resolve to one Exercise row instead of two.
-    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    // SPIKE (T008, A5 / T021): under the lifecycle filter a transaction is already open
+    // and EF refuses to nest one, so join the filter's transaction instead of owning one.
+    await using var transaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
     // Replace means the old blocks go, all of them. Their SetEntry rows go with them
     // through the database-level cascade configured in AppDbContext, so there's no reason
@@ -929,7 +950,10 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
     }
 
     await db.SaveChangesAsync(ct);
-    await transaction.CommitAsync(ct);
+    if (transaction is not null)
+    {
+        await transaction.CommitAsync(ct);
+    }
 
     var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
 
@@ -968,7 +992,8 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
     // Same reasoning as the PUT above: the exercise and the block each need to exist in
     // the database before the next step can reference them by id, and a failure partway
     // through should not leave an empty block behind.
-    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    // SPIKE (T008, A5 / T021): join the filter's transaction when one is open.
+    await using var transaction = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
     var exercise = await GetOrCreateExerciseAsync(db, userId, request.ExerciseName, ct);
     var block = await GetOrCreateBlockAsync(db, workout.Id, exercise.Id, ct);
@@ -991,7 +1016,10 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
 
     db.SetEntries.Add(set);
     await db.SaveChangesAsync(ct);
-    await transaction.CommitAsync(ct);
+    if (transaction is not null)
+    {
+        await transaction.CommitAsync(ct);
+    }
 
     // 201 with no Location header, deliberately: there is no GET /workouts/{id}/sets/{setId}
     // for one to point at, and inventing a URL that 404s is worse than omitting the header.
@@ -1073,6 +1101,12 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
    .WithDescription("Removes one set from a workout. The remaining sets in the block keep their set numbers.")
    .Produces(StatusCodes.Status204NoContent)
    .Produces(StatusCodes.Status404NotFound);
+
+// SPIKE (T008): fake delete, guarded password change and chunked export.
+if (spikeR4.Enabled)
+{
+    SpikeR4Endpoints.Map(app, jwtSecret, jwtExpiryMinutes);
+}
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 app.Run();
