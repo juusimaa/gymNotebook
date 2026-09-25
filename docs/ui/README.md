@@ -58,17 +58,30 @@ Two sessions on one date are two points, not one — the Pull-up series in the p
 - **Load** — a switch between "Loaded (kg)" and "Bodyweight", each with its consequence spelled out (reps vs e1RM; weight means *added* weight). This is the read/write surface for `is_bodyweight`.
 - **Remove** — explained, not offered. An exercise with sets against it can't be deleted; the copy says so and points at renaming-onto as the fix.
 
-### Privacy and account lifecycle — design preview
+### Privacy and account lifecycle
 
-These prototype screens explore `specs/001-privacy-account-lifecycle/spec.md`. They are clickable design samples, not a published privacy notice or working account operations. Controller details, legal bases, processor/transfer information, contact details and provider retention settings remain review gates in the feature specification.
+Screens for `specs/001-privacy-account-lifecycle/spec.md`. The notice screens (user story 1) are implemented behind `PRIVACY_LIFECYCLE_ENABLED`; export and deletion are still design previews in the prototype. The frontend has no flag of its own: when the privacy routes return 404, the links below are hidden and the gate is skipped.
 
-- **Public notice:** A "Privacy notice" link appears on the sign-in screen. The preview shows the content hierarchy, including what users enter, why it is used, retention and rights. Its own header says the legal text is pending review. Returning to sign-in does not record an acknowledgement.
-- **New notice version:** "Open the notebook" on the cover first shows the notice when the current version has not been acknowledged. "Continue to notebook" records the version shown in this prototype's in-memory state; it is explicitly not consent. Leaving without continuing causes the notice to appear again on the next attempt. The account privacy screen has a prototype control for previewing a revised version. Sign-out and sign-in in the same open prototype retain the acknowledgement for review; reloading the page resets all demo state.
-- **Account privacy:** "Privacy & account" sits on the cover, separate from workout navigation. It links to the notice, export and deletion. The prototype screens use the existing single-column layout and design tokens.
+**Implemented (user story 1):**
+
+- **Public notice, `/privacy`.** A "Privacy notice" link sits under the sign-in form, shown only when the API serves a notice. The screen shows the version and effective date, what changed in this version, and the notice's sections as plain text. It also shows any announced future version in a box with its effective date, summary and expandable full text. It works signed out, and reading it records nothing. "← Back" returns to sign-in, or to Privacy & account when signed in. Focus moves to the heading on load. A link to a section, such as `/privacy#notice-contact`, scrolls to it instead.
+- **Privacy & account, `/account/privacy`.** A "Privacy & account" link on the cover, on its own line below Change password and Sign out, shown only when the feature is on. The screen states whether the current notice version has been continued past, and when. It notes that continuing is not consent, and links to the notice and to its contact section. Export and deletion join this screen with user stories 3 and 4. It is reachable without acknowledging the notice.
+- **Notice gate, `/account/privacy/notice?returnTo=…`.** Shown before any notebook screen, whether reached through "Open the notebook" or a deep link to workouts, progress, exercises or an editor, when the account hasn't continued past the current version. The screen has:
+  - the full notice;
+  - a sticky footer: "Continue records the version shown to you. It does not record consent." plus **Continue to notebook**;
+  - Back to the cover, Privacy & account and Sign out, none of which record anything.
+
+  Behaviour:
+  - Continue sends exactly the version on screen and, on success, opens the page the user was heading for. Only same-origin notebook paths are honoured; anything else opens the sessions list.
+  - If a newer version took effect meanwhile, the gate loads it and says so. A network or server failure keeps the gate, with an inline message and the button available to retry.
+  - There is no checkbox and no "I agree".
+- **Every state:** loading ("Opening the notice…"), a load failure with **Try again**, and a "not available" state for when the feature is off. Errors use `role="alert"`, all controls are at least 44px, and focus moves to each screen's heading once it loads.
+
+**Design preview only (prototype):**
+
 - **Export:** The user sees the contents and privacy warning, enters a current password and downloads one *sample* JSON file with a field guide. An empty password or the literal `wrong` shows an inline verification error; a prototype link shows a recoverable export failure. No real account data is read.
 - **Deletion:** The review screen names the active information removed, sign-out across sessions, optional export, irreversibility, the proposed 30-day backup limit and the restricted security-log exception. It requires a separate password-confirmed action and offers cancellation. An empty password or `wrong` shows an inline error; a prototype link shows a recoverable failure. Success leads to a completion screen explaining backup and log expiry. No real account is deleted.
-
-All action buttons are at least 44px high and errors are shown beside the relevant action. The final notice wording and service behavior must be reviewed against the specification before implementation; the prototype is for layout and flow review.
+- The prototype keeps acknowledgement in memory and has a control on the account privacy screen for previewing a revised notice version; reloading resets all demo state. Controller details, legal bases, processor/transfer information, contact details and provider retention settings remain review gates in the feature specification — neither the prototype nor the synthetic development notice is a publishable notice.
 
 ## Rules the UI must not break
 

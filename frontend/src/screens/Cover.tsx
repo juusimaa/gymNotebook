@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useNavigate, useRouteLoaderData, Link } from 'react-router'
 import type { MeResponse } from '../api/auth'
+import { getAccountPrivacy } from '../api/privacy'
 import { clearToken } from '../auth/token'
 import './Cover.css'
 
@@ -14,6 +16,24 @@ export default function Cover() {
   // undefined here and a crash on .username — so this line is where the coupling
   // to routes.tsx lives.
   const user = useRouteLoaderData('auth') as MeResponse
+
+  // "Privacy & account" appears only when the privacy feature is on, which the
+  // frontend learns from the backend: a 404 from GET /account/privacy means off
+  // (plan.md P25). Hidden while loading and on any error — the cover must never
+  // fail to open over an optional link. A 401 is left to the route guard.
+  const [showPrivacy, setShowPrivacy] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    getAccountPrivacy().then(
+      (state) => {
+        if (!cancelled) setShowPrivacy(state !== null)
+      },
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Client-side only (PLAN.md, Auth): there's nothing to revoke server-side
   // short of a password change, so dropping the token is the whole sign-out.
@@ -59,6 +79,13 @@ export default function Cover() {
           Sign out
         </button>
       </div>
+      {showPrivacy && (
+        <p className="cover-privacy">
+          <Link to="/account/privacy" className="btn btn-ghost">
+            Privacy &amp; account
+          </Link>
+        </p>
+      )}
       <p className="cover-support">
         Enjoying the notebook?{' '}
         <a

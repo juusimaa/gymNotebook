@@ -140,38 +140,44 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Tests for User Story 1
 
-- [ ] T028 [P] [US1] Add notice API tests in `backend/GymNotebook.Tests/PrivacyNoticeTests.cs`:
+- [x] T028 [P] [US1] Add notice API tests in `backend/GymNotebook.Tests/PrivacyNoticeTests.cs`:
   - `GET /privacy/notice` is public, has no side effects and returns 404 with the flag off.
   - These are the flag's first behavioural tests (T003 has none, because nothing reads the flag yet). Besides `"false"` (the base factory) and `"true"` (`PrivacyEnabledGymNotebookFactory`), also boot with near-miss values, at least `"True"` and `""`, and expect 404. This proves the exact-match, fail-closed rule (P25). Each value needs its own factory subclass, like `InviteCodeGymNotebookFactory`.
   - `GET /account/privacy` returns `requiresAcknowledgement` correctly for null and old acknowledgement.
   - `PUT /account/privacy/acknowledgement` accepts only the current version, returns 409 `notice_version_changed` for a stale one, is idempotent for the same version (preserving the timestamp) and stores no consent value.
   - An announced successor appears in `announcedSuccessor` before its effective date without changing `requiresAcknowledgement`. After activation, an account that acknowledged the prior version gets `requiresAcknowledgement: true` again (FR-003, quickstart §1.4).
-- [ ] T029 [P] [US1] Add Vitest tests for the notebook-gate decision helper and safe same-origin return-URL validation in `frontend/src/auth/noticeGate.test.ts`.
+- [x] T029 [P] [US1] Add Vitest tests for the notebook-gate decision helper and safe same-origin return-URL validation in `frontend/src/auth/noticeGate.test.ts`.
 
 ### Implementation for User Story 1
 
-- [ ] T030 [US1] (owner) Create two synthetic, clearly labelled development notice versions (a current one and an announced successor with a future `effectiveAt`) and a version index in `docs/privacy/notices/`, per data-model.md → PrivacyNoticeVersion. Superseded versions stay in the index for accountability (FR-003). Real publication content is gated on T041–T043.
-- [ ] T031 [US1] Implement notice loading from the versioned artifacts, as trusted server configuration and never client text, plus `GET /privacy/notice`, `GET /account/privacy` and `PUT /account/privacy/acknowledgement` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`:
+- [x] T030 [US1] (owner) Create two synthetic, clearly labelled development notice versions (a current one and an announced successor with a future `effectiveAt`) and a version index in `docs/privacy/notices/`, per data-model.md → PrivacyNoticeVersion. Superseded versions stay in the index for accountability (FR-003). Real publication content is gated on T041–T043.
+- [x] T031 [US1] Implement notice loading from the versioned artifacts, as trusted server configuration and never client text, plus `GET /privacy/notice`, `GET /account/privacy` and `PUT /account/privacy/acknowledgement` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`:
   - Map them only when `PRIVACY_LIFECYCLE_ENABLED` is true.
   - Attach the lifecycle filter to the account routes.
   - Use `Cache-Control: no-store` on personal responses.
   - Select the current version from the index pointer, and expose an announced successor's metadata until its `effectiveAt`, then switch the gate to it.
   - How the artifacts reach the API image is an implementation choice for owner review (depends on T020, T030).
-- [ ] T032 [P] [US1] Add the notice and privacy-state wire types and calls, treating a 404 from `GET /account/privacy` as "feature off", in `frontend/src/api/privacy.ts`.
-- [ ] T033 [P] [US1] Implement the notebook-gate helper and return-URL validation in `frontend/src/auth/noticeGate.ts` (makes T029 pass).
-- [ ] T034 [US1] Create the public notice screen `/privacy` in `frontend/src/screens/PrivacyNotice.tsx`, rendering structured text only and never unchecked HTML (depends on T032).
-- [ ] T035 [US1] Create the account privacy screen `/account/privacy`, with links to the notice, export, deletion and contact, in `frontend/src/screens/AccountPrivacy.tsx` (depends on T032).
-- [ ] T036 [US1] Create the notice gate `/account/privacy/notice` in `frontend/src/screens/NoticeGate.tsx` (depends on T032, T033):
+- [x] T032 [P] [US1] Add the notice and privacy-state wire types and calls, treating a 404 from `GET /account/privacy` as "feature off", in `frontend/src/api/privacy.ts`.
+- [x] T033 [P] [US1] Implement the notebook-gate helper and return-URL validation in `frontend/src/auth/noticeGate.ts` (makes T029 pass).
+- [x] T034 [US1] Create the public notice screen `/privacy` in `frontend/src/screens/PrivacyNotice.tsx`, rendering structured text only and never unchecked HTML (depends on T032).
+- [x] T035 [US1] Create the account privacy screen `/account/privacy`, with links to the notice, export, deletion and contact, in `frontend/src/screens/AccountPrivacy.tsx` (depends on T032).
+- [x] T036 [US1] Create the notice gate `/account/privacy/notice` in `frontend/src/screens/NoticeGate.tsx` (depends on T032, T033):
   - "Continue" sends exactly the displayed version.
   - A 409 reloads the newer notice.
   - A network failure keeps the gate and offers retry.
   - Leaving does not acknowledge.
-- [ ] T037 [US1] Register the new routes in `frontend/src/routes.tsx`, and run the gate before any notebook fetch on "Open the notebook" and on all notebook deep links (workouts, progress, exercises, editors). Cover, account, privacy and change-password stay reachable (depends on T033–T036).
-- [ ] T038 [P] [US1] Add the "Privacy & account" entry to `frontend/src/screens/Cover.tsx`, hidden when the feature is off.
-- [ ] T039 [P] [US1] Add the public notice link to `frontend/src/screens/Login.tsx`, hidden when `GET /privacy/notice` returns 404.
-- [ ] T040 [US1] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the implemented notice routes and states, and record US1 in `PLAN.md`.
+- [x] T037 [US1] Register the new routes in `frontend/src/routes.tsx`, and run the gate before any notebook fetch on "Open the notebook" and on all notebook deep links (workouts, progress, exercises, editors). Cover, account, privacy and change-password stay reachable (depends on T033–T036).
+- [x] T038 [P] [US1] Add the "Privacy & account" entry to `frontend/src/screens/Cover.tsx`, hidden when the feature is off.
+- [x] T039 [P] [US1] Add the public notice link to `frontend/src/screens/Login.tsx`, hidden when `GET /privacy/notice` returns 404.
+- [x] T040 [US1] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the implemented notice routes and states, and record US1 in `PLAN.md`.
 
 **Checkpoint**: With the flag on locally, US1 passes quickstart §1 and T028–T029 pass. With the flag off, nothing new is visible.
+
+**Done 2026-09-25** on `feat/001-us1-privacy-notice`:
+- T028–T029 pass, and the full backend and frontend suites pass.
+- **T030:** drafted by AI with the owner's approval. The versions are labelled synthetic; real content remains gated on T041–T043.
+- **T031's open item:** the owner chose embedded resources, with the backend image built from the repository root (`backend/Dockerfile.dockerignore` allow-list).
+- The flag-on API behaviour was smoke-tested against the Compose image. The owner still has to record the browser walkthrough of quickstart §1.
 
 ---
 
@@ -445,5 +451,5 @@ US1 → US3 → US4 → US5, each merged with the flag off and validated locally
 
 These are shown as unresolved rather than decided by generation:
 
-- **T031:** how the notice artifacts reach the API image, for example copied files or embedded resources. This is an implementation choice for owner review.
+- **T031:** how the notice artifacts reach the API image. **Resolved 2026-09-25:** embedded resources, with the repository root as the backend build context (owner decision).
 - **T026:** how the Q2d invariant is tested. A source scan is suggested; the owner may prefer another guard.

@@ -113,6 +113,11 @@ PUT    /workouts/{id}/exercises   -- replace the whole session in one transactio
 POST   /workouts/{id}/sets        -- { exerciseName, weight?, reps, isWarmup } appended to that exercise's block
 PATCH  /workouts/{id}/sets/{setId}
 DELETE /workouts/{id}/sets/{setId}
+
+-- privacy (specs/001); mapped only when PRIVACY_LIFECYCLE_ENABLED is exactly "true", otherwise 404
+GET    /privacy/notice                    -- public: the current notice + any announced successor; records nothing
+GET    /account/privacy                   -- current notice version, the caller's acknowledgement, requiresAcknowledgement
+PUT    /account/privacy/acknowledgement   -- { noticeVersion }: current version only (409 notice_version_changed otherwise)
 ```
 
 Sets are nested under `/workouts/{id}` since a set only exists in the context of one workout — this also means the "does this workout belong to the caller" authorization check happens once at the parent route. `WorkoutExercise` deliberately does *not* surface as its own `/workouts/{id}/exercises/{blockId}/sets` path: three levels of nesting to express one entity the user never names is a worse API than one the server keeps consistent on their behalf.
@@ -177,6 +182,7 @@ The interface copy is English, but displayed times follow the app's Finnish cont
 - "New workout" page: a heading block (date, start time defaulting to now, optional title, bodyweight, location, notes) + a growable list of exercise blocks, each with an autocomplete input (backed by `GET /exercises?search=`) and a dynamic list of set rows (weight, reps, warm-up toggle, add/remove). The whole page saves as a single `PUT /workouts/{id}/exercises`. A block whose exercise is marked bodyweight hides the weight field unless the user opts into added weight.
 - Workout history list: a flat list of pages, newest first, each row showing date, start time and title. Two sessions on one date are two adjacent rows distinguished by their times — no date grouping, since flipping back page by page is what a notebook actually does.
 - Per-exercise progress view: line chart of best e1RM per session over time — best reps per session for bodyweight exercises, with the y-axis labelled accordingly.
+- Privacy notice and account privacy (specs/001, behind the flag): a public `/privacy` notice linked from login, a "Privacy & account" screen off the cover, and a notice gate in front of every notebook route — see Milestones → 11.
 
 ## Folder structure
 
@@ -195,6 +201,8 @@ gymNotebook/
 │   ├── Dockerfile
 │   └── package.json
 ├── docs/
+│   ├── privacy/
+│   │   └── notices/          # versioned privacy notices + index.json; embedded into the API at build time
 │   └── ui/
 │       ├── README.md         # UI specification
 │       └── prototype.html    # self-contained clickable prototype (reference only, not a build input)
@@ -325,6 +333,13 @@ git config core.hooksPath .githooks
 9. **Polish** — ✅ done. Session pages expose inline-confirmed deletion and a full edit flow for the heading (including finish time), exercise blocks and sets. The exercise index searches by name and shows distinct session counts plus the last set; its edit screen renames/merges normalized duplicates and switches loaded/bodyweight behavior. Issue #35's usability pass also aligned the read-only page typography/dividers with the UI specification and added an inline confirmation before a new session is finished.
 10. **Azure deployment** — ✅ done. Neon Postgres, pulling the images milestone 6 already publishes, freshly generated secrets wired in as Container Apps `secretref`s (invite code included, and set to a real value), OIDC continuous deploy (mirroring subscription-tracker's Azure deployment milestone). The `gymnotebook.fit` custom domain and its managed certificate were first added by hand, which the next deploy quietly undid: a Bicep deployment replaces the Container App's whole ingress block, so the binding disappeared and the domain answered with connection resets while the app itself stayed healthy. The binding now lives in `container-app-frontend.bicep`; the certificate is still created once by hand (Azure only issues it once DNS validates and the hostname is already on the app) and Bicep references it by name.
 11. **Privacy and account lifecycle** — in progress, through Spec Kit ([specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)), behind the fail-closed `PRIVACY_LIFECYCLE_ENABLED` flag. So far: self-hosted fonts, the nginx access log turned off, the flag itself, spike Part A of the locking design, and **the lifecycle foundation** (tasks T010–T027), which ships unflagged because it changes existing routes. That foundation is the `User` privacy columns and their migration, the account-lifecycle locking described under Auth → Account lifecycle coordination, change-password's move to exclusive access, and login's suspension check. On the frontend, `ApiError` now carries the optional `code` from the few error bodies that have one, so login's `account_suspended` 403 reads differently from register's invite-code 403. The tests run two app hosts against one Testcontainers Postgres (`TwoHostGymNotebookFixture`) and synchronize through `pg_locks` and an EF commit interceptor rather than sleeps. The streaming test runs on real Kestrel, because `TestServer` has no socket buffers to fill. An unchanged API process had nothing to block on, so every existing test passed with the filter attached; the overhead measured in the spike was about 1–3 ms per request locally.
+
+    **User story 1, the privacy notice** (tasks T028–T040), is merged behind the flag:
+    - **Notices are repository artifacts, not database rows.** Each version is a JSON file in `docs/privacy/notices/`, and `index.json` names the current version, an optional announced successor, and every version ever published. The API embeds these files as resources at build time (`PrivacyNoticeCatalog`), so the served notice is fixed per build and needs no runtime path. To make that possible, the backend image now builds with the repository root as its context, and `backend/Dockerfile.dockerignore` keeps the context down to the API, the entrypoint and the notices. The catalog loads and validates at startup even while the flag is off, so a broken notice file fails the deploy, not the day the flag flips.
+    - **The switch to a new version happens by clock, not by deploy.** Before the successor's `effectiveAt`, the notice shows it as an announced change and existing acknowledgements still count. From that moment it is current, and everyone who acknowledged the old version is asked again. The endpoints read an injected `TimeProvider`, so tests move time rather than wait for it.
+    - **Acknowledgement is one idempotent `UPDATE … WHERE version IS DISTINCT FROM`.** A repeated Continue keeps the first timestamp, and two sessions continuing at once can't overwrite each other's time. Only the current version is accepted; the server never stores a version string it didn't publish, and there is no consent field anywhere.
+    - **The gate is a route loader.** The notebook screens sit under a second pathless layout whose loader (`requireNoticeAcknowledged`) runs before they render, and so before they fetch. It redirects to `/account/privacy/notice?returnTo=…`, and the gate honours `returnTo` only for same-origin notebook paths. The cover, change-password and privacy screens sit outside it, so they work without acknowledging. The frontend has no flag of its own: a 404 from the privacy routes hides the cover and login links and skips the gate.
+    - The notice text today is synthetic development content, clearly labelled. Replacing it with reviewed wording is a release gate (T043).
 
 Containers come *second*, not first. This is the one lesson subscription-tracker wrote down explicitly about its own milestone 1: starting without Docker "avoids debugging Docker networking and SQL at the same time." That applies with more force here, since C# and EF Core are both new — a connection that won't open should have one candidate explanation, not three. Migrations are wired up in milestone 1 rather than alongside the domain model, for the other reason that project recorded: it started with `create_all()`, discovered that adding a non-null `user_id` to an existing table isn't something `create_all()` can do, and had to drop the database to move forward.
 
