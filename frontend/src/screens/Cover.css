@@ -79,6 +79,13 @@
   border-color: transparent;
 }
 
+/* Account privacy, on its own line under the account actions and apart from
+   workout navigation (docs/ui/README.md, privacy and account lifecycle). */
+.cover-privacy {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+}
+
 /* A small support link belongs to the closed cover, below account actions, so
    it does not interrupt workout logging or management tasks. */
 .cover-support {

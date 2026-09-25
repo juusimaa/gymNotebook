@@ -22,4 +22,15 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
 
+  <!--
+    The versioned privacy notices (specs/001 T031) are compiled into the assembly as
+    embedded resources rather than read from disk at runtime: the published notice is
+    then fixed per build, can't drift from the code that serves it, and needs no file
+    path configured in Compose, Azure or the tests. LogicalName gives each file a stable
+    resource name, "PrivacyNotices/<file name>", independent of the folder layout.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\privacy\notices\*.json" LogicalName="PrivacyNotices/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

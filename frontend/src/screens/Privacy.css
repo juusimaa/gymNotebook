@@ -1,0 +1,99 @@
+/* The three privacy screens (PrivacyNotice, AccountPrivacy, NoticeGate) share
+   this sheet: the notice reads the same wherever it's shown. Layout follows the
+   privacy design preview in docs/ui/prototype.html. */
+
+.notice-meta {
+  font-size: 13px;
+  color: var(--color-neutral-600);
+  margin: 0 0 var(--space-4);
+}
+
+/* A heading focused programmatically on load (tabIndex -1) so screen readers
+   start at the notice; it isn't interactive, so no focus ring. */
+.privacy-heading:focus {
+  outline: none;
+}
+
+.notice-sections {
+  border-top: 1px solid var(--color-accent);
+  padding-top: var(--space-4);
+}
+
+.notice-section h3 {
+  font-size: 21px;
+  font-weight: 400;
+  margin: 0 0 var(--space-1);
+}
+.notice-section p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.notice-section + .notice-section {
+  margin-top: var(--space-4);
+}
+
+/* An announced future version: set apart by a hairline box, not by color. */
+.notice-announced {
+  margin: var(--space-6) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+.notice-announced h3 {
+  font-size: 19px;
+  font-weight: 400;
+  margin: 0 0 var(--space-1);
+}
+.notice-announced summary {
+  cursor: pointer;
+  min-height: var(--hit-target);
+  display: flex;
+  align-items: center;
+  color: var(--color-accent);
+}
+.notice-announced summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The gate's Continue stays in reach at the bottom of a long notice. */
+.notice-gate-footer {
+  position: sticky;
+  bottom: 0;
+  margin-top: var(--space-6);
+  padding: var(--space-3) 0 var(--space-4);
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-bg);
+}
+.notice-gate-footer p {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* The "← Back" link above a notice. */
+.privacy-back {
+  margin: 0 0 var(--space-4);
+  font-size: 13px;
+}
+
+/* One block per topic on the account privacy screen. */
+.privacy-block {
+  border-top: 1px solid var(--color-divider);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+}
+.privacy-block h3 {
+  font-size: 20px;
+  margin: 0 0 var(--space-2);
+}
+.privacy-block p {
+  font-size: 14px;
+}
+
+.privacy-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-6);
+  font-size: 13px;
+}

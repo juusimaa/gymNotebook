@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router'
 import { login, register } from '../api/auth'
 import { describeAuthError } from '../api/authErrors'
+import { getPrivacyNotice } from '../api/privacy'
 import { setToken } from '../auth/token'
 import './Login.css'
 
@@ -28,6 +29,24 @@ export default function Login() {
   // Disables both buttons while a request is in flight, so a double-tap can't
   // spend two of the ten-per-minute auth rate-limit slots.
   const [submitting, setSubmitting] = useState(false)
+
+  // The public privacy notice link (FR-001: readable before registering).
+  // Shown only once GET /privacy/notice has answered with a notice — a 404
+  // means the privacy feature is off (plan.md P25) — and hidden on any error,
+  // so signing in never depends on it.
+  const [noticeAvailable, setNoticeAvailable] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    getPrivacyNotice().then(
+      (notice) => {
+        if (!cancelled) setNoticeAvailable(notice !== null)
+      },
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function submit(mode: Mode) {
     setMessage(null)
@@ -149,6 +168,14 @@ export default function Login() {
           </p>
         )}
       </form>
+
+      {noticeAvailable && (
+        <p className="muted login-privacy">
+          <Link to="/privacy" className="btn btn-ghost">
+            Privacy notice
+          </Link>
+        </p>
+      )}
     </main>
   )
 }

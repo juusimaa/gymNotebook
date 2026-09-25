@@ -1,8 +1,12 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router'
 import { requireAuth } from './auth/requireAuth.ts'
+import { requireNoticeAcknowledged } from './auth/requireNoticeAcknowledged.ts'
+import AccountPrivacy from './screens/AccountPrivacy.tsx'
 import ChangePassword from './screens/ChangePassword.tsx'
 import Cover from './screens/Cover.tsx'
 import Login from './screens/Login.tsx'
+import NoticeGate from './screens/NoticeGate.tsx'
+import PrivacyNotice from './screens/PrivacyNotice.tsx'
 import Sessions from './screens/Sessions.tsx'
 import NewWorkout from './screens/NewWorkout.tsx'
 import WorkoutDetail from './screens/WorkoutDetail.tsx'
@@ -13,15 +17,24 @@ import EditExercise from './screens/EditExercise.tsx'
 // The route table, one entry per screen in docs/ui/README.md. Data-mode router
 // (createBrowserRouter) rather than <BrowserRouter><Routes>, for the loader below.
 //
-// /login is the only screen outside the guard. Everything else sits under one
+// /login and /privacy (the public notice) are the only screens outside the
+// guard. Everything else sits under one
 // pathless layout route: no path of its own, a loader (requireAuth) that runs
 // before render and on every navigation beneath it, and a bare <Outlet /> that
 // renders whichever child matched. Screens read the signed-in user with
 // useRouteLoaderData('auth') — that id is the handle. The catch-all last sends
 // unknown URLs to "/", which then runs the guard, so a signed-out /typo ends at
 // /login; `replace` keeps the bad URL out of history.
+//
+// Inside the guard, the notebook screens sit one level deeper, under a second
+// pathless layout whose loader is the privacy notice gate (specs/001
+// contracts/ui.md): it runs before any notebook screen renders — and so before
+// any notebook fetch — on "Open the notebook" and on every deep link. The
+// cover, change-password and privacy screens stay outside it, reachable
+// without acknowledging the notice.
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/privacy', element: <PrivacyNotice /> },
   {
     id: 'auth',
     loader: requireAuth,
@@ -33,13 +46,22 @@ export const router = createBrowserRouter([
       // An index route renders at the parent's own URL — "/" here.
       { index: true, element: <Cover /> },
       { path: '/change-password', element: <ChangePassword /> },
-      { path: '/workouts', element: <Sessions /> },
-      { path: '/workouts/new', element: <NewWorkout /> },
-      { path: '/workouts/:workoutId/edit', element: <NewWorkout /> },
-      { path: '/workouts/:workoutId', element: <WorkoutDetail /> },
-      { path: '/progress', element: <Progress /> },
-      { path: '/exercises', element: <Exercises /> },
-      { path: '/exercises/:exerciseId', element: <EditExercise /> },
+      { path: '/account/privacy', element: <AccountPrivacy /> },
+      { path: '/account/privacy/notice', element: <NoticeGate /> },
+      {
+        id: 'notebook',
+        loader: requireNoticeAcknowledged,
+        element: <Outlet />,
+        children: [
+          { path: '/workouts', element: <Sessions /> },
+          { path: '/workouts/new', element: <NewWorkout /> },
+          { path: '/workouts/:workoutId/edit', element: <NewWorkout /> },
+          { path: '/workouts/:workoutId', element: <WorkoutDetail /> },
+          { path: '/progress', element: <Progress /> },
+          { path: '/exercises', element: <Exercises /> },
+          { path: '/exercises/:exerciseId', element: <EditExercise /> },
+        ],
+      },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

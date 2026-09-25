@@ -1,0 +1,8 @@
+{
+  "current": "dev-2026-09-25",
+  "announcedSuccessor": "dev-2026-11-01",
+  "versions": [
+    { "version": "dev-2026-09-25", "file": "dev-2026-09-25.json" },
+    { "version": "dev-2026-11-01", "file": "dev-2026-11-01.json" }
+  ]
+}

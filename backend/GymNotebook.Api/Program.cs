@@ -46,8 +46,8 @@ var inviteCode = builder.Configuration["INVITE_CODE"];
 // P25). Main deploys automatically, so unfinished privacy routes must be able to merge
 // without going live. Deliberately the opposite of INVITE_CODE: a missing, empty or
 // misspelled value fails closed (feature off), and only the exact string "true" turns it
-// on — "True", "1" or "yes" do not, so a typo can never enable it by accident. Nothing
-// reads this yet; the new routes will be mapped only when it's true.
+// on — "True", "1" or "yes" do not, so a typo can never enable it by accident. The
+// privacy routes (PrivacyEndpoints.cs) are mapped only when it's true.
 var privacyLifecycleEnabled = builder.Configuration["PRIVACY_LIFECYCLE_ENABLED"] == "true";
 
 // Comma-separated origins the browser may call this API from — the Vite dev server now, the
@@ -75,6 +75,16 @@ var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSec
 var lifecycleOptions = builder.Configuration.GetSection("Lifecycle").Get<LifecycleOptions>() ?? new LifecycleOptions();
 lifecycleOptions.Validate();
 builder.Services.AddSingleton(lifecycleOptions);
+
+// The versioned privacy notices embedded from docs/privacy/notices/ (PrivacyNoticeCatalog).
+// Loaded even while the feature flag is off, so a broken or missing notice file fails
+// this deploy at boot instead of surfacing only on the day the flag is switched on.
+builder.Services.AddSingleton(PrivacyNoticeCatalog.LoadEmbedded());
+
+// The clock the privacy endpoints read: which notice is current depends on the time (an
+// announced successor takes effect at its effectiveAt). Injected rather than calling
+// DateTimeOffset.UtcNow so tests can move time past that switch-over deterministically.
+builder.Services.AddSingleton(TimeProvider.System);
 
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
@@ -1167,6 +1177,13 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
    .Produces(StatusCodes.Status404NotFound);
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
+// specs/001 user story 1: the public notice and the account's acknowledgement state.
+// Not mapped at all while the feature flag is off, so the routes 404 (plan.md P25).
+if (privacyLifecycleEnabled)
+{
+    app.MapPrivacyEndpoints();
+}
+
 app.Run();
 
 // A local function (it can sit after app.Run() because C# hoists local functions) so

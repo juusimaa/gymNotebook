@@ -492,7 +492,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         </div>
         <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
           <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Privacy</div>
-          <h2 style="font-family:var(--font-heading);font-size:35px;font-weight:400;line-height:1.08;margin:10px 0 14px">Your notebook,<br>your information</h2>
+          <h2 style="font-family:var(--font-heading);font-size:35px;font-weight:400;line-height:1.08;margin:10px 0 8px">Privacy notice</h2>
+          <p style="font-size:13px;color:var(--color-neutral-600);margin:0 0 10px">Version preview-{{ noticeVersion }} · effective date from the notice file</p>
           <p style="font-size:13px;line-height:1.65;color:var(--color-neutral-700);margin:0 0 22px">This is a design preview. Controller details, lawful bases, processors and transfer information need review before a notice can be published.</p>
           <div style="border-top:1px solid var(--color-accent);padding-top:16px">
             <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">What you put in</h3>
@@ -511,6 +512,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           <div style="padding:12px 22px 22px;border-top:1px solid var(--color-divider);background:var(--color-bg)">
             <p style="font-size:12px;line-height:1.45;color:var(--color-neutral-600);margin:0 0 10px">Continue records the version shown to you. It does not record consent.</p>
             <button class="btn btn-primary" sc-camel-on-click="{{ continueNotice }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px">Continue to notebook</button>
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;margin-top:10px;font-size:13px"><a href="#" sc-camel-on-click="{{ goCover }}">Back to the cover</a><a href="#" sc-camel-on-click="{{ goPrivacy }}">Privacy &amp; account</a><a href="#" sc-camel-on-click="{{ goLogin }}">Sign out</a></div>
           </div>
         </sc-if>
       </div>

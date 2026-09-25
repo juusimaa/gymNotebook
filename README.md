@@ -104,7 +104,7 @@ Every route under `/exercises` and `/workouts` answers 404 for anything the call
 
 Everything comes from environment variables; [.env.example](.env.example) lists them and the gitignored `.env` holds real values. The full story — including why `ConnectionStrings__Default` has a double underscore and why `INVITE_CODE` empty means *open registration* — is in [PLAN.md → Configuration](PLAN.md#configuration).
 
-`PRIVACY_LIFECYCLE_ENABLED` switches on the privacy and account lifecycle feature (privacy notice, data export, account deletion; see [specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). Because `main` deploys automatically, the unfinished feature merges switched off. Unlike `INVITE_CODE`, a missing or empty value fails closed: only the exact value `true` enables it, and `True`, `1` or a typo leave it off. It is `false` in Azure until every release gate has evidence. To try the feature locally, set `PRIVACY_LIFECYCLE_ENABLED=true` in `.env` (Compose) or `dotnet user-secrets set PRIVACY_LIFECYCLE_ENABLED true` (SDK). Tests that need it on use `PrivacyEnabledGymNotebookFactory`.
+`PRIVACY_LIFECYCLE_ENABLED` switches on the privacy and account lifecycle feature (privacy notice, data export, account deletion; see [specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). Because `main` deploys automatically, the unfinished feature merges switched off. Unlike `INVITE_CODE`, a missing or empty value fails closed: only the exact value `true` enables it, and `True`, `1` or a typo leave it off. It is `false` in Azure until every release gate has evidence. To try the feature locally, set `PRIVACY_LIFECYCLE_ENABLED=true` in `.env` (Compose) or `dotnet user-secrets set PRIVACY_LIFECYCLE_ENABLED true` (SDK). Tests that need it on use `PrivacyEnabledGymNotebookFactory`. The privacy notice the feature serves lives in [`docs/privacy/notices/`](docs/privacy/notices/README.md) and is compiled into the API image; the files there today are synthetic development content, not a publishable notice.
 
 `Lifecycle:SharedLockTimeoutMs`, `Lifecycle:WriteTimeoutMs` and `Lifecycle:ExclusiveLockTimeoutMs` (defaults 5000, 10000 and 15000) bound the account-lifecycle locks described in [PLAN.md → Account lifecycle coordination](PLAN.md#account-lifecycle-coordination). The defaults are what production runs with; the app refuses to start if the write timeout isn't below the exclusive wait. One consequence for capacity: **every authenticated request holds one pooled database connection for its whole duration, including writing the response** (bounded by the write timeout), because the lock lives in that connection's transaction. The Npgsql pool (100 connections by default) and Neon's pooler are far above what this app needs, but it is the first thing to check if requests ever queue for a connection.
 
@@ -143,17 +143,19 @@ backend/
   GymNotebook.Api/     Minimal API endpoints, EF Core models, Data/AppDbContext, Migrations/
   GymNotebook.Tests/   xUnit; GymNotebookFactory = WebApplicationFactory + Testcontainers Postgres
   GymNotebook.sln
-  Dockerfile           multi-stage: SDK image publishes, slim aspnet image runs
+  Dockerfile           multi-stage: SDK image publishes, slim aspnet image runs; built from the repo root
+  Dockerfile.dockerignore  allow-list for that root context (API, entrypoint, privacy notices)
   entrypoint.sh        applies migrations, then starts the app
 frontend/
   src/api/             client.ts (the one fetch wrapper) + auth.ts (wire types and calls)
-  src/auth/            token.ts (where the JWT lives) + requireAuth.ts (route-guard loader)
+  src/auth/            token.ts (where the JWT lives), requireAuth.ts (route-guard loader), noticeGate.ts + requireNoticeAcknowledged.ts (privacy notice gate)
   src/screens/         Login, Cover, ChangePassword — one .tsx (+ .css) per screen
   src/styles/          tokens.css (design tokens lifted from the prototype, @font-face rules) + base.css
   src/routes.tsx       route table; main.tsx mounts the RouterProvider
   public/fonts/        self-hosted woff2 files (Cormorant Garamond, Lora) + their OFL licenses
   Dockerfile           multi-stage: node builds, nginx serves dist/ (nginx.conf: SPA fallback, access log off)
   eslint.config.js     typescript-eslint (type-checked) + react-hooks + prettier
+docs/privacy/notices/  versioned privacy notices, embedded into the API image
 docs/ui/               UI specification and a clickable HTML prototype
 .github/workflows/     test.yml — backend and frontend jobs: format checks + tests
 .githooks/             pre-commit formatter (dotnet format + prettier)

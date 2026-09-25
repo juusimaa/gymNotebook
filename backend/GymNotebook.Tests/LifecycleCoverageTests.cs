@@ -65,6 +65,9 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
         Assert.Contains("PUT /workouts/{id:int}/exercises", guarded);
         Assert.Contains("POST /workouts/{id:int}/sets", guarded);
         Assert.DoesNotContain("POST /auth/change-password", guarded);
+
+        // US1's account privacy routes (T031), mapped because this host has the flag on.
+        Assert.Contains("PUT /account/privacy/acknowledgement", guarded);
     }
 
     // "METHOD /route" for each HTTP method the endpoint answers.
