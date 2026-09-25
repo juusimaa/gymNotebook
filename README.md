@@ -145,8 +145,9 @@ frontend/
   src/api/             client.ts (the one fetch wrapper) + auth.ts (wire types and calls)
   src/auth/            token.ts (where the JWT lives) + requireAuth.ts (route-guard loader)
   src/screens/         Login, Cover, ChangePassword — one .tsx (+ .css) per screen
-  src/styles/          tokens.css (design tokens lifted from the prototype) + base.css
+  src/styles/          tokens.css (design tokens lifted from the prototype, @font-face rules) + base.css
   src/routes.tsx       route table; main.tsx mounts the RouterProvider
+  public/fonts/        self-hosted woff2 files (Cormorant Garamond, Lora) + their OFL licenses
   Dockerfile           multi-stage: node builds, nginx serves dist/ (nginx.conf: SPA fallback, access log off)
   eslint.config.js     typescript-eslint (type-checked) + react-hooks + prettier
 docs/ui/               UI specification and a clickable HTML prototype
