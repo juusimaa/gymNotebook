@@ -120,7 +120,9 @@ README.md                    run/build/test instructions
 
 ## Current status
 
-Milestones 1–6 are done (backend, frontend and CI/CD are containerized and
-publish to GHCR). Milestone 7 — logging a workout end-to-end — is next. See
-[PLAN.md → Milestones](PLAN.md#milestones) for the full list and what each one
-turned out to involve.
+Milestones 1–10 are done, including the Azure deployment (owner confirmation,
+see `.specify/memory/constitution.md` Q1). Feature work now goes through
+Spec Kit under `specs/`; the privacy and account lifecycle feature
+([specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/))
+is next. See [PLAN.md → Milestones](PLAN.md#milestones) for the full list and
+what each one turned out to involve.

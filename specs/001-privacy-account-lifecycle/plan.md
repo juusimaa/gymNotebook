@@ -4,7 +4,7 @@
 
 **Input**: `specs/001-privacy-account-lifecycle/spec.md`
 
-**Status**: Draft for owner review. Restore safety and fail-closed behavior are approved requirements. The restore-evidence direction (pre-restore diff with a log fallback, no ledger) was chosen on 2026-09-24 but is not yet proven; retention guarantees are not approved. Phase 0 research and Phase 1 design only; no implementation authorization or operational sign-off.
+**Status**: Approved by the owner for implementation, 2026-09-25: proposals P1–P28 approved in [checklists/proposal-review.md](checklists/proposal-review.md) (Q9), constitution ratified (v1.0.1). Restore safety and fail-closed behavior are approved requirements. The restore-evidence direction (pre-restore diff with a log fallback, no ledger) was chosen on 2026-09-24 but is not yet proven; R4 coordination awaits spike Part B, and retention guarantees are not approved. Implementation approval is not operational sign-off: the release gates below still apply.
 
 ## Summary
 
@@ -152,7 +152,7 @@ These are suggested focused PR boundaries, not tasks or permission to create PRs
 
 | Gate | Owner | Required evidence | Current status |
 | --- | --- | --- | --- |
-| Plan/schema/API/UI review and constitution adoption | Project owner | Reviewed decisions and adoption date | Constitution adopted 2026-09-25 (v1.0.1); plan/schema/API/UI review pending |
+| Plan/schema/API/UI review and constitution adoption | Project owner | Reviewed decisions and adoption date | Done 2026-09-25: constitution adopted (v1.0.1); plan/schema/API/UI reviewed as P1–P28 (Q9) |
 | Lawful basis, possible health data and consent decision | Controller with appropriate reviewer | Dated per-purpose conclusions; amendment if consent needed | Unverified; blocks affected processing |
 | Controller/contact/authority and complete notice | Project owner/controller | Final wording and tested monitored contact | Not supplied; blocks publication |
 | Hosting/database/logs/network/fonts/support recipients | Operator | Actual inventory, roles, agreements, locations, transfers and settings | Candidates only; blocks affected processing |

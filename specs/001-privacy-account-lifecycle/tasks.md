@@ -8,7 +8,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 **Input**: Design documents from `/specs/001-privacy-account-lifecycle/`
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/](contracts/), [quickstart.md](quickstart.md), [checklists/proposal-review.md](checklists/proposal-review.md)
 
-**Status**: Generated draft, 2026-09-24. Per constitution Principle VII, it needs owner review before implementation. Per Principle III, the author writes the implementation and tests by hand; these tasks do not authorize AI implementation.
+**Status**: Generated 2026-09-24; reviewed and approved by the owner for implementation, 2026-09-25 (constitution Principle VII). Per Principle III, the author writes the implementation and tests by hand; these tasks do not authorize AI implementation.
 
 **Tests**: Required. The spec defines an Independent Test per story and SC-003–SC-006, and constitution Principle IV requires real-PostgreSQL integration tests. Write each story's tests first and confirm they fail before implementing.
 
@@ -34,15 +34,17 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 **Purpose**: Changes that do not depend on the feature's design, and the production disablement switch that must exist before any feature code merges to `main`.
 
-- [ ] T001 [P] Self-host fonts as a **separate PR branched from `main`** (P28, research R8):
+- [x] T001 [P] Self-host fonts as a **separate PR branched from `main`** (P28, research R8):
   - Fetch the Latin-subset `.woff2` files for Cormorant Garamond 400/600 and Lora 400, 500 and italic 400, plus the SIL OFL 1.1 license text, into `frontend/public/fonts/`.
   - Add `@font-face` rules in `frontend/src/styles/tokens.css`.
   - Remove the three Google `<link>` tags from `frontend/index.html`.
   - Verify in the browser network panel that no `fonts.googleapis.com`/`fonts.gstatic.com` request remains.
-- [ ] T002 [P] Turn off the frontend nginx access log as a **separate PR branched from `main`** (analysis C1, FR-019):
+  - **Done 2026-09-25:** merged in PR #48.
+- [x] T002 [P] Turn off the frontend nginx access log as a **separate PR branched from `main`** (analysis C1, FR-019):
   - Add `access_log off;` to `frontend/nginx.conf`, keeping `error_log`, with a comment on why a static SPA needs no identifying access log.
   - Land it early: stored lines (remote address, user agent, path) only age out about 30–31 days after deployment (research R7).
   - T075 verifies the age-out before the flag is enabled.
+  - **Done 2026-09-25:** merged in PR #47; stored lines age out by about 2026-10-26.
 - [ ] T003 Read `PRIVACY_LIFECYCLE_ENABLED` at startup next to `INVITE_CODE` in `backend/GymNotebook.Api/Program.cs`. Only the exact value `true` enables the feature; unset, empty or any other value disables it (fail closed, P25). Comment why this deliberately differs from `INVITE_CODE`.
 - [ ] T004 [P] Add `PRIVACY_LIFECYCLE_ENABLED` to `.env.example` (value `false`) and to the backend service in `docker-compose.yml`.
 - [ ] T005 [P] Add `PRIVACY_LIFECYCLE_ENABLED` as a plain (non-secret) environment value set to `false` in `infra/modules/container-app-api.bicep`.
@@ -440,4 +442,3 @@ These are shown as unresolved rather than decided by generation:
 
 - **T031:** how the notice artifacts reach the API image, for example copied files or embedded resources. This is an implementation choice for owner review.
 - **T026:** how the Q2d invariant is tested. A source scan is suggested; the owner may prefer another guard.
-- **plan.md:** its Summary and Phase 0 paragraphs still mention "independent restore-suppression evidence" and the "independent receipt protocol", which predate the Q2 decision. `/speckit.analyze` should flag them for a documentation fix.
