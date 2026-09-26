@@ -33,7 +33,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     environment: production
     env:
       RESOURCE_GROUP: rg-gymnotebook-prod
@@ -46,7 +46,7 @@ jobs:
       IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || format('main-{0}', github.event.workflow_run.head_sha) }}
     steps:
       - name: Check out the deployment template
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Deploy the infrastructure definition that belongs to the images,
           # even if another commit reaches main while this job is queued.
@@ -56,7 +56,7 @@ jobs:
       # app registration is configured separately; no Azure client secret is stored
       # in GitHub.
       - name: Sign in to Azure with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -67,7 +67,7 @@ jobs:
       # until Azure has assigned the frontend its FQDN.
       - name: Deploy infrastructure and immutable images
         id: first-deploy
-        uses: azure/cli@v2
+        uses: azure/cli@v3
         with:
           inlineScript: |
             set -eu
@@ -90,7 +90,7 @@ jobs:
       # second Bicep deployment instead of an imperative env-var mutation, keeping
       # the deployed state reproducible from infra/main.bicep.
       - name: Set the production CORS origin
-        uses: azure/cli@v2
+        uses: azure/cli@v3
         with:
           inlineScript: |
             set -eu
@@ -107,7 +107,7 @@ jobs:
                 inviteCode='${{ secrets.INVITE_CODE }}'
 
       - name: Verify the API health endpoint
-        uses: azure/cli@v2
+        uses: azure/cli@v3
         with:
           inlineScript: |
             set -eu
