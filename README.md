@@ -1,5 +1,9 @@
 # Gym Notebook
 
+[![build](https://github.com/juusimaa/gymNotebook/actions/workflows/build-and-push.yml/badge.svg?branch=main)](https://github.com/juusimaa/gymNotebook/actions/workflows/build-and-push.yml?query=branch%3Amain)
+[![test](https://github.com/juusimaa/gymNotebook/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/juusimaa/gymNotebook/actions/workflows/test.yml?query=branch%3Amain)
+[![deploy](https://github.com/juusimaa/gymNotebook/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/juusimaa/gymNotebook/actions/workflows/deploy.yml?query=branch%3Amain)
+
 A digital replacement for a paper gym log: record workouts (exercises, sets, reps, weight) and see strength progress over time.
 
 This is a learning project — the goal is to learn full-stack C# by building this app (by hand through milestone 10, AI-implemented and owner-reviewed since), mirroring the container/PR/CI patterns of an earlier Python project. The design rationale, data model, API contract and milestone log all live in [PLAN.md](PLAN.md); this file is the "how do I run it" companion.
