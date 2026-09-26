@@ -14,9 +14,8 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
 {
     // Endpoints that take their own guard instead of the shared filter, each with the
     // reason. The lock tests (ChangePassword*, LifecycleCoordinationTests and the US3/US4
-    // suites; ExportCoordinationTests for export) prove each of these really does take its
-    // own guard. Delete doesn't exist yet; listing it now means it can't be added without
-    // passing this review.
+    // suites; ExportCoordinationTests for export, DeletionConcurrencyTests for deletion)
+    // prove each of these really does take its own guard.
     private static readonly Dictionary<string, string> _allowList = new()
     {
         ["POST /account/export"] = "Own snapshot guards: a short initialization guard, then a delivery guard per chunk outside the REPEATABLE READ snapshot (research R3/R4).",

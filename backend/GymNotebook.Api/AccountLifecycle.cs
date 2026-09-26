@@ -41,6 +41,10 @@ public sealed class LifecycleOptions
     // How long deletion and password change wait for exclusive access.
     public int ExclusiveLockTimeoutMs { get; set; } = 15000;
 
+    // The per-statement limit inside the deletion transaction (AccountDeletion.cs). With
+    // the exclusive wait above, it bounds how long a deletion can keep the account locked.
+    public int DeletionStatementTimeoutMs { get; set; } = 30000;
+
     // Rows per keyset batch in the export; each batch is one chunk with its own delivery
     // guard, so this is also how far an export can get past a deletion (at most one chunk).
     public int ExportBatchSize { get; set; } = 1000;
@@ -56,9 +60,9 @@ public sealed class LifecycleOptions
             throw new InvalidOperationException(
                 "Lifecycle:WriteTimeoutMs must be below Lifecycle:ExclusiveLockTimeoutMs, or a stalled response write could outlast every deletion's lock wait.");
         }
-        if (ExportBatchSize <= 0 || ExportMaxDurationMs <= 0)
+        if (ExportBatchSize <= 0 || ExportMaxDurationMs <= 0 || DeletionStatementTimeoutMs <= 0)
         {
-            throw new InvalidOperationException("Lifecycle:ExportBatchSize and Lifecycle:ExportMaxDurationMs must be positive.");
+            throw new InvalidOperationException("Lifecycle:ExportBatchSize, Lifecycle:ExportMaxDurationMs and Lifecycle:DeletionStatementTimeoutMs must be positive.");
         }
     }
 }
@@ -111,7 +115,7 @@ public static class AccountLifecycle
         AcquireAsync(db, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, ct);
 
     // Exclusive access for the operations that end or revoke an account's access: password
-    // change now, account deletion in US4. Those endpoints own their transaction and never
+    // change and account deletion (AccountDeletion.cs). Those endpoints own their transaction and never
     // run under LifecycleFilter: asking for exclusive access while already holding shared
     // access would be a lock upgrade, and two concurrent upgraders deadlock (analysis I1).
     public static Task<GuardOutcome> AcquireExclusiveAsync(AppDbContext db, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
@@ -205,13 +209,21 @@ public static class AccountLifecycle
         switch (outcome)
         {
             case GuardOutcome.TimedOut:
-                http.Response.Headers.RetryAfter = RetryAfterSeconds;
-                return Results.Json(new ErrorResponse("temporarily_unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable);
+                return TemporarilyUnavailable(http);
             case GuardOutcome.Revoked:
                 return Results.Unauthorized();
             default:
                 throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "Only a failed guard maps to an error result.");
         }
+    }
+
+    // 503 temporarily_unavailable with Retry-After: the operation didn't happen and the
+    // account is exactly as it was, so the client may simply try again. Also what a
+    // deletion that rolled back before committing returns.
+    public static IResult TemporarilyUnavailable(HttpContext http)
+    {
+        http.Response.Headers.RetryAfter = RetryAfterSeconds;
+        return Results.Json(new ErrorResponse("temporarily_unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 }
 

@@ -270,7 +270,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Tests for User Story 4
 
-- [ ] T056 [P] [US4] Add deletion outcome tests in `backend/GymNotebook.Tests/DeletionTests.cs`:
+- [x] T056 [P] [US4] Add deletion outcome tests in `backend/GymNotebook.Tests/DeletionTests.cs`:
   - A false or missing confirmation, a wrong password or cancellation leaves the database unchanged.
   - Success removes all of A's account, exercise, workout, block, set and acknowledgement rows while B is value-equivalent to its baseline.
   - Every old token of A gets 401 on every protected route.
@@ -278,12 +278,12 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - The response body matches contracts/api.md → Deletion response.
   - With a controlled clock (inject the built-in `TimeProvider`, no new dependency), `backupsExpireBy` is no later than boundary + 30 calendar days and `deletionEvidenceExpiresBy` no later than boundary + 31 days, including month-end boundaries (SC-006).
   - With the flag off, the route returns 404.
-- [ ] T057 [P] [US4] Add deletion log tests in `backend/GymNotebook.Tests/DeletionLogTests.cs`, using a captured logger:
+- [x] T057 [P] [US4] Add deletion log tests in `backend/GymNotebook.Tests/DeletionLogTests.cs`, using a captured logger:
   - `deletion.intent`, then `deletion.committed` on success.
   - `deletion.rolled_back` on an injected pre-commit failure.
   - The lines contain only the event, `PrivacyAccountId` and `DeletionBoundaryAt`, with no username, ID, token or content.
   - An ambiguous commit gets 503 `deletion_outcome_unknown`.
-- [ ] T058 [P] [US4] Add deletion concurrency tests in `backend/GymNotebook.Tests/DeletionConcurrencyTests.cs`, using the two-host fixture and both orderings, per the quickstart §4 table:
+- [x] T058 [P] [US4] Add deletion concurrency tests in `backend/GymNotebook.Tests/DeletionConcurrencyTests.cs`, using the two-host fixture and both orderings, per the quickstart §4 table:
   - Workout/set/exercise writes, bulk replace and exercise merge.
   - Password change.
   - Acknowledgement and `/auth/me`.
@@ -291,7 +291,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - A slow client.
   - An exclusive wait over 15 s gets 503.
   - Re-registering the username gets a new UUID and inherits nothing.
-- [ ] T059 [P] [US4] Add a performance test deleting the 100,000-set reference account within 60 s, recording wait and commit durations separately, in `backend/GymNotebook.Tests/DeletionPerformanceTests.cs`. This is a regression check; the SC-005 evidence comes from the deployed run (analysis U1).
+- [x] T059 [P] [US4] Add a performance test deleting the 100,000-set reference account within 60 s, recording wait and commit durations separately, in `backend/GymNotebook.Tests/DeletionPerformanceTests.cs`. This is a regression check; the SC-005 evidence comes from the deployed run (analysis U1).
 - [ ] T060 [P] [US4] Add Vitest tests for invalidation handling in `frontend/src/auth/invalidation.test.ts`:
   - It clears the token and app-owned state and aborts pending requests.
   - It notifies same-origin tabs.
@@ -299,13 +299,13 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Implementation for User Story 4
 
-- [ ] T061 [US4] Implement account deletion in `backend/GymNotebook.Api/AccountLifecycle.cs`. It owns its transaction through the T022 exclusive-guard helper and is not wrapped by the shared filter (analysis I1) (depends on T019, T022):
+- [x] T061 [US4] Implement account deletion in `backend/GymNotebook.Api/AccountLifecycle.cs` (implemented in its own `AccountDeletion.cs`, so the Q2d scan's allow-list names exactly the deletion code). It owns its transaction through the T022 exclusive-guard helper and is not wrapped by the shared filter (analysis I1) (depends on T019, T022):
   - Take exclusive access with a 15 s wait and a 30 s statement timeout, then freshly check the password and confirmation.
   - Capture the boundary, then log `deletion.intent`.
   - In one transaction, delete workouts (with cascading blocks and sets), then exercises, then User.
   - Commit, then log `deletion.committed`; log `deletion.rolled_back` on definitive rollback.
   - Map an uncertain commit to 503 `deletion_outcome_unknown`.
-- [ ] T062 [US4] Map `POST /account/delete` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`:
+- [x] T062 [US4] Map `POST /account/delete` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`:
   - Flag-gated, with the auth and sensitive rate-limit policies.
   - Require JSON with `confirmDeletion: true`.
   - Return the minimal outcome body with `retentionBoundaryAt`, `backupsExpireBy`, `deletionEvidenceExpiresBy` and `logRetentionNotice`, and no token (depends on T061).
