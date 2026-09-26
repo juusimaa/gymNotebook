@@ -342,6 +342,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 **Independent Test**: Review the inventory and retention schedule; restore a pre-deletion point into an isolated environment and verify deleted records are removed before access is allowed (quickstart §5).
 
 - [ ] T069 [P] [US5] Pin Log Analytics tables to 30 days (the App\*, `Usage` and `AzureActivity` tables, P26) and evaluate `immediatePurgeDataOn30Days` in `infra/modules/log-analytics.bicep`. Verify the live result after deployment.
+  - Code done 2026-09-26 on `feat/001-us5-log-retention` (14 tables, purge flag enabled; see research R7 → T069). Tick once the live check after deployment passes.
 - [ ] T070 [P] [US5] (operator) Write `docs/privacy/suppliers.md` (FR-023):
   - Entries for Azure (Container Apps and Log Analytics, swedencentral) and Neon (aws-eu-central-1), with role, purpose, categories, locations, agreement/transfer evidence and deletion assistance.
   - Discovery results for DNS/CDN and support recipients.
