@@ -31,3 +31,10 @@ export function describeAuthError(error: unknown): string {
   }
   return 'Unable to reach the server, please check your connection and try again'
 }
+
+// Shown on the sign-in screen after the session ended on a write (research R4,
+// Q5, contracts/ui.md → Coordination states). The server may have committed the
+// change before it found the session revoked and answered 401, so repeating it
+// blindly could save it twice.
+export const INTERRUPTED_WRITE_NOTICE =
+  'You were signed out while a change was being saved. It may already have been saved, so check your notebook before entering it again.'
