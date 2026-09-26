@@ -11,9 +11,14 @@ param tags object
 // is not covered until it is added here. Removing a name does not revert that
 // table either (deployments are incremental). The retention runbook's live
 // query ("any table not at 30/30?") is the real check, not this list.
+//
+// AzureActivity and Usage also default to 90 days but are deliberately left
+// out: Azure rejects anything below 90 for them ("minimum allowed value 90
+// days", seen on the 2026-09-26 deploy). That is acceptable because neither
+// holds app-user data: Usage is billing metadata (volume per table), and
+// AzureActivity is empty. Nothing may send the Activity Log here without a
+// review first, since it would then be kept 90 days (research R7 → T069).
 var tablesWith90DayDefault = [
-  'AzureActivity'
-  'Usage'
   'AppAvailabilityResults'
   'AppBrowserTimings'
   'AppDependencies'

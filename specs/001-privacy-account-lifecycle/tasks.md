@@ -341,13 +341,13 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 **Independent Test**: Review the inventory and retention schedule; restore a pre-deletion point into an isolated environment and verify deleted records are removed before access is allowed (quickstart §5).
 
-- [ ] T069 [P] [US5] Pin Log Analytics tables to 30 days (the App\*, `Usage` and `AzureActivity` tables, P26) and evaluate `immediatePurgeDataOn30Days` in `infra/modules/log-analytics.bicep`. Verify the live result after deployment.
-  - Code done 2026-09-26 on `feat/001-us5-log-retention` (14 tables, purge flag enabled; see research R7 → T069). Tick once the live check after deployment passes.
+- [x] T069 [P] [US5] Pin Log Analytics tables to 30 days (the App\*, `Usage` and `AzureActivity` tables, P26) and evaluate `immediatePurgeDataOn30Days` in `infra/modules/log-analytics.bicep`. Verify the live result after deployment.
+  - Done 2026-09-26 (PR #69 and the follow-up fix): the twelve App\* tables are 30/30 and `immediatePurgeDataOn30Days` is on. Azure enforces at least 90 days on `AzureActivity` and `Usage`, so both are accepted exceptions without app-user data (research R7 → T069).
 - [ ] T070 [P] [US5] (operator) Write `docs/privacy/suppliers.md` (FR-023):
   - Entries for Azure (Container Apps and Log Analytics, swedencentral) and Neon (aws-eu-central-1), with role, purpose, categories, locations, agreement/transfer evidence and deletion assistance.
   - Discovery results for DNS/CDN and support recipients.
   - Remove Google Fonts once T001 is verified.
-- [ ] T071 [P] [US5] (operator) Write `docs/privacy/retention.md` (FR-018), per contracts/operations.md → Retention schedule contract. Include the deletion log lines, the preserved pre-restore branch and the Neon 6-hour history window.
+- [ ] T071 [P] [US5] (operator) Write `docs/privacy/retention.md` (FR-018), per contracts/operations.md → Retention schedule contract. Include the deletion log lines, the preserved pre-restore branch and the Neon 6-hour history window. List `AzureActivity` and `Usage` as 90-day Log Analytics exceptions without app-user data (research R7 → T069).
 - [ ] T072 [P] [US5] (operator) Write the restore runbook `docs/privacy/restore.md`, per contracts/operations.md → Restore contract:
   - Isolate by disabling API ingress, then restore with `--preserve-under-name`.
   - Diff by UUID and re-delete.
@@ -365,9 +365,9 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
   Record the evidence in `docs/privacy/release-checklist.md`.
 - [ ] T075 [US5] (operator) **Release gate.** Scan the stored Container Apps console log content for IPs, usernames, tokens or connection strings (the item left open in Q1). Confirm that no nginx access lines newer than T002's deployment exist and that older ones have aged out; if the flag must be enabled before then, purge them instead. Verify the client address the per-IP limiter sees in production (research R10 finding). Record the results in `specs/001-privacy-account-lifecycle/research.md` → R7/R10, and open a separate fix if the limiter sees only the ingress address.
-- [ ] T076 [US5] (operator) **Release gate.** Verify provider settings and agreements against the notice, retention schedule and inventory (FR-024), including Neon's internal durability copies. Verify that only the operator can create branches or restore in the Neon project (console members and API keys), so history stays restricted to recovery use (FR-022). Mark anything unknown as unverified in `docs/privacy/suppliers.md`.
+- [ ] T076 [US5] (operator) **Release gate.** Verify provider settings and agreements against the notice, retention schedule and inventory (FR-024), including Neon's internal durability copies. Verify that only the operator can create branches or restore in the Neon project (console members and API keys), so history stays restricted to recovery use (FR-022). Mark anything unknown as unverified in `docs/privacy/suppliers.md`. Record the 90-day `AzureActivity`/`Usage` exception there as well (research R7 → T069).
 - [ ] T077 [US5] (operator) **Release gate.** Record observed disposal evidence for SC-006 in `docs/privacy/release-checklist.md`:
-  - Query the oldest row age per table in `log-gymnote-prod-58dd` and confirm it never exceeds the 30-day limit, allowing for the purge lag noted in research R7.
+  - Query the oldest row age per table in `log-gymnote-prod-58dd` and confirm it never exceeds the 30-day limit (except `AzureActivity` and `Usage`, which keep 90 days; confirm `AzureActivity` is still empty), allowing for the purge lag noted in research R7.
   - Confirm that Neon refuses a branch or restore at a point older than the 6-hour history window.
   - Record that no persistent export copies exist, since none are created by design (FR-013).
 
