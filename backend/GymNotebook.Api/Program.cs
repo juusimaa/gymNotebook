@@ -30,6 +30,9 @@ var builder = WebApplication.CreateBuilder(args);
 // named is far cheaper to debug.
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured.");
+// Present isn't enough: an unparseable value makes Npgsql throw an exception that quotes
+// it, password and all, into the logs. Fail here instead, without the value.
+ConnectionStringValidation.EnsureValid(connectionString);
 
 // Jwt:Secret signs every token, so it's as sensitive as the database password and
 // lives in the same places (user-secrets locally, a Container Apps secret in Azure).
