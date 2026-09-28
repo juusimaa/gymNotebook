@@ -21,7 +21,7 @@ Owner/reviewer: Jouni Uusimaa. Version: draft 2026-09-28. This is the evidence r
 | Proposed retention limits including deletion lines | Operator | Pending | [Retention schedule](retention.md) records maxima and live settings; actual content, sinks, provider copies and disposal remain T075–T077. | Open |
 | Restore safety and evidence mechanism | Operator | Pending | [Restore runbook](restore.md) exists. Isolated branch-diff and log-fallback exercise, including interruption and gap cases, remains T074. | Open |
 | In-flight cancellation and concurrency | Author/reviewer | Pending | Research R4 Part A is recorded; deployed HTTP/proxy Part B and acceptance decision remain T053. | Open |
-| Usability, correctness and performance | Project owner | Pending | SC-001–SC-008 table below; T081–T083 and T080 remain. | Open |
+| Usability, correctness and performance | Project owner | Pending | SC-001–SC-008 table below; T080 local checks are recorded, while owner review and T081–T083 remain. | Open |
 
 ## Success criteria (SC-001–SC-008)
 
@@ -47,11 +47,26 @@ Owner/reviewer: Jouni Uusimaa. Version: draft 2026-09-28. This is the evidence r
 | T075 — stored log content and limiter source address | Operator | Pending | Restricted log scan, nginx age-out/purge and client-address observation in research R7/R10. | Open |
 | T076 — provider settings, agreements and permissions | Operator | Pending | [Suppliers](suppliers.md) account-specific reviews, Neon internal copies/branch permissions, Azure 90-day metadata confirmation. | Open |
 | T077 — observed retention/disposal | Operator | Pending | Strict Azure 30-day and 90-day table checks, Neon history expiry and all copy deadlines. | Open |
-| T079–T080 — documentation and full required suites | Author/reviewer | Pending | README/PLAN/UI alignment; backend format/tests and frontend typecheck/lint/format/tests/build with commit and environment. | Open |
+| T079–T080 — documentation and full required suites | Author/reviewer | 2026-09-28 | [Local validation record](#local-validation-t079t080): README/PLAN updated; all required suites and the focused export fixture passed. Owner review remains. | Open; local checks passed |
 | T081 — deployed export and deletion reference | Operator | Pending | Disposable cross-region path, connection, duration, payload, memory, zero deleted and unchanged control account. | Open |
 | T082 — owner walkthrough | Project owner | Pending | Mobile and keyboard flow/mode matrix, steps, timing and result. | Open |
 | T083 — rights-request practice | Project owner | Pending | Synthetic cases, receipt/deadline calculation, response or valid extension, including end-of-month and no-sign-in cases. | Open |
 | T084 — flag-on deployment | Project owner | Pending | Final gate review, reviewed PR, deployment/revision verification and exact UTC switch time. | Blocked by open gates |
+
+## Local validation (T079–T080)
+
+Run 2026-09-28 on local macOS arm64, branch `docs/t079-t080-privacy-validation` based on `f9690d8`. .NET SDK 10.0.100, Node v26.10.0, Docker Desktop with Testcontainers PostgreSQL 17. Evidence scope: local source, build and test execution only; no Azure, Neon cross-region, proxy, provider or owner walkthrough claim. Reviewer sign-off is pending.
+
+| Command | Observed result |
+| --- | --- |
+| `dotnet format backend/GymNotebook.sln --verify-no-changes` | Passed, no formatting changes. |
+| `dotnet test backend/GymNotebook.sln` | Passed: 250/250, none skipped. Includes local export and deletion reference tests. |
+| `npm run typecheck` | Passed. |
+| `npm run lint` | Passed. |
+| `npm run format:check` | Passed. |
+| `npm test` | Passed: 142/142 tests in 12 files. |
+| `npm run build` | Passed. |
+| `dotnet test backend/GymNotebook.sln --filter FullyQualifiedName~ExportPerformanceTests --logger 'console;verbosity=detailed'` | Passed: 1/1 over local Kestrel; 0.7 s export, 9.7 MiB payload. The reported 94 MiB allocated and 229 MiB working set are for the combined test process, not server peak memory. |
 
 ## Release decision
 

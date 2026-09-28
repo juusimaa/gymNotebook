@@ -432,8 +432,10 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 - [ ] T078 [P] Create `docs/privacy/release-checklist.md` with owner, date, evidence reference and status for: a line confirming no exceptional retention beyond the FR-019/FR-020 limits was discovered, or the reviewed amendment if one was (FR-021); and SC-001–SC-008 and each release gate in plan.md.
   - Evidence table drafted 2026-09-28. The required FR-021 confirmation cannot be made until T075–T077 resolve provider copies, log content and disposal; all release criteria retain explicit Open/Blocked status.
-- [ ] T079 [P] Update `README.md` with how to run the new privacy tests, the export performance fixture and the local flag setup. Update `PLAN.md` with the milestone log entry for this feature.
-- [ ] T080 Run all required checks: `dotnet format backend/GymNotebook.sln --verify-no-changes` and `dotnet test backend/GymNotebook.sln`, then `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` and `npm run build` in `frontend/`.
+- [x] T079 [P] Update `README.md` with how to run the new privacy tests, the export performance fixture and the local flag setup. Update `PLAN.md` with the milestone log entry for this feature.
+  - Done 2026-09-28: README documents the flag-on Compose/SDK setup, full privacy test coverage, the focused 100,000-set fixture command and its local-evidence boundary; PLAN records Milestone 11 validation.
+- [x] T080 Run all required checks: `dotnet format backend/GymNotebook.sln --verify-no-changes` and `dotnet test backend/GymNotebook.sln`, then `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` and `npm run build` in `frontend/`.
+  - Done 2026-09-28: all seven commands passed locally (250 backend tests, 142 frontend tests); see `docs/privacy/release-checklist.md`. The focused export fixture passed separately.
 - [ ] T081 (operator) **Release gate.** Run the reference export and deletion once in a disposable deployed environment with the real Neon cross-region path, using the T053 Part B environment if approved (analysis U1):
   - Record client connection, regions, measured round-trip time, duration, payload size and peak memory.
   - This run, not the local tests, is the SC-003 and SC-005 evidence; record it in `docs/privacy/release-checklist.md`.
