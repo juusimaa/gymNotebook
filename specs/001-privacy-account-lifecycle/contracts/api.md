@@ -46,7 +46,8 @@ Fields: `currentNoticeVersion` string, `acknowledgement` null or `{ noticeVersio
 Amendment 2026-09-25 (spec FR-029–FR-032). "Optional workout details" are `title`, `location`, `notes` and `bodyweightKg`.
 
 - **Where:** `POST /workouts` and `PATCH /workouts/{id}`, the only routes that write these fields. Exercise names are not covered.
-- **Rule:** with the feature flag on and no consent, a request that sets any optional detail to a non-empty value gets 403 `{ "code": "optional_details_consent_required" }`. Nothing from the request is stored; the whole request is rejected, never partially applied. Setting a detail to null or empty, or omitting it, is always allowed.
+- **Rule:** with the feature flag on and no consent, a request that sets any optional detail to a non-empty value gets 403 `{ "code": "optional_details_consent_required" }`. Nothing from the request is stored; the whole request is rejected, never partially applied. Setting a detail to null or empty, or omitting it, is always allowed. Without consent an empty string is stored as null, so "holds a detail" means "not null" everywhere (transition check, withdrawal count, operator clearing).
+- **Coordination:** a save that sets a detail reads the consent with `FOR SHARE` on the account's users row; withdrawal updates that row before clearing the workouts. A save racing a withdrawal is therefore either rejected or cleared (implementation note, `OptionalDetails.cs`).
 - **Flag off:** no enforcement. Production keeps today's behaviour until the flag is switched on (owner-accepted interim risk, spec Clarifications). This is an exception to "the flag covers new routes only" in plan.md, and is tested in both states.
 - **Reads:** unchanged. Workouts return whatever is stored. Accounts without consent have no stored details, apart from pending-transition accounts, which the notebook gate stops before any notebook fetch.
 

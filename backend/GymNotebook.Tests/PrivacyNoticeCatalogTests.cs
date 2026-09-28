@@ -70,3 +70,33 @@ public class PrivacyNoticeCatalogTests
     private static PrivacyNoticeVersion Notice(string version, DateTimeOffset effectiveAt) =>
         new(version, effectiveAt, effectiveAt, "Summary.", [new PrivacyNoticeSection("about", "About", ["Text."])]);
 }
+
+// The optional-details consent statement's catalog (specs/001 T091): the repository's
+// statement loads, and it gets the same document validation as the notices.
+public class OptionalDetailsConsentCatalogTests
+{
+    [Fact]
+    public void LoadEmbedded_RepositoryStatement_LoadsWithoutError()
+    {
+        // Arrange: the files in docs/privacy/consent/, embedded by the API's csproj.
+
+        // Act
+        var catalog = OptionalDetailsConsentCatalog.LoadEmbedded();
+
+        // Assert
+        Assert.NotEmpty(catalog.Current.Sections);
+    }
+
+    [Fact]
+    public void Constructor_StatementWithoutSections_Throws()
+    {
+        // Arrange
+        var statement = new PrivacyNoticeVersion("v1", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "First version.", []);
+
+        // Act
+        var exception = Record.Exception(() => new OptionalDetailsConsentCatalog(statement));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
+    }
+}

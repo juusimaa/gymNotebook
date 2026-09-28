@@ -132,7 +132,10 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         var acknowledgement = privacy.GetProperty("noticeAcknowledgement");
         Assert.Equal(user.AcknowledgedPrivacyNoticeVersion, acknowledgement.GetProperty("noticeVersion").GetString());
         Assert.Equal(user.PrivacyNoticeAcknowledgedAt, Instant(acknowledgement.GetProperty("acknowledgedAt")));
-        Assert.Equal(JsonValueKind.Null, privacy.GetProperty("optionalDetailsConsent").ValueKind);
+        // User story 6 (T096): A holds optional details, so it holds a consent record too.
+        var consent = privacy.GetProperty("optionalDetailsConsent");
+        Assert.Equal(user.OptionalDetailsConsentVersion, consent.GetProperty("statementVersion").GetString());
+        Assert.Equal(user.OptionalDetailsConsentedAt, Instant(consent.GetProperty("consentedAt")));
 
         // Nothing of B's, and no credential or revocation value, anywhere in the file.
         Assert.DoesNotContain(CanaryB, text);
@@ -165,6 +168,7 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         }
         Assert.Equal(userId, root.GetProperty("account").GetProperty("id").GetInt32());
         Assert.Equal(JsonValueKind.Null, root.GetProperty("privacyRecords").GetProperty("noticeAcknowledgement").ValueKind);
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("privacyRecords").GetProperty("optionalDetailsConsent").ValueKind);
     }
 
     [Fact]
@@ -226,7 +230,7 @@ public class ExportTests(TwoHostGymNotebookFixture db)
     // Account A: two used exercises (one bodyweight) and one unused with a non-ASCII name;
     // a finished workout with every optional field, whose local date differs from its UTC
     // start date, and with the same exercise in two blocks; and an unfinished workout with
-    // every optional field null. Plus a retained notice acknowledgement.
+    // every optional field null. Plus a retained notice acknowledgement and optional-details consent.
     private async Task<int> SeedFullAccountAsync()
     {
         var userId = await db.SeedUserAsync();
@@ -275,7 +279,7 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         await context.SaveChangesAsync();
 
         await db.ExecuteAsync(
-            "UPDATE users SET acknowledged_privacy_notice_version = 'test-notice', privacy_notice_acknowledged_at = now() WHERE id = @id",
+            "UPDATE users SET acknowledged_privacy_notice_version = 'test-notice', privacy_notice_acknowledged_at = now(), optional_details_consent_version = 'test-consent', optional_details_consented_at = now() - INTERVAL '1 day' WHERE id = @id",
             userId);
         return userId;
     }

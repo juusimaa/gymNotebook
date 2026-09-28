@@ -385,30 +385,35 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 ### Tests for User Story 6
 
-- [ ] T085 [P] [US6] Add consent API tests in `backend/GymNotebook.Tests/OptionalDetailsConsentTests.cs`:
+- [x] T085 [P] [US6] Add consent API tests in `backend/GymNotebook.Tests/OptionalDetailsConsentTests.cs`:
   - `GET /privacy/optional-details-statement` is public, and the three routes return 404 with the flag off.
   - `PUT` accepts only the current statement version (409 `consent_statement_changed` otherwise) and is idempotent, keeping the timestamp.
   - `GET /account/privacy` reports `consent` and `transitionPending` correctly: no details; details without consent; consent.
   - `DELETE` clears the pair and all four fields on every workout of the caller only (canary account untouched), leaves every other field and row unchanged, and returns `clearedWorkouts: 0` on repeat.
-- [ ] T086 [P] [US6] Add enforcement tests in `backend/GymNotebook.Tests/OptionalDetailsEnforcementTests.cs`:
+  - Done 2026-09-28: the flag-off 404s run in `PrivacyFlagDisabledTests` (PrivacyNoticeTests.cs), over all three disabled flag values. `UsersTable_AfterAcknowledgement_HasNoConsentColumn` became `…_HasOnlyOptionalDetailsConsentColumns`: the amendment adds exactly this pair, and the acknowledgement still stores no consent.
+- [x] T086 [P] [US6] Add enforcement tests in `backend/GymNotebook.Tests/OptionalDetailsEnforcementTests.cs`:
   - With the flag on and no consent, `POST /workouts` and `PATCH /workouts/{id}` carrying any non-empty optional detail get 403 `optional_details_consent_required` and store nothing, including the request's other fields.
   - Null, empty or omitted details are accepted. Exercise names are never affected.
   - With consent, all four fields are accepted as today.
   - With the flag off, everything is accepted as today.
-- [ ] T087 [P] [US6] Add a withdrawal coordination test in `backend/GymNotebook.Tests/OptionalDetailsCoordinationTests.cs`: a workout save racing withdrawal ends either rejected or cleared, never with a detail stored after withdrawal commits. Use the existing barrier/`pg_locks` pattern, no sleeps.
+- [x] T087 [P] [US6] Add a withdrawal coordination test in `backend/GymNotebook.Tests/OptionalDetailsCoordinationTests.cs`: a workout save racing withdrawal ends either rejected or cleared, never with a detail stored after withdrawal commits. Use the existing barrier/`pg_locks` pattern, no sleeps.
+  - Done 2026-09-28: ordered by a `FOR SHARE` read of the users row in the save and a users-row UPDATE before the workouts UPDATE in the withdrawal. Two tests force each interleaving with a held transaction and `pg_blocking_pids`; each fails when its safeguard is removed.
 - [ ] T088 [P] [US6] Add Vitest tests for the gate decision (notice first, then the transition question only when `transitionPending`) and for dropping optional details from a draft, in `frontend/src/auth/noticeGate.test.ts` and `frontend/src/screens/newWorkoutDraft.test.ts`.
 
 ### Implementation for User Story 6
 
-- [ ] T089 [US6] (owner) Write the consent statement content in `docs/privacy/consent/` (index plus one version), per FR-030. Real wording, not synthetic: it is shown to users with the notice's reviewed content (T043).
-- [ ] T090 [US6] Add `OptionalDetailsConsentVersion` and `OptionalDetailsConsentedAt` to `backend/GymNotebook.Api/User.cs` with a both-or-neither check constraint, and generate and review the migration. No backfill (P29).
-- [ ] T091 [US6] Embed and validate the consent statement at startup, reusing the `PrivacyNoticeCatalog` pattern, in `backend/GymNotebook.Api/OptionalDetailsConsentCatalog.cs` and `GymNotebook.Api.csproj` (depends on T089; a synthetic test version can stand in until then).
-- [ ] T092 [US6] Map the three routes and extend `GET /account/privacy` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`: flag-gated, lifecycle filter, `Cache-Control: no-store`. Withdrawal is one transaction with a single `ExecuteUpdateAsync` (makes T085 pass).
-- [ ] T093 [US6] Enforce consent in `POST /workouts` and `PATCH /workouts/{id}` in `backend/GymNotebook.Api/Program.cs`, only when the flag is on, before any change. Comment the owner-accepted interim behaviour with the flag off (makes T086–T087 pass).
+- [x] T089 [US6] (owner) Write the consent statement content in `docs/privacy/consent/` (index plus one version), per FR-030. Real wording, not synthetic: it is shown to users with the notice's reviewed content (T043).
+  - Done 2026-09-28: drafted by AI at the owner's request, version `2026-09-28`; `reviewDate` is set when the owner approves the PR.
+- [x] T090 [US6] Add `OptionalDetailsConsentVersion` and `OptionalDetailsConsentedAt` to `backend/GymNotebook.Api/User.cs` with a both-or-neither check constraint, and generate and review the migration. No backfill (P29).
+- [x] T091 [US6] Embed and validate the consent statement at startup, reusing the `PrivacyNoticeCatalog` pattern, in `backend/GymNotebook.Api/OptionalDetailsConsentCatalog.cs` and `GymNotebook.Api.csproj` (depends on T089; a synthetic test version can stand in until then).
+- [x] T092 [US6] Map the three routes and extend `GET /account/privacy` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`: flag-gated, lifecycle filter, `Cache-Control: no-store`. Withdrawal is one transaction with a single `ExecuteUpdateAsync` (makes T085 pass).
+- [x] T093 [US6] Enforce consent in `POST /workouts` and `PATCH /workouts/{id}` in `backend/GymNotebook.Api/Program.cs`, only when the flag is on, before any change. Comment the owner-accepted interim behaviour with the flag off (makes T086–T087 pass).
+  - Done 2026-09-28: without consent, empty strings are stored as null, so "holds a detail" means "not null" everywhere (contracts/api.md).
 - [ ] T094 [P] [US6] Add the statement, grant and withdraw calls and the new account-state fields in `frontend/src/api/privacy.ts`, and map the 403 code in `frontend/src/api/client.ts`.
 - [ ] T095 [US6] Create the consent screen `/account/privacy/optional-details` in `frontend/src/screens/OptionalDetailsConsent.tsx`, including the withdrawal review step. Hide the four inputs and show the opt-in entry in `NewWorkout.tsx` and `WorkoutDetail.tsx`. Add the transition question to the notebook gate in `NoticeGate.tsx`/`requireNoticeAcknowledged.ts`. Link from `AccountPrivacy.tsx` (depends on T094; makes T088 pass).
-- [ ] T096 [US6] Include `privacyRecords.optionalDetailsConsent` in the export: in T049 if US3 is not yet merged, otherwise here with a T044 test update. Account deletion removes the pair with User, so no US4 change is needed.
-- [ ] T097 [US6] (operator) Write the transition clearing SQL and its follow-up zero-count query in `docs/privacy/retention.md`, and add a dated step to `docs/privacy/release-checklist.md` for running it 30 days after T084.
+- [x] T096 [US6] Include `privacyRecords.optionalDetailsConsent` in the export: in T049 if US3 is not yet merged, otherwise here with a T044 test update. Account deletion removes the pair with User, so no US4 change is needed.
+- [x] T097 [US6] (operator) Write the transition clearing SQL and its follow-up zero-count query in `docs/privacy/retention.md`, and add a dated step to `docs/privacy/release-checklist.md` for running it 30 days after T084.
+  - Done 2026-09-28: `docs/privacy/retention.md` and `docs/privacy/release-checklist.md` hold only this step until T071 and T078. `TransitionClearingSqlTests` runs both SQL blocks from the document against PostgreSQL (quickstart §6a step 7).
 - [ ] T098 [US6] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the editor opt-in, the consent screen and the transition question, and record US6 in `PLAN.md` and the notice's information section (FR-002: optional information and the consequence of not giving it).
 
 **Checkpoint**: With the flag on locally, quickstart §6a passes and T085–T088 pass. With the flag off, workout writes behave as today.

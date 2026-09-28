@@ -114,38 +114,46 @@ public sealed class PrivacyNoticeCatalog
             ? notice
             : throw new InvalidOperationException($"Privacy notice index.json points at version '{version}', which it does not list.");
 
-    private static T Read<T>(string file)
+    private static T Read<T>(string file) =>
+        ReadEmbedded<T>(ResourcePrefix, file, "Privacy notice", "docs/privacy/notices/");
+
+    // Shared with OptionalDetailsConsentCatalog, whose statement files are embedded the same
+    // way under their own prefix. `kind` and `folder` only shape the error messages.
+    internal static T ReadEmbedded<T>(string resourcePrefix, string file, string kind, string folder)
     {
-        using var stream = typeof(PrivacyNoticeCatalog).Assembly.GetManifestResourceStream(ResourcePrefix + file)
-            ?? throw new InvalidOperationException($"Privacy notice resource '{file}' is not embedded. Is docs/privacy/notices/ in the build?");
+        using var stream = typeof(PrivacyNoticeCatalog).Assembly.GetManifestResourceStream(resourcePrefix + file)
+            ?? throw new InvalidOperationException($"{kind} resource '{file}' is not embedded. Is {folder} in the build?");
         return JsonSerializer.Deserialize<T>(stream, _json)
-            ?? throw new InvalidOperationException($"Privacy notice resource '{file}' is empty.");
+            ?? throw new InvalidOperationException($"{kind} resource '{file}' is empty.");
     }
 
     // A record deserialized from JSON gets null for a missing property even where the C#
     // type says non-null, so the "required" fields are checked here. No check for
     // placeholder wording: that is a human review gate (tasks.md T043), not code.
-    private static void Validate(PrivacyNoticeVersion notice)
+    private static void Validate(PrivacyNoticeVersion notice) => ValidateDocument(notice, "Privacy notice");
+
+    // Also used for the optional-details consent statement, which has the same shape.
+    internal static void ValidateDocument(PrivacyNoticeVersion notice, string kind)
     {
         if (string.IsNullOrWhiteSpace(notice.Version) || notice.Version.Length > MaxVersionLength)
         {
-            throw new InvalidOperationException($"A privacy notice version must be 1–{MaxVersionLength} characters.");
+            throw new InvalidOperationException($"A {kind.ToLowerInvariant()} version must be 1–{MaxVersionLength} characters.");
         }
         if (string.IsNullOrWhiteSpace(notice.MaterialChangeSummary) || notice.Sections is not { Count: > 0 })
         {
-            throw new InvalidOperationException($"Privacy notice '{notice.Version}' needs a materialChangeSummary and at least one section.");
+            throw new InvalidOperationException($"{kind} '{notice.Version}' needs a materialChangeSummary and at least one section.");
         }
         foreach (var section in notice.Sections)
         {
             if (string.IsNullOrWhiteSpace(section.Id) || string.IsNullOrWhiteSpace(section.Heading)
                 || section.Paragraphs is not { Count: > 0 } || section.Paragraphs.Any(string.IsNullOrWhiteSpace))
             {
-                throw new InvalidOperationException($"Privacy notice '{notice.Version}' has a section without an id, heading or paragraphs.");
+                throw new InvalidOperationException($"{kind} '{notice.Version}' has a section without an id, heading or paragraphs.");
             }
         }
         if (notice.Sections.Select(s => s.Id).Distinct().Count() != notice.Sections.Count)
         {
-            throw new InvalidOperationException($"Privacy notice '{notice.Version}' has duplicate section ids.");
+            throw new InvalidOperationException($"{kind} '{notice.Version}' has duplicate section ids.");
         }
     }
 }

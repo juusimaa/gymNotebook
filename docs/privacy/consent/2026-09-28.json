@@ -1,0 +1,50 @@
+{
+  "version": "2026-09-28",
+  "effectiveAt": "2026-09-28T00:00:00Z",
+  "publishedAt": "2026-09-28T00:00:00Z",
+  "materialChangeSummary": "First version of the consent statement for optional workout details.",
+  "owner": "Project owner",
+  "reviewDate": null,
+  "reviewEvidence": "Drafted 2026-09-28 at the owner's request (tasks.md T089); to be reviewed by the owner in the user story 6 pull request, which sets reviewDate.",
+  "sections": [
+    {
+      "id": "covers",
+      "heading": "What this covers",
+      "paragraphs": [
+        "Four optional details you can add to a workout: its title, its location, your notes, and your bodyweight.",
+        "Everything else in your notebook works without them: dates and times, exercises and their names, sets, weights, repetitions, warm-up marks and the progress chart."
+      ]
+    },
+    {
+      "id": "health",
+      "heading": "Why we ask",
+      "paragraphs": [
+        "These details can reveal information about your health. Bodyweight does so directly, and notes, titles and locations often mention injuries, illness, medication or treatment. Health information is a special category of personal data, so the service stores these details only if you explicitly allow it."
+      ]
+    },
+    {
+      "id": "use",
+      "heading": "How they are used",
+      "paragraphs": [
+        "Only to show them to you in your own notebook, and to include them in the copy of your notebook you can export.",
+        "They are not analysed, used for profiling or advertising, or shared with anyone other than the service providers that host the service, as listed in the privacy notice."
+      ]
+    },
+    {
+      "id": "choice",
+      "heading": "Your choice",
+      "paragraphs": [
+        "Allowing is optional. If you choose \"Not now\", nothing is recorded, the four fields stay hidden, and the rest of your notebook works as before. You can allow them later from the workout editor or from the Privacy & account page.",
+        "If you allow them, the service records only this statement's version and the time you allowed it. That record is included in your export and removed if you delete your account."
+      ]
+    },
+    {
+      "id": "withdraw",
+      "heading": "Changing your mind",
+      "paragraphs": [
+        "You can withdraw at any time from the Privacy & account page, without your password. Withdrawing permanently removes the title, location, notes and bodyweight from every workout at once. Your workouts, exercises and sets stay. You can export your notebook first if you want to keep a copy.",
+        "Removed details can remain in the service's backups until those expire, as described in the privacy notice. They are never restored into your notebook. If you allow them again later, the fields start empty."
+      ]
+    }
+  ]
+}

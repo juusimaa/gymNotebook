@@ -69,6 +69,10 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
 
         // US1's account privacy routes (T031), mapped because this host has the flag on.
         Assert.Contains("PUT /account/privacy/acknowledgement", guarded);
+
+        // US6's consent routes (T092): withdrawal must hold shared access like any write.
+        Assert.Contains("PUT /account/privacy/optional-details-consent", guarded);
+        Assert.Contains("DELETE /account/privacy/optional-details-consent", guarded);
     }
 
     // "METHOD /route" for each HTTP method the endpoint answers.
