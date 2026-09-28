@@ -123,3 +123,22 @@
   width: 100%;
   accent-color: var(--color-accent);
 }
+
+/* Optional-details consent (OptionalDetailsConsent.tsx): the statement, then
+   two equally prominent choices side by side (FR-030). Also rendered inline in
+   the workout editor, where it takes the place of the four hidden fields. */
+.consent-panel {
+  margin-top: var(--space-4);
+}
+.consent-panel > p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.consent-choice {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.consent-choice .btn {
+  flex: 1;
+}

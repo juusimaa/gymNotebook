@@ -6,6 +6,8 @@ import {
   createInitialHeadingDraft,
   createLocalEndedAt,
   createWorkoutExerciseDraft,
+  dropOptionalDetails,
+  hasOptionalDetails,
   prepareWorkoutDraft,
   removeSetFromExercise,
   updateSetInExercise,
@@ -384,5 +386,64 @@ describe('prepareWorkoutDraft', () => {
       ok: false,
       message: expectedMessage,
     })
+  })
+})
+
+// User story 6 (tasks.md T088): without consent the editor keeps the rest of a
+// draft but none of its title, location, notes or bodyweight.
+describe('optional details in a draft', () => {
+  const heading = {
+    date: '2026-09-15',
+    startTime: '07:05',
+    title: 'Leg day',
+    bodyweightKg: '82.4',
+    location: 'Home gym',
+    notes: 'Knee felt sore',
+  }
+
+  it('drops all four details and keeps the date and start time', () => {
+    expect(dropOptionalDetails(heading)).toEqual({
+      date: '2026-09-15',
+      startTime: '07:05',
+      title: '',
+      bodyweightKg: '',
+      location: '',
+      notes: '',
+    })
+  })
+
+  it('leaves the given draft unchanged', () => {
+    dropOptionalDetails(heading)
+
+    expect(heading.title).toBe('Leg day')
+  })
+
+  it('sends no detail once dropped', () => {
+    const exercise = createWorkoutExerciseDraft('b', 's', 1, 'Squat', false)
+    const ready = updateSetInExercise(exercise, 's', {
+      weight: '100',
+      reps: '5',
+    })
+
+    const prepared = prepareWorkoutDraft(dropOptionalDetails(heading), [ready])
+
+    expect(prepared.ok && prepared.value.workout).toMatchObject({
+      title: null,
+      bodyweightKg: null,
+      location: null,
+      notes: null,
+    })
+  })
+
+  it('tells a draft with any detail from one with none', () => {
+    expect(hasOptionalDetails(heading)).toBe(true)
+    expect(
+      hasOptionalDetails({ ...dropOptionalDetails(heading), notes: 'x' }),
+    ).toBe(true)
+    expect(hasOptionalDetails(dropOptionalDetails(heading))).toBe(false)
+    // Whitespace alone is what optionalText already sends as null.
+    expect(
+      hasOptionalDetails({ ...dropOptionalDetails(heading), title: '  ' }),
+    ).toBe(false)
   })
 })

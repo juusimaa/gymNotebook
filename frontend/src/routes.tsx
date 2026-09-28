@@ -9,6 +9,7 @@ import DeleteAccount from './screens/DeleteAccount.tsx'
 import ExportData from './screens/ExportData.tsx'
 import Login from './screens/Login.tsx'
 import NoticeGate from './screens/NoticeGate.tsx'
+import OptionalDetailsConsent from './screens/OptionalDetailsConsent.tsx'
 import PrivacyNotice from './screens/PrivacyNotice.tsx'
 import Sessions from './screens/Sessions.tsx'
 import NewWorkout from './screens/NewWorkout.tsx'
@@ -33,7 +34,8 @@ import EditExercise from './screens/EditExercise.tsx'
 // Inside the guard, the notebook screens sit one level deeper, under a second
 // pathless layout whose loader is the privacy notice gate (specs/001
 // contracts/ui.md): it runs before any notebook screen renders — and so before
-// any notebook fetch — on "Open the notebook" and on every deep link. The
+// any notebook fetch — on "Open the notebook" and on every deep link. It then
+// asks the optional-details transition question, when one is pending. The
 // cover, change-password and privacy screens (export and deletion included)
 // stay outside it, reachable without acknowledging the notice.
 export const router = createBrowserRouter([
@@ -53,6 +55,12 @@ export const router = createBrowserRouter([
       { path: '/change-password', element: <ChangePassword /> },
       { path: '/account/privacy', element: <AccountPrivacy /> },
       { path: '/account/privacy/notice', element: <NoticeGate /> },
+      // User story 6: consent for optional workout details, and the notebook
+      // gate's transition question. Outside the gate, like the notice itself.
+      {
+        path: '/account/privacy/optional-details',
+        element: <OptionalDetailsConsent />,
+      },
       { path: '/account/export', element: <ExportData /> },
       { path: '/account/delete', element: <DeleteAccount /> },
       {

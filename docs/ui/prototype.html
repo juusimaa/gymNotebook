@@ -359,6 +359,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     deletePassword: "",
     deleteError: "",
     deleteStep: "review",
+    detailsConsent: false,
+    detailsStep: "ask",
+    detailsTransition: false,
+    detailsReturn: "privacy",
+    detailsCleared: 0,
     draft: [`
     );
     replacePrivacyAnchor(
@@ -442,7 +447,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       sets: sets,
       privacyRecords: {
         noticeAcknowledgement: this.state.noticeSeen ? { noticeVersion: "preview-" + this.state.noticeVersion, acknowledgedAt: new Date().toISOString() } : null,
-        optionalDetailsConsent: null
+        optionalDetailsConsent: this.state.detailsConsent ? { statementVersion: "2026-09-28", consentedAt: new Date().toISOString() } : null
       }
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" }));
@@ -476,9 +481,50 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     this.setState({ screen: "accountDeleted", deletePassword: "", deleteError: "" });
   };
+  // User story 6: consent for title, location, notes and bodyweight.
+  openDetailsFromEditor = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "optionalDetails", detailsStep: "ask", detailsTransition: false, detailsReturn: "new" });
+  };
+  openDetailsFromPrivacy = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ screen: "optionalDetails", detailsStep: s.detailsConsent ? "review" : "ask", detailsTransition: false, detailsReturn: "privacy" }));
+  };
+  previewTransitionQuestion = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "optionalDetails", detailsStep: "ask", detailsTransition: true, detailsConsent: false, detailsReturn: "history" });
+  };
+  allowDetails = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ detailsConsent: true, detailsTransition: false, screen: s.detailsReturn }));
+  };
+  declineDetails = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => s.detailsTransition ? { detailsStep: "review" } : { screen: s.detailsReturn });
+  };
+  reviewWithdrawal = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ detailsStep: "review" });
+  };
+  cancelWithdrawal = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => s.detailsTransition || !s.detailsConsent ? { detailsStep: "ask" } : { screen: "privacy" });
+  };
+  confirmWithdrawal = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ detailsConsent: false, detailsStep: "removed", detailsCleared: s.detailsTransition ? 3 : DATA.length }));
+  };
+  leaveDetails = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ screen: s.detailsTransition ? "cover" : s.detailsReturn, detailsTransition: false }));
+  };
+  finishDetails = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ screen: s.detailsTransition ? "history" : "privacy", detailsTransition: false, detailsStep: "ask" }));
+  };
   restartPrivacyPreview = (e) => {
     if (e) e.preventDefault();
-    this.setState({ screen: "login", noticeSeen: false, noticeVersion: 1, exportPassword: "", deletePassword: "" });
+    this.setState({ screen: "login", noticeSeen: false, noticeVersion: 1, exportPassword: "", deletePassword: "", detailsConsent: false, detailsStep: "ask", detailsTransition: false });
   };`
     );
     const privacyLoginLink = `<div style="margin-top:20px;text-align:center;font-size:13px"><a href="#" sc-camel-on-click="{{ openPublicNotice }}">Privacy notice</a></div>`;
@@ -487,6 +533,30 @@ document.addEventListener('DOMContentLoaded', async function() {
       '          <a href="#" sc-camel-on-click="{{ goCover }}">Change password</a>\n        </div>\n        ' + privacyLoginLink + '\n      </div>\n    </sc-if>'
     );
     replacePrivacyAnchor(coverSignOut, `<div style="text-align:center;margin-top:14px;font-size:13px"><a href="#" sc-camel-on-click="{{ goPrivacy }}">Privacy &amp; account</a></div>\n        ` + coverSignOut);
+    // User story 6: the editor shows title, bodyweight and gym only with
+    // consent; otherwise one opt-in entry takes their place. The session page
+    // hides its notes the same way.
+    const editorDetailsStart = `          <label style="display:flex;flex-direction:column;gap:5px;margin-top:12px">
+            <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600)">Title</span>`;
+    replacePrivacyAnchor(editorDetailsStart, `          <sc-if value="{{ detailsHidden }}" hint-placeholder-val="{{ true }}">
+          <button class="btn btn-secondary" sc-camel-on-click="{{ openDetailsFromEditor }}" style="min-height:44px;width:100%;margin-top:12px">Add title, location, notes and bodyweight</button>
+          </sc-if>
+          <sc-if value="{{ detailsConsent }}" hint-placeholder-val="{{ false }}">
+` + editorDetailsStart);
+    replacePrivacyAnchor(`              <input class="input" type="text" placeholder="Liikuntamylly" style="width:100%;box-sizing:border-box;min-height:44px;font-family:var(--font-body)">
+            </label>
+          </div>
+`, `              <input class="input" type="text" placeholder="Liikuntamylly" style="width:100%;box-sizing:border-box;min-height:44px;font-family:var(--font-body)">
+            </label>
+          </div>
+          </sc-if>
+`);
+    const detailNotes = `          <div class="hr" style="margin:22px 0 14px"></div>
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600);margin-bottom:6px">Notes</div>
+          <p style="margin:0;font-size:14px;line-height:1.65;text-align:justify;hyphens:auto;color:var(--color-neutral-800)">{{ page.notes }}</p>`;
+    replacePrivacyAnchor(detailNotes, `          <sc-if value="{{ detailsConsent }}" hint-placeholder-val="{{ false }}">
+` + detailNotes + `
+          </sc-if>`);
     replacePrivacyAnchor(
       'sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook',
       'sc-camel-on-click="{{ openNotebook }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook'
@@ -540,6 +610,11 @@ document.addEventListener('DOMContentLoaded', async function() {
             <button class="btn btn-ghost" sc-camel-on-click="{{ openAccountNotice }}" style="min-height:44px;width:100%">Read privacy notice</button>
           </div>
           <div style="border-top:1px solid var(--color-divider);padding:17px 0 20px">
+            <div style="font-family:var(--font-heading);font-size:20px">Optional workout details</div>
+            <p style="font-size:12px;color:var(--color-neutral-600);line-height:1.55;margin:5px 0 12px">{{ detailsStatus }}</p>
+            <button class="btn btn-ghost" sc-camel-on-click="{{ openDetailsFromPrivacy }}" style="min-height:44px;width:100%">{{ detailsAction }}</button>
+          </div>
+          <div style="border-top:1px solid var(--color-divider);padding:17px 0 20px">
             <div style="font-family:var(--font-heading);font-size:20px">Export your notebook</div>
             <p style="font-size:12px;color:var(--color-neutral-600);line-height:1.55;margin:5px 0 12px">Get one JSON file with your account, exercises, sessions and sets.</p>
             <button class="btn btn-ghost" sc-camel-on-click="{{ openExport }}" style="min-height:44px;width:100%">Export my data</button>
@@ -553,7 +628,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             Need another privacy right? Use the contact route in the published notice.
           </div>
           <div style="margin-top:24px;padding-top:14px;border-top:1px dashed var(--color-divider);font-size:11px;color:var(--color-neutral-600)">
-            Prototype control · <a href="#" sc-camel-on-click="{{ previewRevisedNotice }}">Preview a new notice version</a>
+            Prototype control · <a href="#" sc-camel-on-click="{{ previewRevisedNotice }}">Preview a new notice version</a> · <a href="#" sc-camel-on-click="{{ previewTransitionQuestion }}">Preview the transition question</a>
           </div>
         </div>
       </div>
@@ -612,6 +687,50 @@ document.addEventListener('DOMContentLoaded', async function() {
       </div>
     </sc-if>
 
+    <sc-if value="{{ isOptionalDetails }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider)"><a href="#" sc-camel-on-click="{{ leaveDetails }}" style="font-size:13px">← Back</a></div>
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
+          <sc-if value="{{ isDetailsAsk }}" hint-placeholder-val="{{ true }}">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">{{ detailsKicker }}</div>
+          <h2 style="font-family:var(--font-heading);font-size:32px;font-weight:400;line-height:1.1;margin:10px 0 12px">{{ detailsHeading }}</h2>
+          <sc-if value="{{ detailsTransition }}" hint-placeholder-val="{{ false }}">
+          <p style="font-size:13px;line-height:1.6;margin:0 0 12px">3 workouts in your notebook have a title, location, notes or bodyweight. The service now keeps these only with your permission.</p>
+          </sc-if>
+          <div style="border-top:1px solid var(--color-accent);padding-top:14px">
+            <p style="font-size:12px;color:var(--color-neutral-600);margin:0 0 10px">Statement version 2026-09-28</p>
+            <h3 style="font-family:var(--font-heading);font-size:20px;font-weight:400;margin:0 0 5px">What this covers</h3>
+            <p style="font-size:13px;line-height:1.6;margin:0 0 14px">A workout's title, location, notes and bodyweight. Everything else in your notebook works without them.</p>
+            <h3 style="font-family:var(--font-heading);font-size:20px;font-weight:400;margin:0 0 5px">Why we ask</h3>
+            <p style="font-size:13px;line-height:1.6;margin:0 0 14px">These details can reveal information about your health, so they are stored only if you explicitly allow it. They are used only to show you your own notebook and your export.</p>
+            <h3 style="font-family:var(--font-heading);font-size:20px;font-weight:400;margin:0 0 5px">Changing your mind</h3>
+            <p style="font-size:13px;line-height:1.6;margin:0 0 18px">You can withdraw any time from Privacy &amp; account, without your password. Withdrawing removes these details from every workout; the rest of your notebook stays.</p>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-secondary" sc-camel-on-click="{{ allowDetails }}" style="flex:1;min-height:48px">Allow</button>
+            <button class="btn btn-secondary" sc-camel-on-click="{{ declineDetails }}" style="flex:1;min-height:48px">{{ detailsDeclineLabel }}</button>
+          </div>
+          </sc-if>
+          <sc-if value="{{ isDetailsReview }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Optional workout details</div>
+          <h2 style="font-family:var(--font-heading);font-size:32px;font-weight:400;line-height:1.1;margin:10px 0 12px">Remove optional details?</h2>
+          <p style="font-size:13px;line-height:1.6;margin:0 0 12px">The title, location, notes and bodyweight will be permanently removed from every workout. Your workouts, exercises and sets stay as they are. You can allow the details again later; the fields will start empty.</p>
+          <button class="btn btn-ghost" sc-camel-on-click="{{ openExport }}" style="min-height:44px;width:100%;margin-bottom:18px">Export your notebook first (optional)</button>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" sc-camel-on-click="{{ confirmWithdrawal }}" style="flex:1;min-height:48px">Remove details</button>
+            <button class="btn btn-secondary" sc-camel-on-click="{{ cancelWithdrawal }}" style="flex:1;min-height:48px">Cancel</button>
+          </div>
+          </sc-if>
+          <sc-if value="{{ isDetailsRemoved }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Optional workout details</div>
+          <h2 style="font-family:var(--font-heading);font-size:32px;font-weight:400;line-height:1.1;margin:10px 0 12px">Details removed</h2>
+          <p role="status" style="font-size:13px;line-height:1.6;margin:0 0 18px">Removed the title, location, notes and bodyweight from {{ detailsCleared }} workouts. The rest of your notebook is unchanged. (Prototype: sample data is not changed.)</p>
+          <button class="btn btn-primary" sc-camel-on-click="{{ finishDetails }}" style="min-height:48px;width:100%">{{ detailsFinishLabel }}</button>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
     <sc-if value="{{ isAccountDeleted }}" hint-placeholder-val="{{ false }}">
       <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:36px 30px">
         <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Account closed · prototype</div>
@@ -635,6 +754,30 @@ document.addEventListener('DOMContentLoaded', async function() {
       isAccountExport: screen === "accountExport",
       isAccountDelete: screen === "accountDelete",
       isAccountDeleted: screen === "accountDeleted",
+      isOptionalDetails: screen === "optionalDetails",
+      isDetailsAsk: this.state.detailsStep === "ask",
+      isDetailsReview: this.state.detailsStep === "review",
+      isDetailsRemoved: this.state.detailsStep === "removed",
+      detailsConsent: this.state.detailsConsent,
+      detailsHidden: !this.state.detailsConsent,
+      detailsTransition: this.state.detailsTransition,
+      detailsCleared: this.state.detailsCleared,
+      detailsKicker: this.state.detailsTransition ? "Before you open the notebook" : "Optional workout details",
+      detailsHeading: this.state.detailsTransition ? "Keep your optional details?" : "Title, location, notes and bodyweight",
+      detailsDeclineLabel: this.state.detailsTransition ? "Don't allow" : "Not now",
+      detailsFinishLabel: this.state.detailsTransition ? "Continue to notebook" : "Back to Privacy & account",
+      detailsStatus: this.state.detailsConsent ? "Allowed in this preview. Withdrawing removes them from every workout." : "Not allowed. The editor hides the title, location, notes and bodyweight fields.",
+      detailsAction: this.state.detailsConsent ? "Withdraw" : "Review and allow",
+      openDetailsFromEditor: this.openDetailsFromEditor,
+      openDetailsFromPrivacy: this.openDetailsFromPrivacy,
+      previewTransitionQuestion: this.previewTransitionQuestion,
+      allowDetails: this.allowDetails,
+      declineDetails: this.declineDetails,
+      reviewWithdrawal: this.reviewWithdrawal,
+      cancelWithdrawal: this.cancelWithdrawal,
+      confirmWithdrawal: this.confirmWithdrawal,
+      leaveDetails: this.leaveDetails,
+      finishDetails: this.finishDetails,
       noticeVersion: this.state.noticeVersion,
       exportPassword: this.state.exportPassword,
       exportError: this.state.exportError,
