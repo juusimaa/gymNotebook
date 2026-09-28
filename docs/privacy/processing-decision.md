@@ -69,16 +69,20 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 
 **Necessity:** a username and password are the minimum needed for a private notebook that follows the user across devices. `TokenVersion`, `PrivacyAccountId`, acknowledgement and suspension each exist to meet another requirement: revocation, erasure surviving a restore, FR-026, and R6 fail-closed handling. No email, real name, phone number or date of birth is collected.
 
-**Lawful basis (provisional owner choice, 2026-09-28):** Art. 6(1)(b) for the account and authentication information necessary to deliver the notebook the person requests. The service is free and invite-only; the owner approved the [registration service description](t043-notice-review.md#registration-service-description) and its placement beside Create account on 2026-09-28. Publication and confirmation against the actual registration flow remain. The basis depends on an actual service agreement and objective necessity, not merely calling the processing contractual ([EDPB Guidelines 2/2019](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)). The notice-acknowledgement and restore/suspension records need their own purpose and basis decision; Art. 6(1)(c) remains a proposal for acknowledgement, not part of this approval.
+**Lawful basis (owner decision, 2026-09-28):**
+- **Account and authentication** (`Username`, `PasswordHash`, `TokenVersion`, `CreatedAt`): Art. 6(1)(b), necessary to deliver the notebook the person requests. The basis depends on an actual service agreement and objective necessity, not merely calling the processing contractual ([EDPB Guidelines 2/2019](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)). The service is free and invite-only. The owner approved the [registration service description](t043-notice-review.md#registration-service-description) and its placement beside Create account on 2026-09-28. It was confirmed live the same day: the production bundle deployed from `main` at `2362352` contains the approved text between Sign in and Create account, and the form asks only for username, password and invite code, matching this purpose's field list.
+- **Notice acknowledgement** (`AcknowledgedPrivacyNoticeVersion`, `PrivacyNoticeAcknowledgedAt`): Art. 6(1)(c). The record documents that the user was given the current notice, which the controller must provide (Art. 13) and be able to demonstrate (Art. 5(2)). It holds only the latest version and time (FR-026) and is not consent.
+- **Restore safety** (`PrivacyAccountId`, `SignInSuspendedAt`): Art. 6(1)(c). These keep an erasure effective after a database restore (Art. 17), so that a deleted account neither reappears nor becomes usable again while a deletion's outcome is unknown (research R5, R6 Q2c).
 
 **Health data:** none. Account fields describe the account, not the person's health.
 
-**Consent (proposed):** not required.
+**Consent:** not required.
 
 **Findings:**
-- **Blocking before release:** Publish the approved short service description before account creation, then confirm the Art. 6(1)(b) conclusion against the actual registration flow. Separately decide the acknowledgement and restore/suspension controls.
+- **Resolved 2026-09-28:** the service description is published before account creation and matches the registration flow (see Lawful basis). The acknowledgement and restore-safety records have their own bases.
+- Keep the registration description in step with the service: if registration starts asking for more, or the core service changes, revisit the Art. 6(1)(b) conclusion and the description together.
 
-**Decision:** Owner provisionally chose Art. 6(1)(b) for essential account processing on 2026-09-28, subject to the service description above. The full P1 decision remains unsigned.
+**Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Art. 6(1)(b) for account and authentication, Art. 6(1)(c) for notice acknowledgement and restore safety; no health data; consent not required. Evidence: the approved and published registration description, and the live bundle check recorded above.
 
 ---
 
@@ -97,7 +101,7 @@ title, location, notes and bodyweight are assessed separately in P3.
 
 **Necessity:** this is the service itself, a digital copy of a paper gym log. Nothing is derived beyond what the user asks to see.
 
-**Lawful basis (provisional owner choice, 2026-09-28):** Art. 6(1)(b) for the core workout, exercise and set information needed to provide the requested log and progress chart, subject to P1's clear service-agreement condition. An Article 6 basis alone does not decide whether Article 9 also applies.
+**Lawful basis (owner decision, 2026-09-28):** Art. 6(1)(b) for the core workout, exercise and set information needed to provide the requested log and progress chart. It relies on the same service agreement as P1, confirmed there. An Article 6 basis alone does not decide whether Article 9 also applies.
 
 **Health data (owner decision, 2026-09-28):** **not health data in this context.** The owner, acting as controller and reviewer, weighed the points below and concluded that the core workout, exercise and set information does not reveal health status as Gym Notebook processes it. No Art. 9(2) condition is needed for P2. The rationale and the residual risk follow.
 - *For:* Art. 4(15) covers data about physical or mental health that **reveals information about health status**.
@@ -122,11 +126,10 @@ title, location, notes and bodyweight are assessed separately in P3.
 
 **Findings:**
 - **Resolved 2026-09-28:** the Article 9 classification. The owner concluded not health data in this context, with the rationale and accepted residual risk recorded above, instead of waiting for an external data-protection review.
-- **Remaining before release:** P1's service-agreement condition, which P2's Art. 6(1)(b) basis depends on (publish the approved registration description and confirm it against the actual registration flow).
+- **Resolved 2026-09-28:** P1's service-agreement condition, which P2's Art. 6(1)(b) basis depends on.
 
-**Decision:** Owner provisionally chose Art. 6(1)(b) for essential core processing on 2026-09-28, subject to P1's service-agreement condition.
-- **Article 9 (owner, 2026-09-28):** not health data in this context; no Art. 9 condition and no consent. Residual risk accepted as recorded above. This replaces the earlier plan to seek a focused external review.
-- The full P2 decision stays unsigned until P1's service-agreement condition is confirmed.
+**Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Art. 6(1)(b); not health data in this context, so no Art. 9 condition; consent not required. Residual risk accepted as recorded above.
+- **Article 9 (owner, 2026-09-28):** this conclusion replaces the earlier plan to seek a focused external review.
 
 ---
 
@@ -275,8 +278,8 @@ Google Fonts is no longer a recipient: T001/PR #48 self-hosted the fonts and rec
 
 | Purpose | Proposed consent conclusion | Blocks rollout? |
 | --- | --- | --- |
-| P1 Account administration | Provisionally not required for essential account processing; ancillary records still need a basis decision | Yes, final P1 decision is open |
-| P2 Training log and progress | Not required: not health data in this context (owner, 2026-09-28); Article 6(1)(b) provisional | Yes, until P1's service-agreement condition is confirmed |
+| P1 Account administration | Not required: Article 6(1)(b), with 6(1)(c) for acknowledgement and restore safety (signed 2026-09-28) | No |
+| P2 Training log and progress | Not required: Article 6(1)(b), not health data in this context (signed 2026-09-28) | No |
 | P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner 2026-09-25 and 2026-09-28 | Yes, pending final amendment and release review |
 | P4 Logs | Not required | No, but retention findings block |
 | P5 Browser storage | Not required (strictly necessary) | No |
@@ -287,7 +290,7 @@ optional workout details. The FR-007 amendment
 ([spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements))
 and its implementation are recorded in [tasks.md](../../specs/001-privacy-account-lifecycle/tasks.md#phase-7a-user-story-6--choose-whether-to-record-optional-workout-details-priority-p1).
 The feature remains behind the privacy flag. Final approval of the amendment,
-the treatment of existing P3 values and the open P1/P2 sign-off remain release
+the treatment of existing P3 values and the open P4/P5/P6 decisions remain release
 gates; the recorded implementation alone does not sign off T042.
 
 ## Change control

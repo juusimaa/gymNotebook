@@ -22,17 +22,17 @@ name them as "Jouni Uusimaa, a private individual in Finland."
 ## Registration service description
 
 Wording and placement beside **Create account** approved by the owner on
-2026-09-28. The copy is in the frontend and UI prototype; it is not evidence
-of a production deployment.
+2026-09-28. The copy is in the frontend and UI prototype, and was confirmed in
+the production bundle (`main` at `2362352`) on 2026-09-28.
 
 > Gym Notebook is a free, invite-only training log provided by Jouni
 > Uusimaa. Creating an account asks us to keep your private record of workout
 > dates, exercises and sets, and show your progress chart. A username and
 > password let you return to that notebook.
 
-This describes the requested core service for the provisional Article 6(1)(b)
-decision in [processing-decision.md](processing-decision.md). Its approval does
-not sign off the full P1/P2 lawful-basis decisions or establish publication.
+This describes the requested core service for the Article 6(1)(b) decision in
+[processing-decision.md](processing-decision.md), where P1 and P2 were signed on
+2026-09-28.
 The privacy notice and optional-details consent remain separate; this copy
 adds no consent checkbox. The login page already links to the notice when the
 privacy feature is enabled.
@@ -176,7 +176,7 @@ making a complaint.
 | --- | --- |
 | Controller, contact, Finnish authority | Name and address confirmed by owner; receipt, reply and personal workday monitoring reported. Authority identified in the processing decision. |
 | Required/optional information, consent distinction, rights, profiling | Drafted against the current product and specification; final wording awaits controller review. |
-| Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details. P1/P2 Article 6(1)(b) chosen provisionally; registration copy approved; P2 concluded not health data (owner, 2026-09-28). P1/P2/P4/P5/request sign-off remains open. |
+| Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details. P1 and P2 signed 2026-09-28: Article 6(1)(b), with 6(1)(c) for notice acknowledgement and deletion-recovery records, and P2 not health data. P4/P5/request decisions remain open. |
 | Recipients, locations and transfer safeguards | Current supplier inventory is a draft; T076 must settle account-specific agreements, support paths and transfer safeguards. |
 | Retention and restored copies | Draft reflects the schedule's intended limits; T075–T077 must verify actual content, copies and disposal before these claims are published. |
 | Version and effective date | Create the reviewed JSON version and index entry only after the content and release evidence are settled. |
@@ -184,10 +184,11 @@ making a complaint.
 The proposed public wording above presents legal bases as final because that
 is how a published notice must read. The owner chose Article 6(1)(a) consent
 for the four optional workout details on 2026-09-28, alongside Article 9(2)(a)
-explicit consent. The owner also provisionally chose Article 6(1)(b) for
-essential P1/P2 processing, conditional on a clear service agreement, and
-concluded that P2's core notebook information is not health data in this
-context, so it needs no Article 9 condition. These choices are
+explicit consent. The owner also signed P1 and P2 on 2026-09-28: Article 6(1)(b)
+for account and core notebook processing, Article 6(1)(c) for notice
+acknowledgement and deletion-recovery records, and P2's core notebook
+information is not health data in this context, so it needs no Article 9
+condition. These choices are
 recorded in the [processing decision](processing-decision.md). The remaining
 legal bases are under review. The [EDPB's Article 6(1)(b)
 guidance](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)
@@ -197,21 +198,17 @@ The remaining purpose decisions to review are:
 
 | Record | Proposed conclusion to confirm or revise |
 | --- | --- |
-| P1 account and P2 core notebook | Owner provisionally chose Article 6(1)(b) for essential processing and approved the registration wording and placement. Confirm the basis against the actual registration flow. P2 concluded not health data on 2026-09-28, so the notice needs no Article 9 wording for core notebook data. |
-| P1 notice acknowledgement | Article 6(1)(c) for documenting transparency; confirm the specific obligation and necessity of this record. |
 | P4 operational logs | Article 6(1)(f), with a documented balance based on actual log content, access and retention from T075–T077. |
 | P4 deletion evidence | Article 6(1)(c) for erasure/restore safety, or revise to a justified alternative. |
 | P5 browser token | Article 6(1)(b) for the signed-in service, with the strictly necessary browser-storage conclusion. |
 | Rights correspondence/register | Article 6(1)(c) is in the notice draft, but needs an explicit purpose decision and verified disposal/recipient handling. |
 
-1. Sign the remaining P1, P2, P4 and P5 conclusions in
+1. Sign the remaining P4 and P5 conclusions in
    [processing-decision.md](processing-decision.md), including the Article 6
-   basis for notice acknowledgement, deletion evidence and
-   request correspondence (which is not yet a separate decision there).
-   Revise the wording above to match those decisions. (P2's health-data
-   question was settled on 2026-09-28: not health data in this context.)
-   Publish the approved registration service description with the reviewed
-   release.
+   basis for deletion evidence and request correspondence (which is not yet
+   a separate decision there). Revise the wording above to match those
+   decisions. (P1 and P2 were signed on 2026-09-28, and the registration
+   service description is live.)
 2. The owner has confirmed the public name, reported successful receipt from
    Gmail and an outgoing reply, and committed to checking the contact mailbox
    each working day, including while away. These owner reports are recorded
