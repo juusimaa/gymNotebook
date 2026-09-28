@@ -69,16 +69,20 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 
 **Necessity:** a username and password are the minimum needed for a private notebook that follows the user across devices. `TokenVersion`, `PrivacyAccountId`, acknowledgement and suspension each exist to meet another requirement: revocation, erasure surviving a restore, FR-026, and R6 fail-closed handling. No email, real name, phone number or date of birth is collected.
 
-**Lawful basis (provisional owner choice, 2026-09-28):** Art. 6(1)(b) for the account and authentication information necessary to deliver the notebook the person requests. The service is free and invite-only; the owner approved the [registration service description](t043-notice-review.md#registration-service-description) and its placement beside Create account on 2026-09-28. Publication and confirmation against the actual registration flow remain. The basis depends on an actual service agreement and objective necessity, not merely calling the processing contractual ([EDPB Guidelines 2/2019](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)). The notice-acknowledgement and restore/suspension records need their own purpose and basis decision; Art. 6(1)(c) remains a proposal for acknowledgement, not part of this approval.
+**Lawful basis (owner decision, 2026-09-28):**
+- **Account and authentication** (`Username`, `PasswordHash`, `TokenVersion`, `CreatedAt`): Art. 6(1)(b), necessary to deliver the notebook the person requests. The basis depends on an actual service agreement and objective necessity, not merely calling the processing contractual ([EDPB Guidelines 2/2019](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)). The service is free and invite-only. The owner approved the [registration service description](t043-notice-review.md#registration-service-description) and its placement beside Create account on 2026-09-28. It was confirmed live the same day: the production bundle deployed from `main` at `2362352` contains the approved text between Sign in and Create account, and the form asks only for username, password and invite code, matching this purpose's field list.
+- **Notice acknowledgement** (`AcknowledgedPrivacyNoticeVersion`, `PrivacyNoticeAcknowledgedAt`): Art. 6(1)(c). The record documents that the user was given the current notice, which the controller must provide (Art. 13) and be able to demonstrate (Art. 5(2)). It holds only the latest version and time (FR-026) and is not consent.
+- **Restore safety** (`PrivacyAccountId`, `SignInSuspendedAt`): Art. 6(1)(c). These keep an erasure effective after a database restore (Art. 17), so that a deleted account neither reappears nor becomes usable again while a deletion's outcome is unknown (research R5, R6 Q2c).
 
 **Health data:** none. Account fields describe the account, not the person's health.
 
-**Consent (proposed):** not required.
+**Consent:** not required.
 
 **Findings:**
-- **Blocking before release:** Publish the approved short service description before account creation, then confirm the Art. 6(1)(b) conclusion against the actual registration flow. Separately decide the acknowledgement and restore/suspension controls.
+- **Resolved 2026-09-28:** the service description is published before account creation and matches the registration flow (see Lawful basis). The acknowledgement and restore-safety records have their own bases.
+- Keep the registration description in step with the service: if registration starts asking for more, or the core service changes, revisit the Art. 6(1)(b) conclusion and the description together.
 
-**Decision:** Owner provisionally chose Art. 6(1)(b) for essential account processing on 2026-09-28, subject to the service description above. The full P1 decision remains unsigned.
+**Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Art. 6(1)(b) for account and authentication, Art. 6(1)(c) for notice acknowledgement and restore safety; no health data; consent not required. Evidence: the approved and published registration description, and the live bundle check recorded above.
 
 ---
 
@@ -97,9 +101,9 @@ title, location, notes and bodyweight are assessed separately in P3.
 
 **Necessity:** this is the service itself, a digital copy of a paper gym log. Nothing is derived beyond what the user asks to see.
 
-**Lawful basis (provisional owner choice, 2026-09-28):** Art. 6(1)(b) for the core workout, exercise and set information needed to provide the requested log and progress chart, subject to P1's clear service-agreement condition. An Article 6 basis alone does not decide whether Article 9 also applies.
+**Lawful basis (owner decision, 2026-09-28):** Art. 6(1)(b) for the core workout, exercise and set information needed to provide the requested log and progress chart. It relies on the same service agreement as P1, confirmed there. An Article 6 basis alone does not decide whether Article 9 also applies.
 
-**Health data (open for focused review):** The earlier proposal was **not health data in this context**, but the owner did not sign it. A data-protection reviewer should assess whether the long strength history, user-entered exercise names and combination with optional bodyweight or notes allow reasonable health-status inferences before a final Article 9 conclusion.
+**Health data (owner decision, 2026-09-28):** **not health data in this context.** The owner, acting as controller and reviewer, weighed the points below and concluded that the core workout, exercise and set information does not reveal health status as Gym Notebook processes it. No Art. 9(2) condition is needed for P2. The rationale and the residual risk follow.
 - *For:* Art. 4(15) covers data about physical or mental health that **reveals information about health status**.
   - The [Article 29 Working Party's 2015 annex](https://ec.europa.eu/justice/article-29/documentation/other-document/files/2015/20150205_letter_art29wp_ec_health_data_after_plenary_annex_en.pdf) distinguishes isolated lifestyle measurements from data tracked over time or combined with other information. It predates the GDPR and is guidance, not a ruling on this app.
   - Gym Notebook records lifts, sets and reps to track strength. It draws no health conclusions, gives no health advice and does no profiling.
@@ -108,16 +112,24 @@ title, location, notes and bodyweight are assessed separately in P3.
   - In C‑21/23 _Lindenapotheke_, pharmacy orders counted as health data even without certainty about who they were for.
   - A long training history could support inferences, for example about an interruption from injury. That is a weaker link than P3's.
 - *Art. 22:* no automated decisions or profiling take place. The notice must say so (FR-002).
+- *Rationale for the conclusion:*
+  - The records are lifestyle and fitness logging: which lift, how much weight, how many reps, on which date. They measure training performance, not health status, and the service uses them only to show the user their own log and e1RM chart.
+  - The operator draws no health inferences, reads no users' logs in the ordinary course, gives no advice and does no profiling or analytics. The inferences in *Against* (such as an injury break) are speculative, and a gap in training has many ordinary explanations.
+  - The fields most likely to reveal health status are handled separately. Bodyweight, notes, title and location are P3 and need explicit Art. 9(2)(a) consent. So the combination of a long P2 history with health-revealing details only exists for accounts that gave that consent.
+  - Treating P2 as health data would leave explicit consent as the only realistic Art. 9(2) condition (see P3). Consent would then be a condition of the whole service, which conflicts with Art. 7(4), and withdrawing it would remove the notebook itself. That consequence is out of proportion to the weak link above.
+- *Residual risk (accepted by the owner, 2026-09-28):*
+  - The CJEU reads special categories broadly (C‑184/20 _OT_), so a supervisory authority could reach a different view on a long training history.
+  - Exercise names are free text and can hold health details despite the notice's request. This risk was already accepted in the 2026-09-25 P3 decision.
+  - Revisit this conclusion if the service ever analyses, derives or displays anything beyond the user's own log and progress chart, adds fields that describe the body or health, or shares notebook data with anyone other than the listed processors.
 
-**Consent:** Undecided for P2 until the Article 9 review. If P2 is health data, identify an applicable Article 9 condition and approve the resulting product/specification change before releasing that processing.
+**Consent:** not required. P2 relies on Art. 6(1)(b) and, per the conclusion above, needs no Art. 9 condition. P3 consent does not cover P2 and P2 does not depend on it.
 
 **Findings:**
-- **Blocking before release:** Obtain a focused data-protection review of the Article 9 classification. Give the reviewer the P2 field list, the long-term storage and progress-chart use, the free-text exercise-name risk, and the separate P3 optional-details flow. Record reviewer, date, rationale and the resulting decision here. Do not infer that P3 consent covers P2.
-  - Ask whether the recorded lift history and derived e1RM, alone or over time, reasonably reveal health status in this service's actual context.
-  - Ask how user-entered exercise names and combining P2 with consented P3 details affect the classification. A request to use generic lift names does not prevent health text from being entered.
-  - If any P2 information is health data, identify the Article 9 condition and the product/specification change needed for accounts that do not give optional-details consent. Keep P2 blocked until that decision is approved and implemented.
+- **Resolved 2026-09-28:** the Article 9 classification. The owner concluded not health data in this context, with the rationale and accepted residual risk recorded above, instead of waiting for an external data-protection review.
+- **Resolved 2026-09-28:** P1's service-agreement condition, which P2's Art. 6(1)(b) basis depends on.
 
-**Decision:** Owner provisionally chose Art. 6(1)(b) for essential core processing on 2026-09-28, subject to P1's service-agreement condition, and chose to seek focused review of P2's Article 9 classification. The full P2 decision remains unsigned.
+**Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Art. 6(1)(b); not health data in this context, so no Art. 9 condition; consent not required. Residual risk accepted as recorded above.
+- **Article 9 (owner, 2026-09-28):** this conclusion replaces the earlier plan to seek a focused external review.
 
 ---
 
@@ -191,9 +203,9 @@ remaining short free-text fields, or B for notes only.
 
 **Necessity:** error logs are needed to run the service. The deletion lines make an erasure survive a restore; without them the fallback path can't work.
 
-**Lawful basis (proposed):**
+**Lawful basis (owner choice, 2026-09-28; signed only once the findings below are resolved):**
 - Operational and error logs: **Art. 6(1)(f)**, legitimate interest in keeping the service working and secure. The proposed balancing relies on minimal content, no notebook data or credentials, restricted access and at most 30 days; T075–T077 must verify those facts.
-- Deletion lines: **Art. 6(1)(c)**, needed to comply with the Art. 17 erasure obligation, or 6(1)(f) as an alternative. FR-019 lets them stay until their original 30-day expiry after the account is gone. The deletion explanation must disclose this.
+- Deletion lines: **Art. 6(1)(c)**, needed to comply with the Art. 17 erasure obligation, matching P1's restore-safety records. FR-019 lets them stay until their original 30-day expiry after the account is gone. The deletion explanation must disclose this.
 
 **Health data:** none is intended in the logs. T075 must scan stored content before this is treated as confirmed.
 
@@ -201,33 +213,34 @@ remaining short free-text fields, or B for notes only.
 
 **Findings:**
 - **Blocking (R7, T075–T077).** T069 set `immediatePurgeDataOn30Days: true` and pinned the twelve App\* tables to 30/30; a live table scan on 2026-09-28 found only `AzureActivity` and `Usage` at 90/90. Azure rejected 30 days for those two metadata tables. Their app-user content/routing, actual purge behavior, extra sinks and old rows still need T075–T077 evidence before a 30-day app-user claim holds.
-- **Blocking (R7, T075).** No scan of stored log text for IPs, usernames, tokens or connection strings has been done yet. It is needed before the retention claim holds.
+- **Blocking (R7, T075), partly done 2026-09-28.** A read-only scan of the console log table ([research R7](../../specs/001-privacy-account-lifecycle/research.md#r7--retention-is-more-than-configuration-intent)) found no addresses, tokens or username values in API lines, and no nginx access lines after 2026-09-24 03:09 UTC. The system log table still needs scanning.
+- **Blocking (security), found 2026-09-28.** 15 API startup-exception lines from 2026-09-23 contain the database connection URL with the owner role's password. This contradicts "no credentials" in the balancing test. Rotate the password, update the Container App secret, then purge the rows or record their expiry.
 - *Non-blocking (R10).* Whether the Container Apps ingress keeps its own request logs with client IPs is unverified. It's likely not exposed to this project, but check before the notice states it.
 
-**Decision:** _(owner, date, evidence)_
+**Decision:** Bases chosen by the owner on 2026-09-28: Art. 6(1)(f) for operational and error logs, Art. 6(1)(c) for deletion lines; no health data intended; consent not required. **Unsigned** until the blocking findings above have evidence.
 
 ---
 
 ## P5 — Browser storage
 
-**Information:** the session JWT in `localStorage` under `gymnotebook.token` (`frontend/src/auth/token.ts`). It holds the user id, `TokenVersion` and expiry, and is removed on sign-out or an invalid session. No other cookies, `localStorage` or `sessionStorage` keys, analytics or third-party scripts. Fonts are self-hosted since PR #48 (T001).
+**Information:** the session JWT in `localStorage` under `gymnotebook.token` (`frontend/src/auth/token.ts`). It holds the user id, `TokenVersion` and expiry, and is removed on sign-out or an invalid session. No other cookies, `localStorage` or `sessionStorage` keys, analytics or third-party scripts. Fonts are self-hosted since PR #48 (T001). Rechecked against `frontend/src` on 2026-09-28: `auth/token.ts` is the only storage access.
 
 **Where it lives:** the user's own browser.
 
 **Necessity:** without it the user would have to sign in again on every page load.
 
-**Lawful basis (proposed):**
+**Lawful basis (owner decision, 2026-09-28):**
 - Storing information on a device falls under the ePrivacy rule: Finland's Act on Electronic Communications Services (917/2014) §205.
 - That rule allows storage without consent when it is **strictly necessary** for a service the user explicitly asked for. A sign-in token for a service the user logs into fits this.
 - Under GDPR, the token belongs to P1: Art. 6(1)(b).
 
 **Health data:** none.
 
-**Consent (proposed):** not required. No cookie banner is needed, and FR-006 forbids adding one without cause.
+**Consent:** not required. No cookie banner is needed, and FR-006 forbids adding one without cause.
 
-**Findings:** none.
+**Findings:** none. Adding any other browser storage, cookie or third-party script needs this purpose reviewed first.
 
-**Decision:** _(owner, date, evidence)_
+**Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Strictly necessary storage under §205 of Act 917/2014; GDPR basis Art. 6(1)(b) with P1; no health data; consent not required. Evidence: the code check above.
 
 ---
 
@@ -248,6 +261,8 @@ evidence.
 
 Google Fonts is no longer a recipient: T001/PR #48 self-hosted the fonts and recorded the browser network check.
 
+Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`frontend/src/screens/Cover.tsx`) is a plain outbound link with `rel="noreferrer"`: nothing is embedded and nothing is sent unless the visitor clicks it. After that click the visitor is on an independent service under its own terms. Recorded 2026-09-28; turning it into an embed or widget needs review first.
+
 **Lawful basis:** the basis of the purpose the data serves (P1–P5). Using a processor needs an Art. 28 agreement, not a separate basis. Proton's role for the contact mailbox should be confirmed: processor, or independent controller for its own purposes.
 
 **Health data:** Neon holds P3 data, so whatever P3 concludes applies to Neon too. A rights request emailed to the contact mailbox may itself contain health details.
@@ -262,23 +277,48 @@ Google Fonts is no longer a recipient: T001/PR #48 self-hosted the fonts and rec
 
 ---
 
+## P7 — Rights requests
+
+**Information:** messages sent to the privacy contact, including any rights request and the replies; and a minimal local register per case (opaque reference, request type, receipt time, channel, identity-check outcome, deadlines, actions, closure and disposal dates). The fields are listed in [rights-requests.md](rights-requests.md#intake-register-and-deadline). No identity-document copies are collected.
+
+**Where it lives:** a restricted Proton Mail folder (P6) and a FileVault-encrypted, operator-only local register with cloud sync disabled.
+
+**Necessity:** the controller must answer requests within the deadlines (Art. 12(3)–(4)) and be able to show how each was handled (Art. 5(2)). Nothing is kept beyond what answering and demonstrating that needs.
+
+**Lawful basis (owner decision, 2026-09-28):** Art. 6(1)(c), compliance with those obligations. This matches the notice's rights-request wording.
+
+**Retention:** 12 calendar months after case closure for routine cases (Q8, approved 2026-09-28; [retention.md](retention.md)). A longer hold needs a specific reviewed obligation or dispute.
+
+**Health data (open point):** not collected by design, but a person may volunteer health details in a request, for example when asking about optional workout notes. Keep only what answering needs, protect other people named in free text, and dispose on the same schedule. Which Art. 9(2) condition covers such volunteered details is not settled here. Revisit it before the first real case holding them, or if requests start to contain them routinely.
+
+**Consent:** not required.
+
+**Findings:**
+- Proton's role, subprocessors and deletion (T076), and local backup behavior before the first real case, are tracked in [rights-requests.md](rights-requests.md) and [suppliers.md](suppliers.md).
+- The T083 practice cases must pass (SC-007).
+
+**Decision:** Art. 6(1)(c) chosen by the owner, Jouni Uusimaa, 2026-09-28; consent not required. The Art. 9 point for volunteered health details stays open as recorded above.
+
+---
+
 ## Consent summary (T042)
 
 | Purpose | Proposed consent conclusion | Blocks rollout? |
 | --- | --- | --- |
-| P1 Account administration | Provisionally not required for essential account processing; ancillary records still need a basis decision | Yes, final P1 decision is open |
-| P2 Training log and progress | Open pending focused Article 9 review | Yes, final P2 decision is open |
+| P1 Account administration | Not required: Article 6(1)(b), with 6(1)(c) for acknowledgement and restore safety (signed 2026-09-28) | No |
+| P2 Training log and progress | Not required: Article 6(1)(b), not health data in this context (signed 2026-09-28) | No |
 | P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner 2026-09-25 and 2026-09-28 | Yes, pending final amendment and release review |
-| P4 Logs | Not required | No, but retention findings block |
-| P5 Browser storage | Not required (strictly necessary) | No |
+| P4 Logs | Not required: Article 6(1)(f) and 6(1)(c) chosen 2026-09-28, unsigned | Log-content, credential and retention findings block |
+| P5 Browser storage | Not required: strictly necessary, Article 6(1)(b) (signed 2026-09-28) | No |
 | P6 Recipients | Not applicable | Supplier findings block |
+| P7 Rights requests | Not required: Article 6(1)(c) (owner, 2026-09-28) | Supplier and T083 findings block |
 
 **T042 outcome (updated 2026-09-28):** consent is required for P3's four
 optional workout details. The FR-007 amendment
 ([spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements))
 and its implementation are recorded in [tasks.md](../../specs/001-privacy-account-lifecycle/tasks.md#phase-7a-user-story-6--choose-whether-to-record-optional-workout-details-priority-p1).
 The feature remains behind the privacy flag. Final approval of the amendment,
-the treatment of existing P3 values and the open P1/P2 decisions remain release
+the treatment of existing P3 values and the open P4/P6 findings remain release
 gates; the recorded implementation alone does not sign off T042.
 
 ## Change control
