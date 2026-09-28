@@ -176,33 +176,30 @@ remaining short free-text fields, or B for notes only.
 **Information:**
 - **API console logs** (`ContainerAppConsoleLogs_CL`, Log Analytics, swedencentral):
   - Default level `Information`, with `Microsoft.AspNetCore` at `Warning`.
-  - The app writes one information line of its own: `LifecycleFilter`'s "Guarded response write abandoned", which carries no identifier.
+  - The app can write `LifecycleFilter`'s "Guarded response write abandoned" diagnostic without an account identifier and the deletion evidence lines below.
   - EF Core logs SQL text but not parameter values (`EnableSensitiveDataLogging` is off).
   - Unhandled-exception lines may include a request path. Paths hold numeric workout and exercise ids.
-- **Planned deletion log lines** (US4, R6 Q2b): intent, committed and rolled-back lines holding only the account's `PrivacyAccountId` and the deletion-boundary timestamp.
+- **Deletion log lines** (`AccountDeletion.cs`, R6 Q2b): intent, committed and rolled-back lines holding only the account's `PrivacyAccountId` and the deletion-boundary timestamp.
   - This is pseudonymous personal data (R6 Q2e). It exists so a database restore can't bring a deleted account back.
 - **Container system logs** (`ContainerAppSystemLogs_CL`): platform events such as revisions, restarts and probes. No request data.
 - **Frontend nginx access log:** turned off in PR #47 (T002). Lines from before that deployment (remote address, user agent, path, time) age out by about 2026-10-26. T075 verifies this.
-- **Rate limiting:** the per-IP `auth` limiter and the planned per-account password throttle hold counters **in memory only**. Nothing is stored.
+- **Rate limiting:** the per-IP `auth` limiter and per-account password throttle hold counters **in memory only**. Nothing is stored.
 
-**Where it lives:** Azure Log Analytics workspace `log-gymnote-prod-58dd`, 30-day retention on the tables that hold rows. Only the operator's Azure account can read it.
+**Where it lives:** Azure Log Analytics workspace `log-gymnote-prod-58dd`, with 30-day settings on the console/system tables that hold rows. Intended access is restricted to the operator; T076 verifies the effective permissions.
 
 **Necessity:** error logs are needed to run the service. The deletion lines make an erasure survive a restore; without them the fallback path can't work.
 
 **Lawful basis (proposed):**
-- Operational and error logs: **Art. 6(1)(f)**, legitimate interest in keeping the service working and secure. Balancing: content is minimal, there is no notebook content or credentials, access is limited to the operator, and entries are kept at most 30 days.
+- Operational and error logs: **Art. 6(1)(f)**, legitimate interest in keeping the service working and secure. The proposed balancing relies on minimal content, no notebook data or credentials, restricted access and at most 30 days; T075–T077 must verify those facts.
 - Deletion lines: **Art. 6(1)(c)**, needed to comply with the Art. 17 erasure obligation, or 6(1)(f) as an alternative. FR-019 lets them stay until their original 30-day expiry after the account is gone. The deletion explanation must disclose this.
 
-**Health data:** none. No notebook content reaches the logs.
+**Health data:** none is intended in the logs. T075 must scan stored content before this is treated as confirmed.
 
 **Consent (proposed):** not required.
 
 **Findings:**
-- **Blocking (R7, T075).**
-  - `immediatePurgeDataOn30Days` isn't set, so Log Analytics may keep data about 31 days.
-  - The App\*, `Usage` and `AzureActivity` tables are at 90 days.
-  - Pin and verify these before claiming 30 days.
-- **Blocking (R7).** No scan of stored log text for IPs, usernames, tokens or connection strings has been done yet. It's needed before the retention claim holds.
+- **Blocking (R7, T075–T077).** T069 set `immediatePurgeDataOn30Days: true` and pinned the twelve App\* tables to 30/30; a live table scan on 2026-09-28 found only `AzureActivity` and `Usage` at 90/90. Azure rejected 30 days for those two metadata tables. Their app-user content/routing, actual purge behavior, extra sinks and old rows still need T075–T077 evidence before a 30-day app-user claim holds.
+- **Blocking (R7, T075).** No scan of stored log text for IPs, usernames, tokens or connection strings has been done yet. It is needed before the retention claim holds.
 - *Non-blocking (R10).* Whether the Container Apps ingress keeps its own request logs with client IPs is unverified. It's likely not exposed to this project, but check before the notice states it.
 
 **Decision:** _(owner, date, evidence)_
@@ -241,12 +238,13 @@ evidence.
 
 | Recipient | Role and data | Location | Evidence still needed |
 | --- | --- | --- | --- |
-| **Neon** | Processor: the whole database (P1–P3). 6-hour history window, no snapshots, one branch (R7). | `aws-eu-central-1` (Frankfurt) | DPA and sub-processor list; internal durability copies; any US transfer path (for example support access) and its safeguard |
-| **Microsoft Azure** | Processor: runs the API and frontend containers, and holds the P4 logs | swedencentral | DPA/Product Terms coverage for this subscription; transfer safeguards |
-| **Cloudflare** | Authoritative DNS for `gymnotebook.fit` (name servers `dawn`/`glen.ns.cloudflare.com`). **DNS-only, not proxied**, checked 2026-09-25: the A record resolves directly to the Azure frontend (20.240.228.206), and responses carry nginx's `server` header with no `cf-ray`. Cloudflare therefore sees DNS queries, usually from the visitor's resolver rather than the visitor, and none of the page or API traffic. The API is called on its `azurecontainerapps.io` address, not through this domain. | global anycast | Cloudflare's DPA and role for DNS; whether it is also the registrar (that concerns the controller's own data, not users'). **Keep the proxy off:** switching it on makes Cloudflare a processor for all frontend traffic, and would need this record, the notice and `suppliers.md` updated first |
-| **Proton Mail** | Holds messages sent to the privacy contact, including rights requests (FR-025). Proton AG is the operator's email provider. | Switzerland (EU adequacy decision 2000/518/EC, confirmed in the Commission's January 2024 review) | The account's terms and data location; whether any sub-processor sits outside Switzerland or the EU; retention of rights-request mail (T073) |
-| **GitHub** | Holds source code and CI logs. No user data. | — | Confirm that CI runs only against test containers, never production data |
-| **Google Fonts** | **Removed** by self-hosting in PR #48 (T001). | — | Confirm in a real browser that no `fonts.googleapis.com`/`fonts.gstatic.com` request remains, then drop this row |
+| **Neon** | Processor: the whole database (P1–P3). On 2026-09-28 the project reported a 6-hour history window, no snapshots and one branch. | `aws-eu-central-1` (Frankfurt) | Applicable DPA/subprocessor list, internal durability copies, support-transfer paths and deletion assistance; see [suppliers.md](suppliers.md). |
+| **Microsoft Azure** | Processor: runs the API and frontend containers, and holds the P4 logs. | swedencentral | DPA/Product Terms coverage for this subscription, transfer safeguards and actual log disposal; see [suppliers.md](suppliers.md). |
+| **Cloudflare** | Authoritative DNS for `gymnotebook.fit` (`dawn`/`glen.ns.cloudflare.com`). **DNS-only, not proxied**, rechecked 2026-09-28: the A record resolved directly to the Azure frontend (20.240.228.206), the response had nginx's `server` header and no `cf-ray`, and public `/config.js` pointed the API directly to `azurecontainerapps.io`. Cloudflare sees DNS query metadata, usually from the visitor's resolver, rather than the page or API HTTP bodies. | global anycast | Applicable terms, role, DNS logging and transfers; see [suppliers.md](suppliers.md). **Keep the proxy off:** enabling it adds a new HTTP recipient and needs prior notice/inventory review. |
+| **Proton Mail** | Holds messages sent to the privacy contact, including rights requests (FR-025). Proton AG is the operator's email provider. | Switzerland, Germany or Norway for encrypted mail storage per Proton's public policy; account-specific path unverified. Switzerland has an EU adequacy decision. | Applicable account terms, role, subprocessors and actual deletion; routine correspondence is scheduled for 12 months after closure under Q8. See [suppliers.md](suppliers.md) and [rights-requests.md](rights-requests.md). |
+| **GitHub** | Holds source code and CI logs; no user data is intended. | — | Confirm that CI runs only against test containers, never production data. |
+
+Google Fonts is no longer a recipient: T001/PR #48 self-hosted the fonts and recorded the browser network check.
 
 **Lawful basis:** the basis of the purpose the data serves (P1–P5). Using a processor needs an Art. 28 agreement, not a separate basis. Proton's role for the contact mailbox should be confirmed: processor, or independent controller for its own purposes.
 
@@ -255,10 +253,8 @@ evidence.
 **Consent:** not required for these recipients as such.
 
 **Findings:**
-- **Blocking (FR-020, T070).** Supplier evidence for Neon and Azure.
-- *Non-blocking.* Cloudflare is DNS-only (checked 2026-09-25). Record its DPA in `suppliers.md` (T070), and treat "proxy off" as a setting to re-check before release.
-- *Non-blocking.* Proton as the contact channel: Switzerland has an adequacy decision, so no further transfer safeguard is needed for Proton itself. Confirm the terms and sub-processors when writing `suppliers.md` (T070).
-- *Non-blocking.* Google Fonts browser check.
+- **Blocking (FR-023/FR-024, T076).** Account-specific agreements, transfer paths, internal copies and deletion assistance remain unverified for the suppliers in [suppliers.md](suppliers.md).
+- **Blocking (T076).** Cloudflare's DNS role/logging and Proton's terms/subprocessors/provider copies need review. Switzerland's adequacy decision covers transfers to Switzerland, not an unverified onward transfer.
 
 **Decision:** _(owner, date, evidence)_
 
