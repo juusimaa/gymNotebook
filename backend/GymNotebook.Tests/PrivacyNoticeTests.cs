@@ -47,6 +47,25 @@ public abstract class PrivacyFlagDisabledTests<TFactory>(TFactory factory) : ICl
         Assert.Equal(HttpStatusCode.NotFound, state.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, acknowledge.StatusCode);
     }
+
+    // User story 6 (tasks.md T085): the consent statement and the grant and withdraw routes
+    // don't exist with the feature off either.
+    [Fact]
+    public async Task OptionalDetailsRoutes_FlagNotExactlyTrue_Return404()
+    {
+        // Arrange: signed in, as above.
+        var client = await PrivacyTestAccounts.CreateSignedInClientAsync(factory);
+
+        // Act
+        var statement = await client.GetAsync("/privacy/optional-details-statement");
+        var grant = await client.PutAsJsonAsync("/account/privacy/optional-details-consent", new GrantOptionalDetailsConsentRequest("any"));
+        var withdraw = await client.DeleteAsync("/account/privacy/optional-details-consent");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, statement.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, grant.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, withdraw.StatusCode);
+    }
 }
 
 // "false": the base factory's value, and production's until T084.
@@ -218,7 +237,7 @@ public class PrivacyNoticeTests(PrivacyEnabledGymNotebookFactory factory) : ICla
     }
 
     [Fact]
-    public async Task UsersTable_AfterAcknowledgement_HasNoConsentColumn()
+    public async Task UsersTable_AfterAcknowledgement_HasOnlyOptionalDetailsConsentColumns()
     {
         // Arrange: nothing — this inspects the schema the migrations produced.
         using var scope = factory.Services.CreateScope();
@@ -228,10 +247,13 @@ public class PrivacyNoticeTests(PrivacyEnabledGymNotebookFactory factory) : ICla
         var consentColumns = await db.Database
             .SqlQuery<string>($"SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_name = 'users' AND column_name LIKE '%consent%'")
             .ToListAsync();
+        consentColumns.Sort(StringComparer.Ordinal);
 
         // Assert: acknowledgement is stored as a version and a time, and there is no
-        // consent value anywhere it could have been written to (FR-003, data-model.md).
-        Assert.Empty(consentColumns);
+        // consent value it could have been written to (FR-003, data-model.md). The only
+        // consent columns are user story 6's separate pair for the optional workout details
+        // (spec amendment 2026-09-25, FR-029), which the notice's Continue never touches.
+        Assert.Equal(["optional_details_consent_version", "optional_details_consented_at"], consentColumns);
     }
 }
 

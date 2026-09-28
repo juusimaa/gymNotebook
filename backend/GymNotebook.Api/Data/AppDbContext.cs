@@ -49,6 +49,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.ToTable(t => t.HasCheckConstraint(
                 "ck_users_privacy_notice_acknowledgement_pair",
                 "(acknowledged_privacy_notice_version IS NULL) = (privacy_notice_acknowledged_at IS NULL)"));
+
+            // The optional-details consent pair follows the same two rules: a trusted,
+            // bounded version string, and both fields null or both set (data-model.md →
+            // Optional-details consent).
+            entity.Property(u => u.OptionalDetailsConsentVersion).HasMaxLength(64);
+            entity.ToTable(t => t.HasCheckConstraint(
+                "ck_users_optional_details_consent_pair",
+                "(optional_details_consent_version IS NULL) = (optional_details_consented_at IS NULL)"));
         });
 
         modelBuilder.Entity<Workout>(entity =>

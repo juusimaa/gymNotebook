@@ -18,7 +18,7 @@ public static class ExportFieldGuide
         snapshotAt = "UTC instant. When the database snapshot this file was read from was taken. Every record in the file reflects the notebook at that single moment; it is not a claim that every record was created then.",
         conventions = new[]
         {
-            "Instants (createdAt, startedAt, endedAt, snapshotAt, acknowledgedAt) are ISO-8601 in UTC. The time zone they were originally entered in is not stored.",
+            "Instants (createdAt, startedAt, endedAt, snapshotAt, acknowledgedAt, consentedAt) are ISO-8601 in UTC. The time zone they were originally entered in is not stored.",
             "Every field is always present. A value that was not recorded is null, never left out; an empty collection is [].",
             "Text is exactly as it was stored, including any non-English characters.",
             "Ids are this account's own database ids. They exist to link records within this file (for example sets[].workoutExerciseId points at workoutExercises[].id) and every such reference resolves within the file.",

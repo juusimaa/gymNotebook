@@ -148,7 +148,17 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
 
         var account = await db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new { u.Id, u.PrivacyAccountId, u.Username, u.CreatedAt, u.AcknowledgedPrivacyNoticeVersion, u.PrivacyNoticeAcknowledgedAt })
+            .Select(u => new
+            {
+                u.Id,
+                u.PrivacyAccountId,
+                u.Username,
+                u.CreatedAt,
+                u.AcknowledgedPrivacyNoticeVersion,
+                u.PrivacyNoticeAcknowledgedAt,
+                u.OptionalDetailsConsentVersion,
+                u.OptionalDetailsConsentedAt,
+            })
             .SingleAsync(ct);
 
         json.WriteStartObject();
@@ -278,9 +288,19 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
             WriteInstant(json, "acknowledgedAt", account.PrivacyNoticeAcknowledgedAt.Value);
             json.WriteEndObject();
         }
-        // Always null for now: the consent columns arrive with user story 6 (tasks.md T090),
-        // and until then no account can hold a consent. T096 fills this in from the row.
-        json.WriteNull("optionalDetailsConsent");
+        // User story 6 (FR-034): the consent record, from the same snapshot as the workouts,
+        // so a concurrent withdrawal shows up as both gone or neither.
+        if (account.OptionalDetailsConsentVersion is null || account.OptionalDetailsConsentedAt is null)
+        {
+            json.WriteNull("optionalDetailsConsent");
+        }
+        else
+        {
+            json.WriteStartObject("optionalDetailsConsent");
+            json.WriteString("statementVersion", account.OptionalDetailsConsentVersion);
+            WriteInstant(json, "consentedAt", account.OptionalDetailsConsentedAt.Value);
+            json.WriteEndObject();
+        }
         json.WriteEndObject();
 
         json.WriteEndObject();

@@ -87,6 +87,10 @@ builder.Services.AddSingleton(lifecycleOptions);
 // this deploy at boot instead of surfacing only on the day the flag is switched on.
 builder.Services.AddSingleton(PrivacyNoticeCatalog.LoadEmbedded());
 
+// The optional-details consent statement from docs/privacy/consent/ (specs/001 user story
+// 6), loaded at boot for the same reason: a broken file fails the deploy, not the switch-on.
+builder.Services.AddSingleton(OptionalDetailsConsentCatalog.LoadEmbedded());
+
 // The clock the privacy endpoints read: which notice is current depends on the time (an
 // announced successor takes effect at its effectiveAt), and deletion deadlines count from
 // it. Injected rather than calling DateTimeOffset.UtcNow so tests can control time
@@ -787,6 +791,18 @@ workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal calle
 {
     var userId = ParseUserId(caller);
 
+    // Optional-details consent (specs/001 user story 6, FR-032), checked before anything
+    // is stored. With PRIVACY_LIFECYCLE_ENABLED off this is always Store: production keeps
+    // accepting the details without consent until the feature is switched on — the
+    // owner-accepted interim risk (spec Clarifications, FR-035).
+    var decision = await OptionalDetails.DecideAsync(db, userId, privacyLifecycleEnabled,
+        request.Title, request.BodyweightKg, request.Location, request.Notes, ct);
+    if (decision == OptionalDetailsDecision.Reject)
+    {
+        return OptionalDetails.ConsentRequired();
+    }
+    var storeAsNull = decision == OptionalDetailsDecision.StoreAsNull;
+
     var workout = new Workout
     {
         UserId = userId,
@@ -795,10 +811,10 @@ workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal calle
         // and Npgsql requires DateTimeOffset values to have offset zero. Accept any
         // valid offset at the HTTP boundary, then normalize it before persistence.
         StartedAt = request.StartedAt.ToUniversalTime(),
-        Title = request.Title,
+        Title = storeAsNull ? null : request.Title,
         BodyweightKg = request.BodyweightKg,
-        Location = request.Location,
-        Notes = request.Notes,
+        Location = storeAsNull ? null : request.Location,
+        Notes = storeAsNull ? null : request.Notes,
     };
 
     db.Workouts.Add(workout);
@@ -811,8 +827,9 @@ workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal calle
 })
    .WithName("CreateWorkout")
    .WithSummary("Creates a new workout")
-   .WithDescription("Starts a new session page for the authenticated user.")
-   .Produces<WorkoutDetailResponse>(StatusCodes.Status201Created);
+   .WithDescription("Starts a new session page for the authenticated user. With the privacy feature on, a non-empty title, location, notes or bodyweight without optional-details consent gets 403 optional_details_consent_required and nothing is stored.")
+   .Produces<WorkoutDetailResponse>(StatusCodes.Status201Created)
+   .Produces<ErrorResponse>(StatusCodes.Status403Forbidden);
 
 workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
@@ -917,6 +934,20 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
         return Results.BadRequest();
     }
 
+    // Optional-details consent, as in POST, and like it before any change: only the
+    // fields this request actually sets are passed, so omitting a detail never needs
+    // consent. The flag-off behaviour is the same owner-accepted interim as in POST.
+    var decision = await OptionalDetails.DecideAsync(db, userId, privacyLifecycleEnabled,
+        request.HasTitle ? request.Title : null,
+        request.HasBodyweightKg ? request.BodyweightKg : null,
+        request.HasLocation ? request.Location : null,
+        request.HasNotes ? request.Notes : null, ct);
+    if (decision == OptionalDetailsDecision.Reject)
+    {
+        return OptionalDetails.ConsentRequired();
+    }
+    var storeAsNull = decision == OptionalDetailsDecision.StoreAsNull;
+
     if (request.HasDate)
     {
         workout.Date = request.Date!.Value;
@@ -936,7 +967,7 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 
     if (request.HasTitle)
     {
-        workout.Title = request.Title;
+        workout.Title = storeAsNull ? null : request.Title;
     }
 
     if (request.HasBodyweightKg)
@@ -946,12 +977,12 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 
     if (request.HasLocation)
     {
-        workout.Location = request.Location;
+        workout.Location = storeAsNull ? null : request.Location;
     }
 
     if (request.HasNotes)
     {
-        workout.Notes = request.Notes;
+        workout.Notes = storeAsNull ? null : request.Notes;
     }
 
     await db.SaveChangesAsync(ct);
@@ -964,9 +995,10 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 })
     .WithName("UpdateWorkout")
     .WithSummary("Updates an existing workout")
-    .WithDescription("Modifies only the supplied workout fields. Explicit null clears nullable fields; date and startedAt cannot be null. Only the owner can update their workouts.")
+    .WithDescription("Modifies only the supplied workout fields. Explicit null clears nullable fields; date and startedAt cannot be null. Only the owner can update their workouts. With the privacy feature on, setting a non-empty title, location, notes or bodyweight without optional-details consent gets 403 optional_details_consent_required and nothing is changed.")
     .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
+    .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
     .Produces(StatusCodes.Status404NotFound);
 
 workouts.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>

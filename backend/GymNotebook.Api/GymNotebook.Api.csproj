@@ -31,6 +31,8 @@
   -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\docs\privacy\notices\*.json" LogicalName="PrivacyNotices/%(Filename)%(Extension)" />
+    <!-- The optional-details consent statement (specs/001 T091), embedded the same way. -->
+    <EmbeddedResource Include="..\..\docs\privacy\consent\*.json" LogicalName="OptionalDetailsConsent/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

@@ -5,5 +5,6 @@
 !backend/GymNotebook.Api/
 !backend/entrypoint.sh
 !docs/privacy/notices/
+!docs/privacy/consent/
 **/bin/
 **/obj/

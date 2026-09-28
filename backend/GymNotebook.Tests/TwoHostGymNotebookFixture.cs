@@ -259,6 +259,32 @@ public sealed class TwoHostGymNotebookFixture : IAsyncLifetime
         return new ExclusiveHolder(connection, transaction, userId);
     }
 
+    // Opens a transaction on a connection the test controls, for row-lock interleavings the
+    // advisory-lock helpers above don't cover (the optional-details consent coordination,
+    // OptionalDetailsCoordinationTests). The test runs statements in it, then commits on cue.
+    public async Task<TransactionHolder> BeginHeldTransactionAsync(int userId)
+    {
+        var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        var transaction = await connection.BeginTransactionAsync();
+        await using var command = new NpgsqlCommand("SELECT pg_backend_pid()", connection, transaction);
+        var pid = Convert.ToInt32(await command.ExecuteScalarAsync());
+        return new TransactionHolder(connection, transaction, userId, pid);
+    }
+
+    // Blocks until some other session is waiting on a lock held by the backend `pid`: the
+    // proof that a request has reached a row-lock wait behind a TransactionHolder.
+    public Task WaitForSessionBlockedByAsync(int pid) =>
+        WaitForAsync(async () =>
+        {
+            await using var connection = new NpgsqlConnection(ConnectionString);
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand(
+                "SELECT count(*) FROM pg_stat_activity WHERE @pid = ANY(pg_blocking_pids(pid))", connection);
+            command.Parameters.AddWithValue("pid", pid);
+            return Convert.ToInt32(await command.ExecuteScalarAsync()) > 0;
+        }, TimeSpan.FromSeconds(10), $"a session blocked by backend {pid}");
+
     public static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string what)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -300,6 +326,28 @@ public sealed class ExclusiveHolder(NpgsqlConnection connection, NpgsqlTransacti
         command.Parameters.AddWithValue("id", userId);
         await command.ExecuteNonQueryAsync();
     }
+
+    public async ValueTask DisposeAsync()
+    {
+        await transaction.DisposeAsync();
+        await connection.DisposeAsync();
+    }
+}
+
+// An open transaction the test runs statements in and commits on cue. `@id` in the SQL is
+// bound to the holder's user id; `Pid` is its backend, for WaitForSessionBlockedByAsync.
+public sealed class TransactionHolder(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, int pid) : IAsyncDisposable
+{
+    public int Pid => pid;
+
+    public async Task ExecuteAsync(string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("id", userId);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public Task CommitAsync() => transaction.CommitAsync();
 
     public async ValueTask DisposeAsync()
     {

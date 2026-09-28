@@ -39,6 +39,14 @@ public class User
     public string? AcknowledgedPrivacyNoticeVersion { get; set; }
     public DateTimeOffset? PrivacyNoticeAcknowledgedAt { get; set; }
 
+    // The consent statement version this user consented to for the optional workout
+    // details (title, location, notes, bodyweight), and when (specs/001 FR-029–FR-035).
+    // Both null means no consent — refusals and withdrawals aren't recorded, they leave the
+    // pair null. Always set together (a check constraint in AppDbContext). Existing
+    // accounts start with null: consent is never seeded (FR-035).
+    public string? OptionalDetailsConsentVersion { get; set; }
+    public DateTimeOffset? OptionalDetailsConsentedAt { get; set; }
+
     // Set only by the operator, by manual SQL during a restore fallback, when a
     // deletion's outcome is unknown (research R6 Q2c). While set, login answers a correct
     // password with 403 account_suspended and any token for the account is rejected.
