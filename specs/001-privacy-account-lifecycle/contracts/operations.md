@@ -70,7 +70,7 @@ No second store exists, so there is nothing to finalize or reconcile after commi
 ## Restore contract — fail closed
 
 1. **Isolate.** Disable API ingress and background writers before touching the database. Record the restore target `T`, schema version and covered interval. Reject targets before the UUID migration unless a reviewed compatible restore migration exists.
-2. **Restore with preservation.** Run `neon branches restore main main@<T> --preserve-under-name <name>` so the pre-restore state survives as a separate branch.
+2. **Restore with preservation.** Run `neon branches restore main '^self@<T>' --preserve-under-name <name>` (current self-restore CLI syntax; verify installed CLI) so the pre-restore state survives as a separate branch.
 3. **Reconcile.**
    - **Primary:** list PrivacyAccountId values present in the restored database and absent from the preserved branch. Delete those accounts again (workouts/blocks/sets, exercises, acknowledgement, credentials). Replays are idempotent.
    - **Fallback:** use this only if the preserved branch is unusable. First verify that log ingestion shows no gap from `T` to the restore; otherwise stay closed. Re-delete every UUID with a `deletion.committed` line after `T`. Ignore intents with a matching `deletion.rolled_back`. For an intent with neither, set SignInSuspendedAt by manual SQL, recorded in the restore log; never erase or revive it. Resolution follows [data-model.md → User additions](../data-model.md#user-additions).
