@@ -176,7 +176,7 @@ making a complaint.
 | --- | --- |
 | Controller, contact, Finnish authority | Name and address confirmed by owner; receipt, reply and personal workday monitoring reported. Authority identified in the processing decision. |
 | Required/optional information, consent distinction, rights, profiling | Drafted against the current product and specification; final wording awaits controller review. |
-| Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details. P1/P2 Article 6(1)(b) chosen provisionally; registration copy approved, while P2 Article 9 review and P1/P2/P4/P5/request decisions remain open. |
+| Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details. P1/P2 Article 6(1)(b) chosen provisionally; registration copy approved; P2 concluded not health data (owner, 2026-09-28). P1/P2/P4/P5/request sign-off remains open. |
 | Recipients, locations and transfer safeguards | Current supplier inventory is a draft; T076 must settle account-specific agreements, support paths and transfer safeguards. |
 | Retention and restored copies | Draft reflects the schedule's intended limits; T075–T077 must verify actual content, copies and disposal before these claims are published. |
 | Version and effective date | Create the reviewed JSON version and index entry only after the content and release evidence are settled. |
@@ -185,8 +185,9 @@ The proposed public wording above presents legal bases as final because that
 is how a published notice must read. The owner chose Article 6(1)(a) consent
 for the four optional workout details on 2026-09-28, alongside Article 9(2)(a)
 explicit consent. The owner also provisionally chose Article 6(1)(b) for
-essential P1/P2 processing, conditional on a clear service agreement. P2's
-Article 9 classification is open for focused review. These choices are
+essential P1/P2 processing, conditional on a clear service agreement, and
+concluded that P2's core notebook information is not health data in this
+context, so it needs no Article 9 condition. These choices are
 recorded in the [processing decision](processing-decision.md). The remaining
 legal bases are under review. The [EDPB's Article 6(1)(b)
 guidance](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)
@@ -196,7 +197,7 @@ The remaining purpose decisions to review are:
 
 | Record | Proposed conclusion to confirm or revise |
 | --- | --- |
-| P1 account and P2 core notebook | Owner provisionally chose Article 6(1)(b) for essential processing and approved the registration wording and placement. Confirm the basis against the actual registration flow; P2's separate Article 9 classification needs focused review. |
+| P1 account and P2 core notebook | Owner provisionally chose Article 6(1)(b) for essential processing and approved the registration wording and placement. Confirm the basis against the actual registration flow. P2 concluded not health data on 2026-09-28, so the notice needs no Article 9 wording for core notebook data. |
 | P1 notice acknowledgement | Article 6(1)(c) for documenting transparency; confirm the specific obligation and necessity of this record. |
 | P4 operational logs | Article 6(1)(f), with a documented balance based on actual log content, access and retention from T075–T077. |
 | P4 deletion evidence | Article 6(1)(c) for erasure/restore safety, or revise to a justified alternative. |
@@ -207,8 +208,8 @@ The remaining purpose decisions to review are:
    [processing-decision.md](processing-decision.md), including the Article 6
    basis for notice acknowledgement, deletion evidence and
    request correspondence (which is not yet a separate decision there).
-   Revise the wording above to match those decisions. Obtain the focused P2
-   health-data review as part of T041/T042 before enabling the feature.
+   Revise the wording above to match those decisions. (P2's health-data
+   question was settled on 2026-09-28: not health data in this context.)
    Publish the approved registration service description with the reviewed
    release.
 2. The owner has confirmed the public name, reported successful receipt from

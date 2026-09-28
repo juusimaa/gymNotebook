@@ -99,7 +99,7 @@ title, location, notes and bodyweight are assessed separately in P3.
 
 **Lawful basis (provisional owner choice, 2026-09-28):** Art. 6(1)(b) for the core workout, exercise and set information needed to provide the requested log and progress chart, subject to P1's clear service-agreement condition. An Article 6 basis alone does not decide whether Article 9 also applies.
 
-**Health data (open for focused review):** The earlier proposal was **not health data in this context**, but the owner did not sign it. A data-protection reviewer should assess whether the long strength history, user-entered exercise names and combination with optional bodyweight or notes allow reasonable health-status inferences before a final Article 9 conclusion.
+**Health data (owner decision, 2026-09-28):** **not health data in this context.** The owner, acting as controller and reviewer, weighed the points below and concluded that the core workout, exercise and set information does not reveal health status as Gym Notebook processes it. No Art. 9(2) condition is needed for P2. The rationale and the residual risk follow.
 - *For:* Art. 4(15) covers data about physical or mental health that **reveals information about health status**.
   - The [Article 29 Working Party's 2015 annex](https://ec.europa.eu/justice/article-29/documentation/other-document/files/2015/20150205_letter_art29wp_ec_health_data_after_plenary_annex_en.pdf) distinguishes isolated lifestyle measurements from data tracked over time or combined with other information. It predates the GDPR and is guidance, not a ruling on this app.
   - Gym Notebook records lifts, sets and reps to track strength. It draws no health conclusions, gives no health advice and does no profiling.
@@ -108,16 +108,25 @@ title, location, notes and bodyweight are assessed separately in P3.
   - In C‑21/23 _Lindenapotheke_, pharmacy orders counted as health data even without certainty about who they were for.
   - A long training history could support inferences, for example about an interruption from injury. That is a weaker link than P3's.
 - *Art. 22:* no automated decisions or profiling take place. The notice must say so (FR-002).
+- *Rationale for the conclusion:*
+  - The records are lifestyle and fitness logging: which lift, how much weight, how many reps, on which date. They measure training performance, not health status, and the service uses them only to show the user their own log and e1RM chart.
+  - The operator draws no health inferences, reads no users' logs in the ordinary course, gives no advice and does no profiling or analytics. The inferences in *Against* (such as an injury break) are speculative, and a gap in training has many ordinary explanations.
+  - The fields most likely to reveal health status are handled separately. Bodyweight, notes, title and location are P3 and need explicit Art. 9(2)(a) consent. So the combination of a long P2 history with health-revealing details only exists for accounts that gave that consent.
+  - Treating P2 as health data would leave explicit consent as the only realistic Art. 9(2) condition (see P3). Consent would then be a condition of the whole service, which conflicts with Art. 7(4), and withdrawing it would remove the notebook itself. That consequence is out of proportion to the weak link above.
+- *Residual risk (accepted by the owner, 2026-09-28):*
+  - The CJEU reads special categories broadly (C‑184/20 _OT_), so a supervisory authority could reach a different view on a long training history.
+  - Exercise names are free text and can hold health details despite the notice's request. This risk was already accepted in the 2026-09-25 P3 decision.
+  - Revisit this conclusion if the service ever analyses, derives or displays anything beyond the user's own log and progress chart, adds fields that describe the body or health, or shares notebook data with anyone other than the listed processors.
 
-**Consent:** Undecided for P2 until the Article 9 review. If P2 is health data, identify an applicable Article 9 condition and approve the resulting product/specification change before releasing that processing.
+**Consent:** not required. P2 relies on Art. 6(1)(b) and, per the conclusion above, needs no Art. 9 condition. P3 consent does not cover P2 and P2 does not depend on it.
 
 **Findings:**
-- **Blocking before release:** Obtain a focused data-protection review of the Article 9 classification. Give the reviewer the P2 field list, the long-term storage and progress-chart use, the free-text exercise-name risk, and the separate P3 optional-details flow. Record reviewer, date, rationale and the resulting decision here. Do not infer that P3 consent covers P2.
-  - Ask whether the recorded lift history and derived e1RM, alone or over time, reasonably reveal health status in this service's actual context.
-  - Ask how user-entered exercise names and combining P2 with consented P3 details affect the classification. A request to use generic lift names does not prevent health text from being entered.
-  - If any P2 information is health data, identify the Article 9 condition and the product/specification change needed for accounts that do not give optional-details consent. Keep P2 blocked until that decision is approved and implemented.
+- **Resolved 2026-09-28:** the Article 9 classification. The owner concluded not health data in this context, with the rationale and accepted residual risk recorded above, instead of waiting for an external data-protection review.
+- **Remaining before release:** P1's service-agreement condition, which P2's Art. 6(1)(b) basis depends on (publish the approved registration description and confirm it against the actual registration flow).
 
-**Decision:** Owner provisionally chose Art. 6(1)(b) for essential core processing on 2026-09-28, subject to P1's service-agreement condition, and chose to seek focused review of P2's Article 9 classification. The full P2 decision remains unsigned.
+**Decision:** Owner provisionally chose Art. 6(1)(b) for essential core processing on 2026-09-28, subject to P1's service-agreement condition.
+- **Article 9 (owner, 2026-09-28):** not health data in this context; no Art. 9 condition and no consent. Residual risk accepted as recorded above. This replaces the earlier plan to seek a focused external review.
+- The full P2 decision stays unsigned until P1's service-agreement condition is confirmed.
 
 ---
 
@@ -267,7 +276,7 @@ Google Fonts is no longer a recipient: T001/PR #48 self-hosted the fonts and rec
 | Purpose | Proposed consent conclusion | Blocks rollout? |
 | --- | --- | --- |
 | P1 Account administration | Provisionally not required for essential account processing; ancillary records still need a basis decision | Yes, final P1 decision is open |
-| P2 Training log and progress | Open pending focused Article 9 review | Yes, final P2 decision is open |
+| P2 Training log and progress | Not required: not health data in this context (owner, 2026-09-28); Article 6(1)(b) provisional | Yes, until P1's service-agreement condition is confirmed |
 | P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner 2026-09-25 and 2026-09-28 | Yes, pending final amendment and release review |
 | P4 Logs | Not required | No, but retention findings block |
 | P5 Browser storage | Not required (strictly necessary) | No |
@@ -278,7 +287,7 @@ optional workout details. The FR-007 amendment
 ([spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements))
 and its implementation are recorded in [tasks.md](../../specs/001-privacy-account-lifecycle/tasks.md#phase-7a-user-story-6--choose-whether-to-record-optional-workout-details-priority-p1).
 The feature remains behind the privacy flag. Final approval of the amendment,
-the treatment of existing P3 values and the open P1/P2 decisions remain release
+the treatment of existing P3 values and the open P1/P2 sign-off remain release
 gates; the recorded implementation alone does not sign off T042.
 
 ## Change control
