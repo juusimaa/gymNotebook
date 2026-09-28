@@ -102,17 +102,21 @@ Current endpoints:
 | `PATCH` | `/workouts/{id}/sets/{setId}` | Bearer | Replaces weight, reps and warm-up flag |
 | `DELETE` | `/workouts/{id}/sets/{setId}` | Bearer | Removes one set |
 | `GET` | `/privacy/notice` | – | The current privacy notice + any announced successor; records nothing |
-| `GET` | `/account/privacy` | Bearer | Current notice version, the caller's acknowledgement, whether one is required |
+| `GET` | `/privacy/optional-details-statement` | – | Current statement for optional workout details |
+| `GET` | `/account/privacy` | Bearer | Notice acknowledgement and optional-details consent state, including a pending transition count |
 | `PUT` | `/account/privacy/acknowledgement` | Bearer | Acknowledges the current notice version only (409 otherwise) |
+| `PUT` | `/account/privacy/optional-details-consent` | Bearer | Grants consent for the current statement version |
+| `DELETE` | `/account/privacy/optional-details-consent` | Bearer | Withdraws consent and clears stored optional details |
 | `POST` | `/account/export` | Bearer | Needs `currentPassword`; streams the whole notebook as one JSON attachment |
+| `POST` | `/account/delete` | Bearer | Needs `currentPassword` and `confirmDeletion: true`; deletes the account and notebook |
 
-The four privacy routes exist only when `PRIVACY_LIFECYCLE_ENABLED` is `true` (see [Configuration](#configuration)); otherwise they answer 404. Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history?from=&to=`) returns the best qualifying working set per session for the chart: Epley e1RM for loaded exercises (with tested singles unchanged), or reps for unloaded bodyweight sets. Its optional calendar-date bounds are inclusive.
+These privacy routes exist only when `PRIVACY_LIFECYCLE_ENABLED` is `true` (see [Configuration](#configuration)); otherwise they answer 404. Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history?from=&to=`) returns the best qualifying working set per session for the chart: Epley e1RM for loaded exercises (with tested singles unchanged), or reps for unloaded bodyweight sets. Its optional calendar-date bounds are inclusive.
 
 ## Configuration
 
 Everything comes from environment variables; [.env.example](.env.example) lists them and the gitignored `.env` holds real values. The full story — including why `ConnectionStrings__Default` has a double underscore and why `INVITE_CODE` empty means *open registration* — is in [PLAN.md → Configuration](PLAN.md#configuration).
 
-`PRIVACY_LIFECYCLE_ENABLED` switches on the privacy and account lifecycle feature (privacy notice, data export, account deletion; see [specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). Because `main` deploys automatically, the unfinished feature merges switched off. Unlike `INVITE_CODE`, a missing or empty value fails closed: only the exact value `true` enables it, and `True`, `1` or a typo leave it off. It is `false` in Azure until every release gate has evidence. To try the feature locally, set `PRIVACY_LIFECYCLE_ENABLED=true` in `.env` (Compose) or `dotnet user-secrets set PRIVACY_LIFECYCLE_ENABLED true` (SDK). Tests that need it on use `PrivacyEnabledGymNotebookFactory`. The privacy notice the feature serves lives in [`docs/privacy/notices/`](docs/privacy/notices/README.md) and is compiled into the API image; the files there today are synthetic development content, not a publishable notice.
+`PRIVACY_LIFECYCLE_ENABLED` switches on the privacy and account lifecycle feature (notice, optional-details consent, export and deletion; see [specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). Because `main` deploys automatically, the feature remains switched off in production until every release gate has evidence. A missing or empty value fails closed: only the exact value `true` enables it, and `True`, `1` or a typo leave it off. For a local Compose run, put `PRIVACY_LIFECYCLE_ENABLED=true` in the gitignored root `.env`, then run `docker compose up --build` from the repository root. For an SDK run, set `dotnet user-secrets set PRIVACY_LIFECYCLE_ENABLED true --project backend/GymNotebook.Api` from the repository root before starting the API. Check `GET /privacy/notice` returns 200; with the flag off it returns 404. The test fixtures set the flag themselves, so it does not need to be enabled for `dotnet test`. The served notices in [`docs/privacy/notices/`](docs/privacy/notices/README.md) are synthetic development content, not a publishable notice.
 
 `Lifecycle:SharedLockTimeoutMs`, `Lifecycle:WriteTimeoutMs`, `Lifecycle:ExclusiveLockTimeoutMs` and `Lifecycle:DeletionStatementTimeoutMs` (defaults 5000, 10000, 15000 and 30000) bound the account-lifecycle locks described in [PLAN.md → Account lifecycle coordination](PLAN.md#account-lifecycle-coordination). The defaults are what production runs with; the app refuses to start if the write timeout isn't below the exclusive wait. One consequence for capacity: **every authenticated request holds one pooled database connection for its whole duration, including writing the response** (bounded by the write timeout), because the lock lives in that connection's transaction. The Npgsql pool (100 connections by default) and Neon's pooler are far above what this app needs, but it is the first thing to check if requests ever queue for a connection.
 
@@ -123,6 +127,14 @@ dotnet test backend/GymNotebook.sln
 ```
 
 Docker must be running: each test class gets a throwaway `postgres:17` container via Testcontainers, and the migrations are applied to it before the first test. There is no in-memory database mode on purpose — the constraints in the schema are among the things worth testing. The account-lifecycle tests (the `Lifecycle` collection) share one container and start several app hosts against it, some on real Kestrel over loopback; they take a few seconds longer than the rest.
+
+The full backend command above includes the privacy notice, consent, export, deletion, lifecycle concurrency and transition-clearing tests. To run the 100,000-set export regression fixture alone from the repository root and see its timing and payload measurements:
+
+```sh
+dotnet test backend/GymNotebook.sln --filter FullyQualifiedName~ExportPerformanceTests --logger 'console;verbosity=detailed'
+```
+
+`ExportPerformanceTests` seeds 1,000 workouts × 10 exercise blocks × 10 sets (100,000 sets), downloads and parses the complete JSON over loopback Kestrel, and checks the 60-second local bound. Its test output reports duration, payload size and test-process memory approximations. `DeletionPerformanceTests` uses the same fixture for the local deletion bound. These checks cannot establish the deployed cross-region and proxy results; those require the separate [release checklist](docs/privacy/release-checklist.md) run.
 
 The frontend has the same four checks CI runs, as npm scripts:
 
@@ -183,7 +195,7 @@ AGENTS.md              working guidelines for AI assistants in this repo
 
 Milestones 1–10 are done. Workouts can be logged, edited and deleted end-to-end, exercises have both an e1RM/reps progress chart and rename/merge management, and every push to `main` publishes both images to GHCR and deploys them to Azure Container Apps at <https://gymnotebook.fit>.
 
-Milestone 11, privacy and account lifecycle, is in progress through Spec Kit ([specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). The account-lifecycle locking is live. The privacy notice and the notebook export are merged but switched off in production behind `PRIVACY_LIFECYCLE_ENABLED` until their release gates have evidence. Account deletion is still to come. The full list with what each milestone turned out to involve is in [PLAN.md → Milestones](PLAN.md#milestones).
+Milestone 11, privacy and account lifecycle, is in progress through Spec Kit ([specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). The notice, export, deletion and optional-details consent are implemented and remain switched off in production behind `PRIVACY_LIFECYCLE_ENABLED`. Provider, restore, deployed performance and owner walkthrough evidence is still needed before the production switch; track it in the [release checklist](docs/privacy/release-checklist.md). The full milestone log is in [PLAN.md → Milestones](PLAN.md#milestones).
 
 ## License
 
