@@ -398,7 +398,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - With the flag off, everything is accepted as today.
 - [x] T087 [P] [US6] Add a withdrawal coordination test in `backend/GymNotebook.Tests/OptionalDetailsCoordinationTests.cs`: a workout save racing withdrawal ends either rejected or cleared, never with a detail stored after withdrawal commits. Use the existing barrier/`pg_locks` pattern, no sleeps.
   - Done 2026-09-28: ordered by a `FOR SHARE` read of the users row in the save and a users-row UPDATE before the workouts UPDATE in the withdrawal. Two tests force each interleaving with a held transaction and `pg_blocking_pids`; each fails when its safeguard is removed.
-- [ ] T088 [P] [US6] Add Vitest tests for the gate decision (notice first, then the transition question only when `transitionPending`) and for dropping optional details from a draft, in `frontend/src/auth/noticeGate.test.ts` and `frontend/src/screens/newWorkoutDraft.test.ts`.
+- [x] T088 [P] [US6] Add Vitest tests for the gate decision (notice first, then the transition question only when `transitionPending`) and for dropping optional details from a draft, in `frontend/src/auth/noticeGate.test.ts` and `frontend/src/screens/newWorkoutDraft.test.ts`.
 
 ### Implementation for User Story 6
 
@@ -409,12 +409,14 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 - [x] T092 [US6] Map the three routes and extend `GET /account/privacy` in `backend/GymNotebook.Api/PrivacyEndpoints.cs`: flag-gated, lifecycle filter, `Cache-Control: no-store`. Withdrawal is one transaction with a single `ExecuteUpdateAsync` (makes T085 pass).
 - [x] T093 [US6] Enforce consent in `POST /workouts` and `PATCH /workouts/{id}` in `backend/GymNotebook.Api/Program.cs`, only when the flag is on, before any change. Comment the owner-accepted interim behaviour with the flag off (makes T086–T087 pass).
   - Done 2026-09-28: without consent, empty strings are stored as null, so "holds a detail" means "not null" everywhere (contracts/api.md).
-- [ ] T094 [P] [US6] Add the statement, grant and withdraw calls and the new account-state fields in `frontend/src/api/privacy.ts`, and map the 403 code in `frontend/src/api/client.ts`.
-- [ ] T095 [US6] Create the consent screen `/account/privacy/optional-details` in `frontend/src/screens/OptionalDetailsConsent.tsx`, including the withdrawal review step. Hide the four inputs and show the opt-in entry in `NewWorkout.tsx` and `WorkoutDetail.tsx`. Add the transition question to the notebook gate in `NoticeGate.tsx`/`requireNoticeAcknowledged.ts`. Link from `AccountPrivacy.tsx` (depends on T094; makes T088 pass).
+- [x] T094 [P] [US6] Add the statement, grant and withdraw calls and the new account-state fields in `frontend/src/api/privacy.ts`, and map the 403 code in `frontend/src/api/client.ts`.
+- [x] T095 [US6] Create the consent screen `/account/privacy/optional-details` in `frontend/src/screens/OptionalDetailsConsent.tsx`, including the withdrawal review step. Hide the four inputs and show the opt-in entry in `NewWorkout.tsx` and `WorkoutDetail.tsx`. Add the transition question to the notebook gate in `NoticeGate.tsx`/`requireNoticeAcknowledged.ts`. Link from `AccountPrivacy.tsx` (depends on T094; makes T088 pass).
+  - Done 2026-09-28: the editor opens the choice inline rather than navigating, so the draft survives (contracts/ui.md updated). The transition question is the consent screen itself; `notebookGateRedirect` sends there after the notice. It needed the affected-workout count, so `GET /account/privacy` gained `pendingWorkoutCount` (added to PR A). Walked through in the real app with the flag on: inline allow, rejected save, withdrawal, and the transition question with leave-and-return.
 - [x] T096 [US6] Include `privacyRecords.optionalDetailsConsent` in the export: in T049 if US3 is not yet merged, otherwise here with a T044 test update. Account deletion removes the pair with User, so no US4 change is needed.
 - [x] T097 [US6] (operator) Write the transition clearing SQL and its follow-up zero-count query in `docs/privacy/retention.md`, and add a dated step to `docs/privacy/release-checklist.md` for running it 30 days after T084.
   - Done 2026-09-28: `docs/privacy/retention.md` and `docs/privacy/release-checklist.md` hold only this step until T071 and T078. `TransitionClearingSqlTests` runs both SQL blocks from the document against PostgreSQL (quickstart §6a step 7).
-- [ ] T098 [US6] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the editor opt-in, the consent screen and the transition question, and record US6 in `PLAN.md` and the notice's information section (FR-002: optional information and the consequence of not giving it).
+- [x] T098 [US6] Align `docs/ui/README.md` and `docs/ui/prototype.html` with the editor opt-in, the consent screen and the transition question, and record US6 in `PLAN.md` and the notice's information section (FR-002: optional information and the consequence of not giving it).
+  - Done 2026-09-28: the notice wording went into the announced synthetic successor `dev-2026-11-01`, not the current version. The reviewed notice (T043) must carry the same point.
 
 **Checkpoint**: With the flag on locally, quickstart §6a passes and T085–T088 pass. With the flag off, workout writes behave as today.
 

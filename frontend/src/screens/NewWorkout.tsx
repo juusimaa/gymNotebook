@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ApiError } from '../api/client'
+import { ApiError, isOptionalDetailsConsentRequired } from '../api/client'
 import {
   searchExercises,
   updateExercise as updateExerciseRecord,
@@ -18,6 +18,7 @@ import {
   createInitialHeadingDraft,
   createLocalEndedAt,
   createWorkoutExerciseDraft,
+  dropOptionalDetails,
   prepareWorkoutDraft,
   removeSetFromExercise,
   updateSetInExercise,
@@ -27,6 +28,8 @@ import {
 } from './newWorkoutDraft'
 import { createClientId } from './clientId'
 import { describeLastSet, normalizeExerciseName } from './exerciseFormat'
+import { OptionalDetailsChoice } from './OptionalDetailsConsent'
+import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import './NewWorkout.css'
 
 export default function NewWorkout() {
@@ -56,6 +59,24 @@ export default function NewWorkout() {
   const [isLoading, setIsLoading] = useState(isEditing)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
   const [confirmingFinish, setConfirmingFinish] = useState(false)
+
+  // Title, bodyweight, gym and notes need the account's consent (specs/001
+  // user story 6). Without it their inputs are hidden and one entry offers to
+  // enable them; the consent choice then opens right here, in their place, so
+  // the draft survives it. Focus follows: to the title after "Allow", back to
+  // the entry after "Not now".
+  const optionalDetails = useOptionalDetailsAllowed()
+  const detailsAllowed = optionalDetails.status === 'allowed'
+  const [showingConsent, setShowingConsent] = useState(false)
+  const entryRef = useRef<HTMLButtonElement>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
+  const focusAfterConsent = useRef<'entry' | 'title' | null>(null)
+
+  useEffect(() => {
+    if (focusAfterConsent.current === 'entry') entryRef.current?.focus()
+    if (focusAfterConsent.current === 'title') titleRef.current?.focus()
+    focusAfterConsent.current = null
+  }, [showingConsent, optionalDetails.status])
 
   // If the heading POST succeeds but a later request fails, retain its id. A
   // retry then updates that page instead of creating a duplicate empty page.
@@ -235,7 +256,12 @@ export default function NewWorkout() {
       return
     }
 
-    const prepared = prepareWorkoutDraft(heading, exercises)
+    // Hidden values are never sent: without consent (or while it's still being
+    // checked) the draft is saved without its optional details.
+    const prepared = prepareWorkoutDraft(
+      detailsAllowed ? heading : dropOptionalDetails(heading),
+      exercises,
+    )
     if (!prepared.ok) {
       setSaveMessage(prepared.message)
       return
@@ -302,7 +328,19 @@ export default function NewWorkout() {
       }
 
       void navigate(isEditing ? `/workouts/${workoutId}` : '/workouts')
-    } catch {
+    } catch (error: unknown) {
+      // Consent was withdrawn elsewhere while this page was open, and the
+      // server refused the details (contracts/ui.md → Rejected save). Not a
+      // session problem: keep the draft, drop only those details, say so, and
+      // offer the opt-in entry again.
+      if (isOptionalDetailsConsentRequired(error)) {
+        setHeading(dropOptionalDetails)
+        optionalDetails.setStatus('not-allowed')
+        setSaveMessage(
+          'This account no longer allows a title, bodyweight, gym or notes, so they were removed from this page and not saved. The rest of your draft is kept; save again.',
+        )
+        return
+      }
       setSaveMessage(
         workoutId === null
           ? 'The page could not be saved. Please try again.'
@@ -406,62 +444,91 @@ export default function NewWorkout() {
                   </span>
                 </div>
               )}
-              <div className="field">
-                <label className="label" htmlFor="title">
-                  Title
-                </label>
-                <input
-                  className="input"
-                  id="title"
-                  type="text"
-                  value={heading.title}
-                  onChange={(event) =>
-                    updateHeadingField('title', event.target.value)
-                  }
-                />
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="bodyweightKg">
-                  Bodyweight (kg)
-                </label>
-                <input
-                  className="input num"
-                  id="bodyweightKg"
-                  type="text"
-                  inputMode="decimal"
-                  value={heading.bodyweightKg}
-                  onChange={(event) =>
-                    updateHeadingField('bodyweightKg', event.target.value)
-                  }
-                />
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="location">
-                  Gym
-                </label>
-                <input
-                  className="input"
-                  id="location"
-                  type="text"
-                  value={heading.location}
-                  onChange={(event) =>
-                    updateHeadingField('location', event.target.value)
-                  }
-                />
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="notes">
-                  Notes
-                </label>
-                <textarea
-                  className="input"
-                  id="notes"
-                  value={heading.notes}
-                  onChange={(event) =>
-                    updateHeadingField('notes', event.target.value)
-                  }
-                />
-              </div>
+              {detailsAllowed && (
+                <>
+                  <div className="field">
+                    <label className="label" htmlFor="title">
+                      Title
+                    </label>
+                    <input
+                      className="input"
+                      id="title"
+                      ref={titleRef}
+                      type="text"
+                      value={heading.title}
+                      onChange={(event) =>
+                        updateHeadingField('title', event.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="bodyweightKg">
+                      Bodyweight (kg)
+                    </label>
+                    <input
+                      className="input num"
+                      id="bodyweightKg"
+                      type="text"
+                      inputMode="decimal"
+                      value={heading.bodyweightKg}
+                      onChange={(event) =>
+                        updateHeadingField('bodyweightKg', event.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="location">
+                      Gym
+                    </label>
+                    <input
+                      className="input"
+                      id="location"
+                      type="text"
+                      value={heading.location}
+                      onChange={(event) =>
+                        updateHeadingField('location', event.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="notes">
+                      Notes
+                    </label>
+                    <textarea
+                      className="input"
+                      id="notes"
+                      value={heading.notes}
+                      onChange={(event) =>
+                        updateHeadingField('notes', event.target.value)
+                      }
+                    />
+                  </div>
+                </>
+              )}
+              {optionalDetails.status === 'not-allowed' &&
+                (showingConsent ? (
+                  <OptionalDetailsChoice
+                    declineLabel="Not now"
+                    onAllowed={() => {
+                      focusAfterConsent.current = 'title'
+                      optionalDetails.setStatus('allowed')
+                      setShowingConsent(false)
+                    }}
+                    onDeclined={() => {
+                      focusAfterConsent.current = 'entry'
+                      setShowingConsent(false)
+                    }}
+                  />
+                ) : (
+                  <button
+                    ref={entryRef}
+                    className="btn btn-secondary btn-block"
+                    type="button"
+                    onClick={() => setShowingConsent(true)}
+                  >
+                    Add title, location, notes and bodyweight
+                  </button>
+                ))}
             </section>
 
             <section

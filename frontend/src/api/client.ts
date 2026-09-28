@@ -41,6 +41,22 @@ export class ApiError extends Error {
   }
 }
 
+// The 403 a workout save gets when it carries a title, location, notes or
+// bodyweight the account hasn't allowed (specs/001 user story 6) — for example
+// from a tab still open after consent was withdrawn elsewhere. It is not a
+// session problem: nothing signs out, and the editor keeps the draft and drops
+// only those details (contracts/ui.md → Rejected save).
+export const OPTIONAL_DETAILS_CONSENT_REQUIRED =
+  'optional_details_consent_required'
+
+export function isOptionalDetailsConsentRequired(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    error.code === OPTIONAL_DETAILS_CONSENT_REQUIRED
+  )
+}
+
 // Reads the `code` out of an error response, if it has one. Only a JSON body is
 // parsed, and a body that isn't the expected shape just means "no code" — the
 // status alone is still a complete error.

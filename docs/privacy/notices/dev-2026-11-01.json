@@ -2,7 +2,7 @@
   "version": "dev-2026-11-01",
   "effectiveAt": "2026-11-01T00:00:00Z",
   "publishedAt": "2026-09-25T00:00:00Z",
-  "materialChangeSummary": "SYNTHETIC DEVELOPMENT NOTICE. An announced successor with a future effective date, used only to exercise the \"announced change\" display and the gate repeating after activation.",
+  "materialChangeSummary": "SYNTHETIC DEVELOPMENT NOTICE. An announced successor with a future effective date, used only to exercise the \"announced change\" display and the gate repeating after activation. Also describes the separate consent for a workout's title, location, notes and bodyweight (user story 6).",
   "owner": "Project owner",
   "reviewDate": null,
   "reviewEvidence": "None. Synthetic development content; not reviewed and not for publication (tasks.md T030, gated on T041-T043).",
@@ -28,7 +28,7 @@
       "heading": "What you put in",
       "paragraphs": [
         "Required to have an account: a username and a password. The password is stored only as a one-way hash. Without them the service cannot keep a notebook for you.",
-        "Your notebook: exercises, workouts, sets, and optionally bodyweight, titles, locations and notes. Optional fields can be left empty. Notes may contain sensitive details, so choose what you write."
+        "Your notebook: exercises, workouts and sets. A workout's title, location, notes and bodyweight are optional and are stored only if you allow them in a separate consent, because they can reveal health information. If you don't, those fields stay hidden and everything else works; you can allow or withdraw at any time from the Privacy & account page."
       ]
     },
     {

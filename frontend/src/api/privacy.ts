@@ -1,8 +1,8 @@
 import { ApiError, request, send } from './client'
 import { readCompleteJson } from './download'
 
-// Wire types and calls for the privacy routes (specs/001 user stories 1, 3 and
-// 4, contracts/api.md), one per record in backend/GymNotebook.Api.
+// Wire types and calls for the privacy routes (specs/001 user stories 1, 3, 4
+// and 6, contracts/api.md), one per record in backend/GymNotebook.Api.
 //
 // The frontend has no feature flag of its own (plan.md P25): the backend maps
 // these routes only when PRIVACY_LIFECYCLE_ENABLED is "true", so a 404 here
@@ -40,11 +40,39 @@ export interface NoticeAcknowledgement {
   acknowledgedAt: string
 }
 
+// User story 6: consent for a workout's title, location, notes and bodyweight
+// ("optional details"). Refusals and withdrawals aren't recorded: no consent is
+// simply null.
+export interface OptionalDetailsConsent {
+  statementVersion: string
+  consentedAt: string
+}
+
+export interface OptionalDetailsState {
+  currentStatementVersion: string
+  consent: OptionalDetailsConsent | null
+  // No consent, but the account still holds details from before the feature:
+  // the notebook gate asks the transition question (contracts/ui.md).
+  transitionPending: boolean
+  // How many workouts that question is about; 0 when nothing is pending.
+  pendingWorkoutCount: number
+}
+
 export interface AccountPrivacyState {
   currentNoticeVersion: string
   acknowledgement: NoticeAcknowledgement | null
   // Decided by the server; the client never compares version strings itself.
   requiresAcknowledgement: boolean
+  optionalDetails: OptionalDetailsState
+}
+
+// The consent statement has the notice's shape, without the successor
+// mechanism: a new statement needs its own specification change (FR-034).
+export type OptionalDetailsStatement = Omit<PrivacyNotice, 'announcedSuccessor'>
+
+export interface OptionalDetailsWithdrawal {
+  // Workouts this request cleared. A retry after a lost response returns 0.
+  clearedWorkouts: number
 }
 
 // Turns the 404 of an unmapped route into null; anything else propagates.
@@ -79,6 +107,36 @@ export function acknowledgeNotice(
     method: 'PUT',
     body: { noticeVersion },
   })
+}
+
+// Public, like the notice: the statement can be read before deciding, and
+// reading it records nothing.
+export function getOptionalDetailsStatement(): Promise<OptionalDetailsStatement | null> {
+  return nullWhenFeatureOff(
+    request<OptionalDetailsStatement>('/privacy/optional-details-statement'),
+  )
+}
+
+// "Allow": sends exactly the statement version on screen. Throws ApiError 409
+// "consent_statement_changed" when that's no longer the current one. A retry of
+// the same version keeps the original time.
+export function grantOptionalDetailsConsent(
+  statementVersion: string,
+): Promise<OptionalDetailsConsent> {
+  return request<OptionalDetailsConsent>(
+    '/account/privacy/optional-details-consent',
+    { method: 'PUT', body: { statementVersion } },
+  )
+}
+
+// Withdrawal, and "Don't allow" in the transition question: removes the
+// consent and every optional detail in one step. No password (FR-033). Safe to
+// retry after a lost response.
+export function withdrawOptionalDetailsConsent(): Promise<OptionalDetailsWithdrawal> {
+  return request<OptionalDetailsWithdrawal>(
+    '/account/privacy/optional-details-consent',
+    { method: 'DELETE' },
+  )
 }
 
 // The export's fixed file name; the server sends the same one in

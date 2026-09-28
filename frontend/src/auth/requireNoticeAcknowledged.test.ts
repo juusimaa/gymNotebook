@@ -19,6 +19,13 @@ beforeEach(() => {
   vi.mocked(getAccountPrivacy).mockReset()
 })
 
+const noOptionalDetails = {
+  currentStatementVersion: 's1',
+  consent: null,
+  transitionPending: false,
+  pendingWorkoutCount: 0,
+}
+
 // Only `request` is read, so the rest of the loader arguments are left out.
 function load(path: string): Promise<null> {
   const args = {
@@ -50,6 +57,7 @@ describe('requireNoticeAcknowledged', () => {
       currentNoticeVersion: 'v1',
       acknowledgement: null,
       requiresAcknowledgement: true,
+      optionalDetails: noOptionalDetails,
     })
 
     expect(await redirectLocation(load('/workouts/12?x=1'))).toBe(
@@ -66,9 +74,31 @@ describe('requireNoticeAcknowledged', () => {
         acknowledgedAt: '2026-09-25T10:00:00Z',
       },
       requiresAcknowledgement: false,
+      optionalDetails: noOptionalDetails,
     })
 
     await expect(load('/progress')).resolves.toBeNull()
+  })
+
+  it('asks the transition question before any notebook fetch', async () => {
+    setToken('good')
+    vi.mocked(getAccountPrivacy).mockResolvedValue({
+      currentNoticeVersion: 'v1',
+      acknowledgement: {
+        noticeVersion: 'v1',
+        acknowledgedAt: '2026-09-25T10:00:00Z',
+      },
+      requiresAcknowledgement: false,
+      optionalDetails: {
+        ...noOptionalDetails,
+        transitionPending: true,
+        pendingWorkoutCount: 2,
+      },
+    })
+
+    expect(await redirectLocation(load('/workouts'))).toBe(
+      '/account/privacy/optional-details?returnTo=%2Fworkouts',
+    )
   })
 
   // getAccountPrivacy turns the unmapped route's 404 into null.

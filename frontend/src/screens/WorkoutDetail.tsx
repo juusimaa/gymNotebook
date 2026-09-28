@@ -12,6 +12,7 @@ import {
   formatWorkoutLongDate,
   formatWorkoutTime,
 } from './workoutFormat'
+import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import './WorkoutDetail.css'
 
 export default function WorkoutDetail() {
@@ -26,6 +27,11 @@ export default function WorkoutDetail() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null)
+  // Without optional-details consent (specs/001 user story 6) the title,
+  // bodyweight, gym and notes are hidden here as in the editor. Such an
+  // account has none stored anyway, apart from one still facing the
+  // transition question, which the notebook gate stops before this screen.
+  const detailsAllowed = useOptionalDetailsAllowed().status === 'allowed'
 
   useEffect(() => {
     let cancelled = false
@@ -119,6 +125,9 @@ export default function WorkoutDetail() {
       ? 'bodyweight not logged'
       : `${workout.bodyweightKg.toFixed(1)} kg bodyweight`
   const location = workout.location ?? 'gym not logged'
+  const meta = detailsAllowed
+    ? `${timeRange} · ${bodyweight} · ${location}`
+    : timeRange
 
   return (
     <main className="page workout-detail">
@@ -164,10 +173,10 @@ export default function WorkoutDetail() {
           <p className="workout-detail-date num">
             {formatWorkoutLongDate(workout.date)}
           </p>
-          <h1>{workout.title ?? 'Untitled session'}</h1>
-          <p className="workout-detail-meta num">
-            {timeRange} · {bodyweight} · {location}
-          </p>
+          <h1>
+            {(detailsAllowed ? workout.title : null) ?? 'Untitled session'}
+          </h1>
+          <p className="workout-detail-meta num">{meta}</p>
         </section>
 
         <div className="accent-rule" aria-hidden="true"></div>
@@ -221,12 +230,17 @@ export default function WorkoutDetail() {
           )}
         </section>
 
-        <section className="workout-detail-notes" aria-labelledby="notes-title">
-          <h2 id="notes-title">Notes</h2>
-          <p className={workout.notes === null ? 'muted' : undefined}>
-            {workout.notes ?? 'No notes logged.'}
-          </p>
-        </section>
+        {detailsAllowed && (
+          <section
+            className="workout-detail-notes"
+            aria-labelledby="notes-title"
+          >
+            <h2 id="notes-title">Notes</h2>
+            <p className={workout.notes === null ? 'muted' : undefined}>
+              {workout.notes ?? 'No notes logged.'}
+            </p>
+          </section>
+        )}
       </div>
     </main>
   )

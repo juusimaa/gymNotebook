@@ -29,6 +29,22 @@ function describeStatus(state: AccountPrivacyState): string {
   return `You continued past the current notice (version ${ack.noticeVersion}) on ${formatDate(ack.acknowledgedAt)}.`
 }
 
+// User story 6's consent status in words, for the optional-details block.
+function describeOptionalDetails(state: AccountPrivacyState): string {
+  const details = state.optionalDetails
+  if (details.consent !== null) {
+    return `You allowed a title, location, notes and bodyweight on your workouts on ${formatDate(details.consent.consentedAt)}.`
+  }
+  if (details.transitionPending) {
+    const workouts =
+      details.pendingWorkoutCount === 1
+        ? '1 workout has'
+        : `${details.pendingWorkoutCount} workouts have`
+    return `${workouts} a title, location, notes or bodyweight from before this choice existed. You'll be asked whether to keep them when you next open the notebook.`
+  }
+  return 'Not allowed. The workout editor hides the title, location, notes and bodyweight fields; everything else works without them.'
+}
+
 export default function AccountPrivacy() {
   const navigate = useNavigate()
   // undefined = loading, null = feature off (404), otherwise the state.
@@ -132,6 +148,30 @@ export default function AccountPrivacy() {
         <Link to="/privacy" className="btn btn-secondary btn-block">
           Read the privacy notice
         </Link>
+      </section>
+
+      <section className="privacy-block" aria-labelledby="privacy-details">
+        <h3 id="privacy-details">Optional workout details</h3>
+        <p>{describeOptionalDetails(state)}</p>
+        {state.optionalDetails.consent !== null ? (
+          // Straight to the review step: withdrawing takes no more steps than
+          // allowing did (FR-033).
+          <Link
+            to="/account/privacy/optional-details?step=withdraw"
+            className="btn btn-secondary btn-block"
+          >
+            Withdraw
+          </Link>
+        ) : (
+          <Link
+            to="/account/privacy/optional-details"
+            className="btn btn-secondary btn-block"
+          >
+            {state.optionalDetails.transitionPending
+              ? 'Choose now'
+              : 'Review and allow'}
+          </Link>
+        )}
       </section>
 
       <section className="privacy-block" aria-labelledby="privacy-export">

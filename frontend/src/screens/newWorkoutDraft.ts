@@ -43,6 +43,27 @@ export function createInitialHeadingDraft(now: Date): WorkoutHeadingDraft {
   }
 }
 
+// specs/001 user story 6: title, bodyweight, location and notes are the
+// "optional details" an account may store only with consent. Without it the
+// editor hides their inputs and saves the draft without them, so a hidden
+// value can never be sent. A new object: the caller's draft isn't changed.
+export function dropOptionalDetails(
+  heading: WorkoutHeadingDraft,
+): WorkoutHeadingDraft {
+  return { ...heading, title: '', bodyweightKg: '', location: '', notes: '' }
+}
+
+// Whether any of the four holds something that would be saved. Blank text
+// counts as empty, matching what prepareWorkoutDraft sends as null.
+export function hasOptionalDetails(heading: WorkoutHeadingDraft): boolean {
+  return [
+    heading.title,
+    heading.bodyweightKg,
+    heading.location,
+    heading.notes,
+  ].some((value) => value.trim() !== '')
+}
+
 export interface ExistingWorkoutDraft {
   heading: WorkoutHeadingDraft
   endTime: string

@@ -1,14 +1,15 @@
 import { redirect, type LoaderFunctionArgs } from 'react-router'
 import { ApiError } from '../api/client'
 import { getAccountPrivacy } from '../api/privacy'
-import { needsNoticeGate, noticeGateUrl } from './noticeGate'
+import { notebookGateRedirect } from './noticeGate'
 import { clearToken, getToken } from './token'
 
 // Route loader for the layout route every notebook screen sits under
 // (routes.tsx). A loader runs before its route renders, and the screens fetch
 // their data only once rendered, so a redirect from here means no notebook
-// request is ever sent before the notice is acknowledged (contracts/ui.md →
-// Notice transitions). It runs whenever the notebook is entered — from the
+// request is ever sent before the notice is acknowledged or the transition
+// question answered (contracts/ui.md → Notice transitions, Optional-details
+// consent transitions). It runs whenever the notebook is entered — from the
 // cover's "Open the notebook" or any deep link — because entering matches this
 // route afresh.
 //
@@ -33,10 +34,13 @@ export async function requireNoticeAcknowledged({
     throw err
   }
 
-  if (needsNoticeGate(state)) {
-    // Path and query only; the gate validates it again before navigating back.
-    const url = new URL(request.url)
-    throw redirect(noticeGateUrl(url.pathname + url.search))
+  // The notice first, then the optional-details transition question (user
+  // story 6). Path and query only; the gate screens validate it again before
+  // navigating back.
+  const url = new URL(request.url)
+  const gate = notebookGateRedirect(state, url.pathname + url.search)
+  if (gate !== null) {
+    throw redirect(gate)
   }
   return null
 }

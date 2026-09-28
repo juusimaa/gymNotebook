@@ -7,6 +7,8 @@ import type { AccountPrivacyState } from '../api/privacy'
 // Where the gate lives, and where a signed-in user lands when there is no
 // valid place to return to.
 export const NOTICE_GATE_PATH = '/account/privacy/notice'
+// The optional-details consent screen, which also asks the transition question.
+export const OPTIONAL_DETAILS_PATH = '/account/privacy/optional-details'
 export const DEFAULT_NOTEBOOK_PATH = '/workouts'
 
 // null is "feature off" (a 404 from GET /account/privacy): no gate at all.
@@ -23,6 +25,48 @@ export function isNotebookPath(pathname: string): boolean {
 
 export function noticeGateUrl(returnTo: string): string {
   return `${NOTICE_GATE_PATH}?returnTo=${encodeURIComponent(returnTo)}`
+}
+
+// The transition question (specs/001 user story 6, FR-035): an account that
+// holds optional details without consent is asked once per visit whether to
+// keep them. Only after the notice, so the gate never asks two things at once.
+export function needsTransitionQuestion(
+  state: AccountPrivacyState | null,
+): boolean {
+  return (
+    state !== null &&
+    !state.requiresAcknowledgement &&
+    state.optionalDetails.transitionPending
+  )
+}
+
+export function optionalDetailsUrl(returnTo: string): string {
+  return `${OPTIONAL_DETAILS_PATH}?returnTo=${encodeURIComponent(returnTo)}`
+}
+
+// The whole notebook gate in one decision: where to send an account entering
+// `returnTo`, or null to let it in. The notice comes first; the transition
+// question after it. Accounts without details, or with consent, are never asked.
+export function notebookGateRedirect(
+  state: AccountPrivacyState | null,
+  returnTo: string,
+): string | null {
+  if (needsNoticeGate(state)) {
+    return noticeGateUrl(returnTo)
+  }
+  if (needsTransitionQuestion(state)) {
+    return optionalDetailsUrl(returnTo)
+  }
+  return null
+}
+
+// Whether the editor and detail screens show title, location, notes and
+// bodyweight. With the feature off (null) they do, as before the feature:
+// production's owner-accepted interim until the switch (FR-035).
+export function optionalDetailsAllowed(
+  state: AccountPrivacyState | null,
+): boolean {
+  return state === null || state.optionalDetails.consent !== null
 }
 
 // The gate's returnTo comes from the query string, so anyone can craft a link

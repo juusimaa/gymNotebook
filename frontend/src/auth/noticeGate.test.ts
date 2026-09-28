@@ -4,18 +4,35 @@ import {
   DEFAULT_NOTEBOOK_PATH,
   isNotebookPath,
   needsNoticeGate,
+  notebookGateRedirect,
   noticeGateUrl,
+  optionalDetailsAllowed,
   safeReturnPath,
 } from './noticeGate'
 
-function state(requiresAcknowledgement: boolean): AccountPrivacyState {
+function state(
+  requiresAcknowledgement: boolean,
+  optionalDetails: Partial<AccountPrivacyState['optionalDetails']> = {},
+): AccountPrivacyState {
   return {
     currentNoticeVersion: 'v2',
     acknowledgement: requiresAcknowledgement
       ? null
       : { noticeVersion: 'v2', acknowledgedAt: '2026-09-25T10:00:00Z' },
     requiresAcknowledgement,
+    optionalDetails: {
+      currentStatementVersion: 's1',
+      consent: null,
+      transitionPending: false,
+      pendingWorkoutCount: 0,
+      ...optionalDetails,
+    },
   }
+}
+
+const pending = { transitionPending: true, pendingWorkoutCount: 3 }
+const consented = {
+  consent: { statementVersion: 's1', consentedAt: '2026-09-28T10:00:00Z' },
 }
 
 describe('needsNoticeGate', () => {
@@ -30,6 +47,58 @@ describe('needsNoticeGate', () => {
   // null is GET /account/privacy's 404: the feature is off, so no gate.
   it('never gates when the feature is off', () => {
     expect(needsNoticeGate(null)).toBe(false)
+  })
+})
+
+// User story 6 (tasks.md T088): the notebook gate asks at most one thing per
+// visit, the notice first, then the transition question — and only an account
+// that still holds details without consent ever sees that question.
+describe('notebookGateRedirect', () => {
+  it('opens the notebook when nothing is pending', () => {
+    expect(notebookGateRedirect(state(false), '/workouts')).toBeNull()
+  })
+
+  it('asks for the notice first, even when the transition is pending too', () => {
+    expect(notebookGateRedirect(state(true, pending), '/workouts/12')).toBe(
+      '/account/privacy/notice?returnTo=%2Fworkouts%2F12',
+    )
+  })
+
+  it('asks the transition question once the notice is acknowledged', () => {
+    expect(notebookGateRedirect(state(false, pending), '/workouts/12')).toBe(
+      '/account/privacy/optional-details?returnTo=%2Fworkouts%2F12',
+    )
+  })
+
+  // FR-031: refusing, or never having had details, never leads to a prompt.
+  it('never asks an account without details', () => {
+    expect(notebookGateRedirect(state(false), '/progress')).toBeNull()
+  })
+
+  it('never asks an account that has consent', () => {
+    expect(
+      notebookGateRedirect(state(false, { ...consented }), '/progress'),
+    ).toBeNull()
+  })
+
+  it('never gates when the feature is off', () => {
+    expect(notebookGateRedirect(null, '/workouts')).toBeNull()
+  })
+})
+
+describe('optionalDetailsAllowed', () => {
+  it('allows the details with consent', () => {
+    expect(optionalDetailsAllowed(state(false, consented))).toBe(true)
+  })
+
+  it('hides them without consent', () => {
+    expect(optionalDetailsAllowed(state(false))).toBe(false)
+    expect(optionalDetailsAllowed(state(false, pending))).toBe(false)
+  })
+
+  // Flag off: production's behaviour until the switch, details as before.
+  it('allows them when the feature is off', () => {
+    expect(optionalDetailsAllowed(null)).toBe(true)
   })
 })
 
@@ -52,6 +121,7 @@ describe('isNotebookPath', () => {
     '/change-password',
     '/account/privacy',
     '/account/privacy/notice',
+    '/account/privacy/optional-details',
     '/privacy',
     '/workoutsx',
     '/login',
