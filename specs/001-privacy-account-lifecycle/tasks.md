@@ -343,11 +343,13 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 
 - [x] T069 [P] [US5] Pin Log Analytics tables to 30 days (the App\*, `Usage` and `AzureActivity` tables, P26) and evaluate `immediatePurgeDataOn30Days` in `infra/modules/log-analytics.bicep`. Verify the live result after deployment.
   - Done 2026-09-26 (PR #69 and the follow-up fix): the twelve App\* tables are 30/30 and `immediatePurgeDataOn30Days` is on. Azure enforces at least 90 days on `AzureActivity` and `Usage`, so both are accepted exceptions without app-user data (research R7 → T069).
-- [ ] T070 [P] [US5] (operator) Write `docs/privacy/suppliers.md` (FR-023):
+- [x] T070 [P] [US5] (operator) Write `docs/privacy/suppliers.md` (FR-023):
   - Entries for Azure (Container Apps and Log Analytics, swedencentral) and Neon (aws-eu-central-1), with role, purpose, categories, locations, agreement/transfer evidence and deletion assistance.
   - Discovery results for DNS/CDN and support recipients.
   - Remove Google Fonts once T001 is verified.
-- [ ] T071 [P] [US5] (operator) Write `docs/privacy/retention.md` (FR-018), per contracts/operations.md → Retention schedule contract. Include the deletion log lines, the preserved pre-restore branch and the Neon 6-hour history window. List `AzureActivity` and `Usage` as 90-day Log Analytics exceptions without app-user data (research R7 → T069).
+  - Drafted 2026-09-28 with dated live configuration/network checks; account-specific agreements, transfer paths and deletion assistance remain T076.
+- [x] T071 [P] [US5] (operator) Write `docs/privacy/retention.md` (FR-018), per contracts/operations.md → Retention schedule contract. Include the deletion log lines, the preserved pre-restore branch and the Neon 6-hour history window. List `AzureActivity` and `Usage` as 90-day Log Analytics exceptions without app-user data (research R7 → T069).
+  - Schedule drafted 2026-09-28; content and actual disposal evidence remain T075–T077.
 - [x] T072 [P] [US5] (operator) Write the restore runbook `docs/privacy/restore.md`, per contracts/operations.md → Restore contract:
   - Isolate by disabling API ingress, then restore with `--preserve-under-name`.
   - Diff by UUID and re-delete.
@@ -357,7 +359,8 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Delete the preserved branch, then reopen.
   - Neon drift re-check trigger.
   - Runbook drafted 2026-09-28; the isolated exercise and release approval remain T074.
-- [ ] T073 [P] [US5] (operator) Write `docs/privacy/rights-requests.md` (FR-025): monitored contact, proportionate verification, calendar-month deadlines, and the register's own retention period and location (Q8).
+- [x] T073 [P] [US5] (operator) Write `docs/privacy/rights-requests.md` (FR-025): monitored contact, proportionate verification, calendar-month deadlines, and the register's own retention period and location (Q8).
+  - Q8 location and 12-month routine period approved 2026-09-28; contact monitoring and practice remain T043/T083.
 - [ ] T074 [US5] (operator) **Release gate.** Run the isolated restore exercise in a separate Neon test project, per quickstart §5 steps 4–5 (depends on T061, T072):
   - Primary diff re-deletes A while B stays intact.
   - B's password change after `T` survives through the credential copy.
@@ -428,6 +431,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
 **Purpose**: Cross-cutting acceptance evidence, documentation alignment and the controlled production switch.
 
 - [ ] T078 [P] Create `docs/privacy/release-checklist.md` with owner, date, evidence reference and status for: a line confirming no exceptional retention beyond the FR-019/FR-020 limits was discovered, or the reviewed amendment if one was (FR-021); and SC-001–SC-008 and each release gate in plan.md.
+  - Evidence table drafted 2026-09-28. The required FR-021 confirmation cannot be made until T075–T077 resolve provider copies, log content and disposal; all release criteria retain explicit Open/Blocked status.
 - [ ] T079 [P] Update `README.md` with how to run the new privacy tests, the export performance fixture and the local flag setup. Update `PLAN.md` with the milestone log entry for this feature.
 - [ ] T080 Run all required checks: `dotnet format backend/GymNotebook.sln --verify-no-changes` and `dotnet test backend/GymNotebook.sln`, then `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` and `npm run build` in `frontend/`.
 - [ ] T081 (operator) **Release gate.** Run the reference export and deletion once in a disposable deployed environment with the real Neon cross-region path, using the T053 Part B environment if approved (analysis U1):
