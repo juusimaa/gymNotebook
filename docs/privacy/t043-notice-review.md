@@ -198,17 +198,14 @@ The remaining purpose decisions to review are:
 
 | Record | Proposed conclusion to confirm or revise |
 | --- | --- |
-| P4 operational logs | Article 6(1)(f), with a documented balance based on actual log content, access and retention from T075–T077. |
-| P4 deletion evidence | Article 6(1)(c) for erasure/restore safety, or revise to a justified alternative. |
-| P5 browser token | Article 6(1)(b) for the signed-in service, with the strictly necessary browser-storage conclusion. |
-| Rights correspondence/register | Article 6(1)(c) is in the notice draft, but needs an explicit purpose decision and verified disposal/recipient handling. |
+| P4 operational logs | Owner chose Article 6(1)(f) on 2026-09-28; the balance still needs the actual log content, access and retention from T075–T077. The first scan found a leaked credential that must be removed. |
+| P4 deletion evidence | Owner chose Article 6(1)(c) on 2026-09-28; signed with P4 once T075–T077 evidence exists. |
+| Rights correspondence/register | Owner chose Article 6(1)(c) on 2026-09-28 (P7); disposal and recipient handling still need T076/T083 evidence. |
 
-1. Sign the remaining P4 and P5 conclusions in
-   [processing-decision.md](processing-decision.md), including the Article 6
-   basis for deletion evidence and request correspondence (which is not yet
-   a separate decision there). Revise the wording above to match those
-   decisions. (P1 and P2 were signed on 2026-09-28, and the registration
-   service description is live.)
+1. Sign P4 in [processing-decision.md](processing-decision.md) once its
+   T075–T077 findings are resolved. (P1, P2 and P5 were signed on 2026-09-28,
+   P7 recorded the request-correspondence basis, and the registration service
+   description is live. The notice wording above already matches these bases.)
 2. The owner has confirmed the public name, reported successful receipt from
    Gmail and an outgoing reply, and committed to checking the contact mailbox
    each working day, including while away. These owner reports are recorded
