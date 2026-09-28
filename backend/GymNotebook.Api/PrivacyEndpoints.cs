@@ -73,9 +73,11 @@ public static class PrivacyEndpoints
             var consent = await ReadConsentAsync(db, userId, ct);
 
             // The transition question (FR-035) is only for an account without consent that
-            // still holds details from before the feature. EXISTS stops at the first match.
-            var transitionPending = consent is null
-                && await db.Workouts.Where(w => w.UserId == userId).AnyAsync(OptionalDetails.HoldsDetail, ct);
+            // still holds details from before the feature, and it names how many workouts
+            // are affected. With consent there's nothing to ask, so no query at all.
+            var pendingWorkouts = consent is null
+                ? await db.Workouts.Where(w => w.UserId == userId).CountAsync(OptionalDetails.HoldsDetail, ct)
+                : 0;
 
             // Equality, never ordering: version strings are identifiers, and "later" is
             // decided by the catalog's effective dates, not by comparing text (data-model.md).
@@ -83,11 +85,11 @@ public static class PrivacyEndpoints
                 current.Version,
                 acknowledgement,
                 acknowledgement?.NoticeVersion != current.Version,
-                new OptionalDetailsStateResponse(consentCatalog.Current.Version, consent, transitionPending)));
+                new OptionalDetailsStateResponse(consentCatalog.Current.Version, consent, pendingWorkouts > 0, pendingWorkouts)));
         })
            .WithName("GetAccountPrivacy")
            .WithSummary("Returns the caller's privacy notice and consent state")
-           .WithDescription("The current notice version, the caller's latest acknowledgement (or null), and whether the notebook gate must show the notice before notebook access. Plus the optional-details consent: the current statement version, the caller's consent (or null), and whether the transition question is pending.")
+           .WithDescription("The current notice version, the caller's latest acknowledgement (or null), and whether the notebook gate must show the notice before notebook access. Plus the optional-details consent: the current statement version, the caller's consent (or null), whether the transition question is pending, and how many workouts it concerns.")
            .Produces<AccountPrivacyResponse>(StatusCodes.Status200OK)
            .Produces(StatusCodes.Status401Unauthorized);
 

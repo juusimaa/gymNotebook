@@ -39,7 +39,7 @@ Fields: `version` string, `effectiveAt` UTC instant, `publishedAt` UTC instant, 
 
 ### Account privacy state
 
-Fields: `currentNoticeVersion` string, `acknowledgement` null or `{ noticeVersion, acknowledgedAt }`, `requiresAcknowledgement` boolean determined on the server, and `optionalDetails` `{ currentStatementVersion, consent: null or { statementVersion, consentedAt }, transitionPending }`. `transitionPending` is true when there is no consent and the account still holds optional details (data-model.md); the UI asks the transition question only then. No password hash, token version or other revocation values. Acknowledgement response has the same acknowledgement shape; success means the version was acknowledged through Continue, not read or consented to. Public notice rendering never writes it.
+Fields: `currentNoticeVersion` string, `acknowledgement` null or `{ noticeVersion, acknowledgedAt }`, `requiresAcknowledgement` boolean determined on the server, and `optionalDetails` `{ currentStatementVersion, consent: null or { statementVersion, consentedAt }, transitionPending, pendingWorkoutCount }`. `transitionPending` is true when there is no consent and the account still holds optional details (data-model.md); the UI asks the transition question only then. `pendingWorkoutCount` is the number of workouts holding a detail while there is no consent, for the question's workout count (Story 6 scenario 7); 0 when nothing is pending. No password hash, token version or other revocation values. Acknowledgement response has the same acknowledgement shape; success means the version was acknowledged through Continue, not read or consented to. Public notice rendering never writes it.
 
 ### Optional-details enforcement on existing workout routes
 

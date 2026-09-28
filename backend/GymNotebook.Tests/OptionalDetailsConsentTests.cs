@@ -152,10 +152,12 @@ public class OptionalDetailsConsentTests(PrivacyEnabledGymNotebookFactory factor
     [Fact]
     public async Task GetAccountPrivacy_DetailsWithoutConsent_TransitionPending()
     {
-        // Arrange: an existing account from before the feature, holding one detail only
-        // (bodyweight), so every one of the four fields is shown to count.
+        // Arrange: an existing account from before the feature: one workout holding one
+        // detail only (bodyweight), so each field counts on its own, and one holding none,
+        // which the count must leave out.
         var (client, userId) = await OptionalDetailsTestData.CreateAccountAsync(factory);
         await OptionalDetailsTestData.SeedWorkoutAsync(factory, userId, withDetails: false, bodyweightKg: 80.5m);
+        await OptionalDetailsTestData.SeedWorkoutAsync(factory, userId, withDetails: false);
 
         // Act
         var state = await client.GetFromJsonAsync<AccountPrivacyResponse>("/account/privacy");
@@ -164,6 +166,7 @@ public class OptionalDetailsConsentTests(PrivacyEnabledGymNotebookFactory factor
         Assert.NotNull(state);
         Assert.Null(state.OptionalDetails.Consent);
         Assert.True(state.OptionalDetails.TransitionPending);
+        Assert.Equal(1, state.OptionalDetails.PendingWorkoutCount);
     }
 
     [Fact]
@@ -180,6 +183,7 @@ public class OptionalDetailsConsentTests(PrivacyEnabledGymNotebookFactory factor
         Assert.NotNull(state);
         Assert.NotNull(state.OptionalDetails.Consent);
         Assert.False(state.OptionalDetails.TransitionPending);
+        Assert.Equal(0, state.OptionalDetails.PendingWorkoutCount);
     }
 
     [Fact]
