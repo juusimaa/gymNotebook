@@ -348,7 +348,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Discovery results for DNS/CDN and support recipients.
   - Remove Google Fonts once T001 is verified.
 - [ ] T071 [P] [US5] (operator) Write `docs/privacy/retention.md` (FR-018), per contracts/operations.md → Retention schedule contract. Include the deletion log lines, the preserved pre-restore branch and the Neon 6-hour history window. List `AzureActivity` and `Usage` as 90-day Log Analytics exceptions without app-user data (research R7 → T069).
-- [ ] T072 [P] [US5] (operator) Write the restore runbook `docs/privacy/restore.md`, per contracts/operations.md → Restore contract:
+- [x] T072 [P] [US5] (operator) Write the restore runbook `docs/privacy/restore.md`, per contracts/operations.md → Restore contract:
   - Isolate by disabling API ingress, then restore with `--preserve-under-name`.
   - Diff by UUID and re-delete.
   - Log fallback with an ingestion-gap check; manual SQL for `SignInSuspendedAt` and its resolution.
@@ -356,6 +356,7 @@ description: "Task list for the Privacy and Account Lifecycle feature"
   - Rotate the JWT secret directly into the Container Apps secret.
   - Delete the preserved branch, then reopen.
   - Neon drift re-check trigger.
+  - Runbook drafted 2026-09-28; the isolated exercise and release approval remain T074.
 - [ ] T073 [P] [US5] (operator) Write `docs/privacy/rights-requests.md` (FR-025): monitored contact, proportionate verification, calendar-month deadlines, and the register's own retention period and location (Q8).
 - [ ] T074 [US5] (operator) **Release gate.** Run the isolated restore exercise in a separate Neon test project, per quickstart §5 steps 4–5 (depends on T061, T072):
   - Primary diff re-deletes A while B stays intact.
