@@ -1,0 +1,235 @@
+# T043 privacy notice — owner review draft
+
+**Status:** Draft for controller review, 2026-09-28. This file is outside
+`notices/` and is not embedded or served by the API. Its proposed lawful bases
+come from the unsigned [processing decision](processing-decision.md); its
+retention and supplier claims require the checks in
+[release-checklist.md](release-checklist.md). Do not publish this text or mark
+T043 complete until the decisions and evidence below are recorded.
+
+**Contact address:** The owner supplied `jouni.uu@proton.me` on 2026-09-28.
+This spelling already appears in the draft and related privacy records.
+On 2026-09-28 the owner reported that this address received a test message
+sent from a Gmail account and that a reply sent from this address worked. The
+report date is the recorded test evidence; no mailbox content is kept in Git.
+The owner confirmed on 2026-09-28 that they will check the mailbox every working day,
+including while away; no other person needs mailbox access. This is an
+operating commitment to monitor the address.
+
+**Public identity:** The owner confirmed on 2026-09-28 that the notice may
+name them as "Jouni Uusimaa, a private individual in Finland."
+
+## Registration service description
+
+Wording and placement beside **Create account** approved by the owner on
+2026-09-28. The copy is in the frontend and UI prototype; it is not evidence
+of a production deployment.
+
+> Gym Notebook is a free, invite-only training log provided by Jouni
+> Uusimaa. Creating an account asks us to keep your private record of workout
+> dates, exercises and sets, and show your progress chart. A username and
+> password let you return to that notebook.
+
+This describes the requested core service for the provisional Article 6(1)(b)
+decision in [processing-decision.md](processing-decision.md). Its approval does
+not sign off the full P1/P2 lawful-basis decisions or establish publication.
+The privacy notice and optional-details consent remain separate; this copy
+adds no consent checkbox. The login page already links to the notice when the
+privacy feature is enabled.
+
+## Proposed public wording
+
+### About this notice
+
+Gym Notebook is a private training log. This notice explains what happens to
+information you give the service and how to exercise your privacy rights.
+Reading this notice or pressing Continue records only that you saw this
+version. It is not consent to optional workout details.
+
+### Who is responsible
+
+Jouni Uusimaa, a private individual in Finland, is the controller of Gym
+Notebook. For privacy questions and requests, email jouni.uu@proton.me.
+
+### Information in your account and notebook
+
+To create and use an account, you provide a username and password. The
+service stores a password hash, not the password itself, plus account creation,
+session-control and privacy-notice acknowledgement records. Without a username
+and password, the service cannot maintain a private notebook for you. An
+invite code is checked at registration but is not stored with your account.
+
+Your notebook contains workout dates and times, exercise names and whether an
+exercise is bodyweight based, sets, weights, repetitions and warm-up marks.
+The service calculates a progress chart from your sets when you ask to see it;
+the chart values are not kept separately. Exercise names are needed to record
+sets. Please use lift names rather than health details in exercise names.
+
+A workout's title, location, notes and your bodyweight are optional. They can
+reveal health information. The service stores them only if you choose Allow on
+a separate consent screen. If you choose Not now, the four fields stay hidden
+and the rest of the notebook works. You can allow them later or withdraw from
+Privacy & account. Withdrawing removes those four fields from all your
+workouts; the other notebook information stays. Existing details from before
+this choice was introduced follow the transition explained on that screen.
+
+The browser stores your sign-in token on your device so you can stay signed
+in. The service also processes limited operational and security information,
+including error and deletion-recovery records. If you email the privacy
+contact, your message and minimal case-handling records are processed to
+answer your request. Please do not send your password or sign-in token by
+email.
+
+### Why the information is used
+
+Account and core notebook information are used to provide your private
+training log and progress chart. The lawful basis is GDPR Article 6(1)(b),
+performance of the service you request. Notice acknowledgement is used to
+document which version you saw; the basis for that record is Article 6(1)(c),
+compliance with transparency obligations.
+
+Optional workout details are used only to show them in your own notebook and
+include them in your export. The Article 6 basis is your consent under Article
+6(1)(a). Because these fields can contain health information, they also
+require your explicit consent under Article 9(2)(a). You may withdraw that consent at any
+time without affecting earlier lawful processing or use of the rest of the
+notebook. Consent to these details is separate from pressing Continue on this
+notice.
+
+Limited operational and security records are used to run and protect the
+service. The basis is Article 6(1)(f), the controller's legitimate
+interest in a working and secure service. Minimal deletion-recovery records
+help prevent a deleted account from reappearing after a database restore; the
+basis is Article 6(1)(c), compliance with erasure obligations. The privacy
+contact uses correspondence and a minimal request register to handle your
+rights request and document the response; the basis is Article 6(1)(c). The
+sign-in token in your browser supports the requested signed-in service; its
+GDPR basis is Article 6(1)(b).
+
+Gym Notebook does not make automated decisions about you or profile you. It
+does not use your notebook for advertising or analytics.
+
+### Who receives information and where
+
+Microsoft Azure runs the application and holds its operational logs in Sweden.
+Neon hosts the notebook database in Frankfurt, Germany. Cloudflare currently
+provides DNS for the site; it is not the site's HTTP proxy. Proton Mail
+receives messages sent to the privacy contact. The controller also keeps a
+minimal rights-request register on a restricted local device in Finland. A
+downloaded notebook export is saved to the device you choose.
+
+These providers may use their own supporting services or remote support
+access. Proton states that encrypted mail storage may be in Switzerland,
+Germany or Norway. Switzerland has an EU adequacy decision.
+
+### How long information is kept
+
+Account and notebook information remains in the active database until you
+delete the account. Withdrawing optional-details consent removes those
+details from the active notebook immediately. Deleting the account removes
+its active account, notebook and consent/acknowledgement records. Information
+in recovery copies may remain for no more than 30 calendar days from the
+deletion. It is restricted to recovery use, and a restore must remove deleted
+accounts before access resumes.
+
+Identifying operational and security logs have an intended maximum of 30
+calendar days from the original log entry. After deletion, only minimal logs
+with a documented reason to keep them may remain until their original expiry;
+the deadline is not restarted by deletion. Minimal deletion-recovery evidence
+has an additional ceiling of 31 calendar days from the deletion, whichever
+deadline comes first. No notebook content or credentials are intended for
+these logs.
+
+The sign-in token permits requests for up to 30 minutes after issue. The
+browser removes its stored copy on sign-out or when it observes an invalid
+session; an offline browser may retain the bytes until it is next used.
+The service does not keep a completed server-side export copy. Routine
+rights-request correspondence and the minimal register are scheduled for
+deletion no later than 12 calendar months after the case closes. A specific
+legal obligation or dispute may require a documented, limited exception.
+
+### Your choices and rights
+
+You can view and edit your notebook, download a JSON copy from Privacy &
+account, and delete your account there. For access to other information we
+may hold about you, or to ask for correction, erasure, restriction or
+portability where applicable, email jouni.uu@proton.me. You may object to
+processing based on legitimate interests. You may also withdraw the separate
+consent for optional workout details from Privacy & account.
+
+We will respond without undue delay and within one calendar month of receiving
+a rights request, or explain a permitted extension within that month. We may
+need a proportionate identity check before disclosing or changing information.
+You do not need to send a password by email.
+
+### Contact and complaints
+
+Contact Jouni Uusimaa at jouni.uu@proton.me for privacy questions or rights
+requests. You may complain to Finland's Office of the Data Protection
+Ombudsman (Tietosuojavaltuutetun toimisto) at
+https://tietosuoja.fi/en/home. You do not need to contact Gym Notebook before
+making a complaint.
+
+## Controller decisions and evidence required before publication
+
+| Notice item | Current review state |
+| --- | --- |
+| Controller, contact, Finnish authority | Name and address confirmed by owner; receipt, reply and personal workday monitoring reported. Authority identified in the processing decision. |
+| Required/optional information, consent distinction, rights, profiling | Drafted against the current product and specification; final wording awaits controller review. |
+| Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details. P1/P2 Article 6(1)(b) chosen provisionally; registration copy approved, while P2 Article 9 review and P1/P2/P4/P5/request decisions remain open. |
+| Recipients, locations and transfer safeguards | Current supplier inventory is a draft; T076 must settle account-specific agreements, support paths and transfer safeguards. |
+| Retention and restored copies | Draft reflects the schedule's intended limits; T075–T077 must verify actual content, copies and disposal before these claims are published. |
+| Version and effective date | Create the reviewed JSON version and index entry only after the content and release evidence are settled. |
+
+The proposed public wording above presents legal bases as final because that
+is how a published notice must read. The owner chose Article 6(1)(a) consent
+for the four optional workout details on 2026-09-28, alongside Article 9(2)(a)
+explicit consent. The owner also provisionally chose Article 6(1)(b) for
+essential P1/P2 processing, conditional on a clear service agreement. P2's
+Article 9 classification is open for focused review. These choices are
+recorded in the [processing decision](processing-decision.md). The remaining
+legal bases are under review. The [EDPB's Article 6(1)(b)
+guidance](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)
+informs the contract-necessity assessment.
+
+The remaining purpose decisions to review are:
+
+| Record | Proposed conclusion to confirm or revise |
+| --- | --- |
+| P1 account and P2 core notebook | Owner provisionally chose Article 6(1)(b) for essential processing and approved the registration wording and placement. Confirm the basis against the actual registration flow; P2's separate Article 9 classification needs focused review. |
+| P1 notice acknowledgement | Article 6(1)(c) for documenting transparency; confirm the specific obligation and necessity of this record. |
+| P4 operational logs | Article 6(1)(f), with a documented balance based on actual log content, access and retention from T075–T077. |
+| P4 deletion evidence | Article 6(1)(c) for erasure/restore safety, or revise to a justified alternative. |
+| P5 browser token | Article 6(1)(b) for the signed-in service, with the strictly necessary browser-storage conclusion. |
+| Rights correspondence/register | Article 6(1)(c) is in the notice draft, but needs an explicit purpose decision and verified disposal/recipient handling. |
+
+1. Sign the remaining P1, P2, P4 and P5 conclusions in
+   [processing-decision.md](processing-decision.md), including the Article 6
+   basis for notice acknowledgement, deletion evidence and
+   request correspondence (which is not yet a separate decision there).
+   Revise the wording above to match those decisions. Obtain the focused P2
+   health-data review as part of T041/T042 before enabling the feature.
+   Publish the approved registration service description with the reviewed
+   release.
+2. The owner has confirmed the public name, reported successful receipt from
+   Gmail and an outgoing reply, and committed to checking the contact mailbox
+   each working day, including while away. These owner reports are recorded
+   above. Follow the [rights-request procedure](rights-requests.md); review
+   the coverage arrangement if personal checks stop being possible. Do not
+   put test messages or mailbox screenshots in Git.
+3. Finish supplier agreement, transfer, support-access and deletion-assistance
+   checks (T076), plus log-content and disposal checks (T075–T077). Reconcile
+   their results with the recipients and retention sections above. A declared
+   maximum is not proof of actual disposal.
+4. Review the final wording as controller, record reviewer/date/evidence, and
+   create a new immutable version in `notices/` with a reviewed `effectiveAt`,
+   `publishedAt`, `materialChangeSummary`, `owner`, `reviewDate` and
+   `reviewEvidence`. Update `index.json` to point at it. Keep the synthetic
+   versions in Git for development history, but do not list them as published
+   history after the first real notice takes effect. Rebuild the API image,
+   check the public route and notice acknowledgement, and record the version
+   and observed result in [release-checklist.md](release-checklist.md).
+
+Legal content checklist: [GDPR Article 13](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng),
+[EDPB transparency guidance](https://www.edpb.europa.eu/system/files/2023-09/wp260rev01_en.pdf),
+and the [Finnish authority](https://www.edpb.europa.eu/contact/file-a-complaint_en).

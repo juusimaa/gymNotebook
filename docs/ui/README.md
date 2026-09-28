@@ -16,7 +16,7 @@ Tokens live in the prototype's stylesheet as CSS custom properties: `--color-bg 
 ## Screens
 
 ### 1. Login — `/login`
-Email, password, invite code (labelled optional for existing accounts), one primary action, plus "Create account" and "Change password" links. Backs onto `POST /auth/login` and `POST /auth/register`; the invite code field is only sent on register. A 401 returns here with the email preserved. Rate-limit rejections (429) show an inline message under the button, not a toast.
+Username, password, invite code (labelled optional for existing accounts), one primary action, plus "Create account" and "Change password" actions. A short service description sits immediately before Create account: the free, invite-only training log, provider, core records and reason for the username/password. It describes what registration requests; it is not notice acknowledgement or consent. Backs onto `POST /auth/login` and `POST /auth/register`; the invite code field is only sent on register. A 401 returns here with the username preserved. Rate-limit rejections (429) show an inline message under the button, not a toast.
 
 ### 2. Cover — `/`
 The page you land on after login; the owner name comes from `GET /auth/me`. Volume, year, one "Open the notebook" action, "Sign out" below it. Deliberately carries no data — it is the closed cover of the book, and its job is to make opening the log a decision rather than a dashboard. Sign-out drops the token client-side.

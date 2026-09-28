@@ -69,19 +69,16 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 
 **Necessity:** a username and password are the minimum needed for a private notebook that follows the user across devices. `TokenVersion`, `PrivacyAccountId`, acknowledgement and suspension each exist to meet another requirement: revocation, erasure surviving a restore, FR-026, and R6 fail-closed handling. No email, real name, phone number or date of birth is collected.
 
-**Lawful basis (proposed):** Art. 6(1)(b), necessary to perform the service the user signs up for.
-- *Caveat:* the app has no written terms of service, and it's free and invite-only. Art. 6(1)(b) still works where there is an agreement to provide a service, but it applies only to what is **objectively necessary** for that service (EDPB Guidelines 2/2019).
-- *Alternative:* Art. 6(1)(f), legitimate interests. It needs a written balancing test.
-- The acknowledgement fields record that the notice was shown (Art. 12–13 transparency and Art. 5(2) accountability). Art. 6(1)(c) is a plausible basis for them.
+**Lawful basis (provisional owner choice, 2026-09-28):** Art. 6(1)(b) for the account and authentication information necessary to deliver the notebook the person requests. The service is free and invite-only; the owner approved the [registration service description](t043-notice-review.md#registration-service-description) and its placement beside Create account on 2026-09-28. Publication and confirmation against the actual registration flow remain. The basis depends on an actual service agreement and objective necessity, not merely calling the processing contractual ([EDPB Guidelines 2/2019](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)). The notice-acknowledgement and restore/suspension records need their own purpose and basis decision; Art. 6(1)(c) remains a proposal for acknowledgement, not part of this approval.
 
 **Health data:** none. Account fields describe the account, not the person's health.
 
 **Consent (proposed):** not required.
 
 **Findings:**
-- *Non-blocking.* Decide between 6(1)(b) and 6(1)(f). If 6(1)(b), consider whether a short terms-of-use statement is needed to show what the service is.
+- **Blocking before release:** Publish the approved short service description before account creation, then confirm the Art. 6(1)(b) conclusion against the actual registration flow. Separately decide the acknowledgement and restore/suspension controls.
 
-**Decision:** _(owner, date, evidence)_
+**Decision:** Owner provisionally chose Art. 6(1)(b) for essential account processing on 2026-09-28, subject to the service description above. The full P1 decision remains unsigned.
 
 ---
 
@@ -93,17 +90,18 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 - **Sets:** `SetNumber`, `Weight`, `Reps`, `IsWarmup`, and the exercise's position in the workout.
 - **Progress:** the e1RM chart is calculated on request from stored sets (`ProgressMetric`, Epley formula) and never stored.
 
-Free-text fields and bodyweight are assessed separately in P3.
+Exercise names are part of P2, including their free-text risk. Optional workout
+title, location, notes and bodyweight are assessed separately in P3.
 
 **Where it lives:** Neon PostgreSQL, one row set per user, scoped by `UserId`. Every `/workouts` and `/exercises` route returns 404 for another user's data.
 
 **Necessity:** this is the service itself, a digital copy of a paper gym log. Nothing is derived beyond what the user asks to see.
 
-**Lawful basis (proposed):** Art. 6(1)(b), the core of the service. Same caveat as P1.
+**Lawful basis (provisional owner choice, 2026-09-28):** Art. 6(1)(b) for the core workout, exercise and set information needed to provide the requested log and progress chart, subject to P1's clear service-agreement condition. An Article 6 basis alone does not decide whether Article 9 also applies.
 
-**Health data (proposed assessment):** **not health data in this context**, with a stated risk.
+**Health data (open for focused review):** The earlier proposal was **not health data in this context**, but the owner did not sign it. A data-protection reviewer should assess whether the long strength history, user-entered exercise names and combination with optional bodyweight or notes allow reasonable health-status inferences before a final Article 9 conclusion.
 - *For:* Art. 4(15) covers data about physical or mental health that **reveals information about health status**.
-  - The Article 29 Working Party's 2015 annex on health data in apps separates lifestyle and fitness data from health data. Raw activity data counts as health data when it is used, or can reasonably be used, to draw conclusions about a person's health. *Verify this citation before signing.*
+  - The [Article 29 Working Party's 2015 annex](https://ec.europa.eu/justice/article-29/documentation/other-document/files/2015/20150205_letter_art29wp_ec_health_data_after_plenary_annex_en.pdf) distinguishes isolated lifestyle measurements from data tracked over time or combined with other information. It predates the GDPR and is guidance, not a ruling on this app.
   - Gym Notebook records lifts, sets and reps to track strength. It draws no health conclusions, gives no health advice and does no profiling.
 - *Against:* the CJEU reads special categories broadly.
   - In C‑184/20 _OT_, data that reveals sensitive information **indirectly**, through inference, counted as special-category data.
@@ -111,26 +109,29 @@ Free-text fields and bodyweight are assessed separately in P3.
   - A long training history could support inferences, for example about an interruption from injury. That is a weaker link than P3's.
 - *Art. 22:* no automated decisions or profiling take place. The notice must say so (FR-002).
 
-**Consent (proposed):** not required, if the assessment above is accepted.
+**Consent:** Undecided for P2 until the Article 9 review. If P2 is health data, identify an applicable Article 9 condition and approve the resulting product/specification change before releasing that processing.
 
 **Findings:**
-- *Non-blocking.* The owner should confirm the assessment, and ideally have it checked by someone with data-protection expertise.
+- **Blocking before release:** Obtain a focused data-protection review of the Article 9 classification. Give the reviewer the P2 field list, the long-term storage and progress-chart use, the free-text exercise-name risk, and the separate P3 optional-details flow. Record reviewer, date, rationale and the resulting decision here. Do not infer that P3 consent covers P2.
+  - Ask whether the recorded lift history and derived e1RM, alone or over time, reasonably reveal health status in this service's actual context.
+  - Ask how user-entered exercise names and combining P2 with consented P3 details affect the classification. A request to use generic lift names does not prevent health text from being entered.
+  - If any P2 information is health data, identify the Article 9 condition and the product/specification change needed for accounts that do not give optional-details consent. Keep P2 blocked until that decision is approved and implemented.
 
-**Decision:** _(owner, date, evidence)_
+**Decision:** Owner provisionally chose Art. 6(1)(b) for essential core processing on 2026-09-28, subject to P1's service-agreement condition, and chose to seek focused review of P2's Article 9 classification. The full P2 decision remains unsigned.
 
 ---
 
 ## P3 — Free text and bodyweight
 
-**Information:** workout `Title`, `Location`, `Notes`, `BodyweightKg`, and free-form exercise `Name`s. All optional and user-typed. Nothing prompts the user for health information.
+**Information:** optional workout `Title`, `Location`, `Notes` and `BodyweightKg`. Exercise `Name` is required and assessed with the core notebook in P2; its free-text risk is discussed below. Nothing prompts the user for health information.
 
 **Where it lives:** Neon PostgreSQL, like P2.
 
 **Necessity:** optional context the paper log also had, such as where and how the session went. The service works without them.
 
-**Lawful basis (proposed):** Art. 6(1)(b) for the fields as a feature of the service. This does **not** settle Art. 9 (FR-005).
+**Lawful basis (owner decision, 2026-09-28):** Art. 6(1)(a), consent, for the four optional workout details (`Title`, `Location`, `Notes`, `BodyweightKg`). The separate affirmative Allow action and withdrawal flow implement that choice. Art. 9(2)(a) explicit consent is also required because these details can reveal health information. This decision does not cover exercise names, which remain part of P2's core notebook basis.
 
-**Health data (assessment):** **undecided. This is the key open question of US2.**
+**Health data (assessment):** The owner chose to treat the four optional workout details as possible health information requiring explicit consent (Art. 9(2)(a)). Exercise names remain outside that consent with the residual risk recorded below.
 - **Notes, titles and exercise names:** free text can hold anything, for example "left knee hurt, stopped after two sets", "back from surgery" or "rehab exercises".
   - That is data concerning health as soon as a user writes it.
   - The operator can't prevent it without either removing the field or reading users' notes.
@@ -166,6 +167,7 @@ remaining short free-text fields, or B for notes only.
 - **Accepted: processing already live.** These fields exist in production today, outside the feature flag, with no Art. 9 condition. The owner accepted this interim risk until the flag is switched on (see Decision). FR-035 governs the stored values afterwards.
 
 **Decision:** Option **B**, explicit consent under Art. 9(2)(a), for the optional fields: `BodyweightKg`, `Title`, `Location` and `Notes`. Chosen by the owner, 2026-09-25.
+- **Article 6 basis:** The owner chose consent under Art. 6(1)(a) for these four fields on 2026-09-28. This replaces the earlier proposed contract basis; the notice must state the same basis. The consent remains separate from notice acknowledgement.
 - **Exercise names: outside consent** (owner, 2026-09-25). `Name` is required, since every set belongs to an exercise, so it can't depend on consent without breaking the notebook for anyone who refuses. Treated under option A's reasoning: the field names a lift, and the notice asks users not to put health details in names. **Residual risk accepted.**
 - **Interim period: risk accepted** (owner, 2026-09-25). Until the feature flag is switched on (T084), production keeps accepting these details without an Art. 9 condition. Accepted for the small invite-only user base. No unflagged change is shipped. Existing values follow the spec's transition (FR-035): they are kept only if the account consents, and are cleared 30 days after enabling otherwise. Evidence: the FR-007 amendment, [spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements), drafted 2026-09-25, awaiting approval. Sign when it is approved.
 
@@ -264,18 +266,20 @@ Google Fonts is no longer a recipient: T001/PR #48 self-hosted the fonts and rec
 
 | Purpose | Proposed consent conclusion | Blocks rollout? |
 | --- | --- | --- |
-| P1 Account administration | Not required | No |
-| P2 Training log and progress | Not required, if the health-data assessment is accepted | No |
-| P3 Free text and bodyweight | **Required**: option B, owner 2026-09-25 | **Yes**, until the FR-007 amendment is approved and implemented |
+| P1 Account administration | Provisionally not required for essential account processing; ancillary records still need a basis decision | Yes, final P1 decision is open |
+| P2 Training log and progress | Open pending focused Article 9 review | Yes, final P2 decision is open |
+| P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner 2026-09-25 and 2026-09-28 | Yes, pending final amendment and release review |
 | P4 Logs | Not required | No, but retention findings block |
 | P5 Browser storage | Not required (strictly necessary) | No |
 | P6 Recipients | Not applicable | Supplier findings block |
 
-**T042 outcome (2026-09-25):** consent is required for P3. Processing of
-bodyweight and free text under the lifecycle feature is **halted** until an
-FR-007 specification amendment is approved and implemented. The amendment
-must also decide the treatment of the P3 data already in production (see P3
-findings). Amendment: [spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements), drafted 2026-09-25, awaiting approval.
+**T042 outcome (updated 2026-09-28):** consent is required for P3's four
+optional workout details. The FR-007 amendment
+([spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements))
+and its implementation are recorded in [tasks.md](../../specs/001-privacy-account-lifecycle/tasks.md#phase-7a-user-story-6--choose-whether-to-record-optional-workout-details-priority-p1).
+The feature remains behind the privacy flag. Final approval of the amendment,
+the treatment of existing P3 values and the open P1/P2 decisions remain release
+gates; the recorded implementation alone does not sign off T042.
 
 ## Change control
 
