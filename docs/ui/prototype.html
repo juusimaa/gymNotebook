@@ -527,6 +527,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     this.setState({ screen: "login", noticeSeen: false, noticeVersion: 1, exportPassword: "", deletePassword: "", detailsConsent: false, detailsStep: "ask", detailsTransition: false });
   };`
     );
+    // Provisional P1/P2 Article 6(1)(b): describe the core service before the
+    // demo's Create account action, independently of notice acknowledgement.
+    const registrationService = `<p style="margin:20px 0 10px;text-align:center;font-size:13px;color:var(--color-neutral-700)">Gym Notebook is a free, invite-only training log provided by Jouni Uusimaa. Creating an account asks us to keep your private record of workout dates, exercises and sets, and show your progress chart. A username and password let you return to that notebook.</p>`;
+    replacePrivacyAnchor(
+      '        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">',
+      '        ' + registrationService + '\n        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">'
+    );
     const privacyLoginLink = `<div style="margin-top:20px;text-align:center;font-size:13px"><a href="#" sc-camel-on-click="{{ openPublicNotice }}">Privacy notice</a></div>`;
     replacePrivacyAnchor(
       '          <a href="#" sc-camel-on-click="{{ goCover }}">Change password</a>\n        </div>\n      </div>\n    </sc-if>',

@@ -159,6 +159,15 @@ export default function Login() {
         >
           Sign in
         </button>
+        {/* Describe the core service before registration. This is a service
+            description, not privacy-notice acknowledgement or consent to
+            optional workout details (processing-decision.md P1/P2). */}
+        <p className="muted login-service">
+          Gym Notebook is a free, invite-only training log provided by Jouni
+          Uusimaa. Creating an account asks us to keep your private record of
+          workout dates, exercises and sets, and show your progress chart. A
+          username and password let you return to that notebook.
+        </p>
         {/* type="button" is load-bearing: a <button> inside a <form> defaults
             to type="submit", so without it this would also fire the login
             handler above. */}
