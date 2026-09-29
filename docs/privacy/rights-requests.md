@@ -17,6 +17,13 @@ Use the existing signed-in route and current-password verification where it answ
 
 The exact manual verification path for someone unable to sign in needs a practice case in T083. If it cannot be demonstrated without excessive collection or unsafe disclosure, record the gap as a release blocker and improve the procedure before publication.
 
+Do not ask a person to send health details to establish a request. If they
+volunteer such details, keep them out of the minimal register and limit any
+case material to what answering actually needs. The Article 9 condition for
+using or retaining volunteered health details remains open for focused legal
+review before a real case needs them; see [P7 in the processing decision](processing-decision.md#p7--rights-requests).
+Keep the request deadline running while resolving that question.
+
 ## Handle each requested right
 
 | Request | Operator action and decision record |

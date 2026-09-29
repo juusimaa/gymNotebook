@@ -2,8 +2,9 @@
 
 **Status:** Draft for controller review, updated 2026-09-29. This file and
 [the matching JSON candidate](notice-candidate.json) are outside `notices/`
-and are not embedded or served by the API. P1, P2 and P5 have signed decisions;
-the other conclusions and proposed public wording still require final review.
+and are not embedded or served by the API. P1, P2 and P5 have signed decisions.
+The owner approved five wording sections on 2026-09-29, as recorded below;
+the other conclusions and public wording still require final review.
 Retention and supplier claims require the checks in
 [release-checklist.md](release-checklist.md). Do not publish this text or mark
 T043 complete until the decisions and evidence below are recorded.
@@ -39,6 +40,13 @@ adds no consent checkbox. The login page already links to the notice when the
 privacy feature is enabled.
 
 ## Proposed public wording
+
+**Partial wording approval (owner, 2026-09-29, conversation):** the owner
+approved the text in this draft and the matching JSON candidate at commit
+`7254cbc` for “About this notice,” “Who is responsible,” “Information in your
+account and notebook,” “Your choices and rights,” and “Contact and complaints.”
+This approval is limited to those five sections. The purposes, recipients and
+retention sections, the complete notice version, and publication remain open.
 
 ### About this notice
 
@@ -178,7 +186,7 @@ making a complaint.
 | Notice item | Current review state |
 | --- | --- |
 | Controller, contact, Finnish authority | Name and address confirmed by owner; receipt, reply and personal workday monitoring reported. Authority identified in the processing decision. |
-| Required/optional information, consent distinction, rights, profiling | Drafted against the current product and specification; final wording awaits controller review. |
+| Required/optional information, consent distinction, rights, profiling | Owner approved the about, controller, information, rights and contact sections on 2026-09-29; the purposes section, including the profiling statement in its context, still awaits final review. |
 | Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details; FR-029–FR-035 and the existing-value transition approved 2026-09-29 (T042). P1, P2 and P5 signed 2026-09-28. P4 bases chosen but unsigned pending log findings; P7 basis recorded, with the Article 9 point for volunteered health details open. |
 | Recipients, locations and transfer safeguards | Current supplier inventory is a draft; T076 must settle account-specific agreements, support paths and transfer safeguards. |
 | Retention and restored copies | Draft reflects the schedule's intended limits; T075–T077 must verify actual content, copies and disposal before these claims are published. |

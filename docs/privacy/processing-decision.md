@@ -290,7 +290,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 
 **Retention:** 12 calendar months after case closure for routine cases (Q8, approved 2026-09-28; [retention.md](retention.md)). A longer hold needs a specific reviewed obligation or dispute.
 
-**Health data (open point):** not collected by design, but a person may volunteer health details in a request, for example when asking about optional workout notes. Keep only what answering needs, protect other people named in free text, and dispose on the same schedule. Which Art. 9(2) condition covers such volunteered details is not settled here. Revisit it before the first real case holding them, or if requests start to contain them routinely.
+**Health data (open point):** not collected by design, but a person may volunteer health details in a request, for example when asking about optional workout notes. Keep only what answering needs, protect other people named in free text, and dispose on the same schedule. Which Art. 9(2) condition covers such volunteered details is not settled here. On 2026-09-29 the owner chose to keep this point open for focused legal review before any real case needs those details. No Art. 9 condition is inferred from the Article 6(1)(c) choice.
 
 **Consent:** not required.
 
@@ -298,7 +298,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 - Proton's role, subprocessors and deletion (T076), and local backup behavior before the first real case, are tracked in [rights-requests.md](rights-requests.md) and [suppliers.md](suppliers.md).
 - The T083 practice cases must pass (SC-007).
 
-**Decision:** Art. 6(1)(c) chosen by the owner, Jouni Uusimaa, 2026-09-28; consent not required. The Art. 9 point for volunteered health details stays open as recorded above.
+**Decision:** Art. 6(1)(c) chosen by the owner, Jouni Uusimaa, 2026-09-28; consent not required for ordinary request handling. The owner confirmed on 2026-09-29 that the Art. 9 point for volunteered health details stays open for focused review before a real case needs those details.
 
 ---
 
