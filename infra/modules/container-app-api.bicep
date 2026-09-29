@@ -101,6 +101,14 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
                 name: 'PRIVACY_LIFECYCLE_ENABLED'
                 value: 'false'
               }
+              {
+                // Take the client address from the ingress's X-Forwarded-For entry so the
+                // per-IP login/register limit is per visitor, not one shared bucket for the
+                // ingress (Program.cs, UseForwardedHeaders). Safe here because external
+                // ingress is the only route into the container.
+                name: 'FORWARDED_HEADERS_ENABLED'
+                value: 'true'
+              }
             ],
             [
               {

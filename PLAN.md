@@ -173,6 +173,8 @@ A token is checked when a request arrives, but a deletion or password change can
 
 `POST /auth/login` and `POST /auth/register` are rate-limited per IP using the built-in `Microsoft.AspNetCore.RateLimiting` middleware (a fixed window is sufficient). Without it, a username-and-password login endpoint on a public URL is an open invitation to credential stuffing, and the invite code protects registration from *signups*, not from being hammered. In-process counters are the accepted limitation: with one backend replica that's correct, and if this ever scales out, the limiter needs shared state — the same trade-off subscription-tracker recorded and deferred.
 
+**Which IP.** In Azure the API's only peer is the Container Apps ingress, so `Connection.RemoteIpAddress` is the ingress's address and, left alone, every visitor would share one bucket (found during specs/001 T075, research R10). With `FORWARDED_HEADERS_ENABLED=true`, set only in the API's Bicep, `UseForwardedHeaders` runs first in the pipeline and replaces it with the **rightmost** `X-Forwarded-For` entry (`ForwardLimit = 1`). That's the one the ingress appended; anything further left came from the client and could be forged. The known-proxy lists are cleared because the ingress's internal address isn't ours to pin without a custom VNet, and the default list (loopback only) would silently ignore the header. That's safe only because external ingress is the sole route into the container. So the switch is off everywhere else, fail-closed like `PRIVACY_LIFECYCLE_ENABLED`: locally nothing sits in front of the API, and trusting the header would let a caller choose a fresh bucket per request. The address is used only as an in-memory counter key and is never logged.
+
 The password-verified account operations (`POST /account/export` and `POST /account/delete`) keep that per-IP policy and add a **per-account** bucket: 10 attempts per 60 s, keyed by the validated `sub` claim (specs/001 P12, `SensitiveRateLimit:*` configuration). The middleware applies only one named policy per endpoint, so the per-account bucket is the *global* limiter, which counts only endpoints marked with `SensitiveOperationMetadata` and lets everything else through. Rejections carry `Retry-After`. It is in process like the rest, so its real bound is the limit times the number of running instances.
 
 ### Deliberately out of scope
@@ -262,6 +264,7 @@ The variable *names* are identical everywhere — the app reads `INVITE_CODE` an
 | `Jwt__Secret` | `.env` (user-secrets before milestone 2) | Container Apps **secret** |
 | `ConnectionStrings__Default` | `.env`, points at the `db` service | Container Apps **secret** — it embeds Neon's password |
 | `CORS_ORIGINS`, `Jwt__ExpiryMinutes`, `PRIVACY_LIFECYCLE_ENABLED` | `.env` | plain env value — not sensitive |
+| `FORWARDED_HEADERS_ENABLED` | not set (off) — deliberately absent from `.env.example` and Compose | plain env value `true`, set in `container-app-api.bicep` (see Rate limiting) |
 
 Three rules that come with this:
 

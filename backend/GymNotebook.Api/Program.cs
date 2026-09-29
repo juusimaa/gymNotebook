@@ -7,6 +7,7 @@ using GymNotebook.Api;
 using GymNotebook.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -53,6 +54,13 @@ var inviteCode = builder.Configuration["INVITE_CODE"];
 // on — "True", "1" or "yes" do not, so a typo can never enable it by accident. The
 // privacy routes (PrivacyEndpoints.cs) are mapped only when it's true.
 var privacyLifecycleEnabled = builder.Configuration["PRIVACY_LIFECYCLE_ENABLED"] == "true";
+
+// Whether to take the client address from X-Forwarded-For (see UseForwardedHeaders below).
+// Only right when a trusted proxy is the sole way in — Container Apps ingress in Azure,
+// where the Bicep sets it. Locally nothing sits in front of the API, so trusting the header
+// would let any caller choose their own rate-limit bucket. Same exact-"true" rule as the
+// privacy switch: missing or misspelled leaves it off, which keeps today's behavior.
+var forwardedHeadersEnabled = builder.Configuration["FORWARDED_HEADERS_ENABLED"] == "true";
 
 // Comma-separated origins the browser may call this API from — the Vite dev server now, the
 // deployed frontend URL later. An origin is scheme + host + port with no trailing slash
@@ -199,7 +207,8 @@ builder.Services.AddRateLimiter(options =>
     // caller the problem is them.
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    // A fixed window per client IP: each address gets PermitLimit requests per Window,
+    // A fixed window per client IP (the forwarded one when FORWARDED_HEADERS_ENABLED is
+    // on, see UseForwardedHeaders): each address gets PermitLimit requests per Window,
     // then is rejected until the window resets. QueueLimit = 0 refuses excess requests
     // immediately instead of parking them until a permit frees up. Counters live in
     // process — correct with one replica, and the thing that needs shared state if this
@@ -349,6 +358,28 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+}
+
+// The real client address, ahead of everything that reads it (the "auth" rate limiter).
+// Behind Container Apps ingress, Connection.RemoteIpAddress is the ingress itself, so
+// without this every visitor shares one login/register bucket (specs/001 research R10).
+// The ingress appends the caller's address as the *rightmost* X-Forwarded-For entry;
+// anything to its left came from the client and can be forged. ForwardLimit = 1 takes
+// only that rightmost entry. The known-proxy lists are cleared because the ingress's
+// internal address isn't ours to pin (no custom VNet) — the default list is loopback only,
+// which would silently ignore the header. That's safe only because external ingress is the
+// sole route into the container, hence the switch. X-Forwarded-Proto isn't processed:
+// nothing here builds URLs or redirects by scheme.
+if (forwardedHeadersEnabled)
+{
+    var forwardedOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor,
+        ForwardLimit = 1,
+    };
+    forwardedOptions.KnownIPNetworks.Clear();
+    forwardedOptions.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwardedOptions);
 }
 
 // Order matters. CORS goes first: a preflight OPTIONS carries no bearer token, and the
