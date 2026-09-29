@@ -57,6 +57,16 @@ Paragraph 3, covering logs, deletion records, rights requests and the browser
 token, remains open with the P4/P7 findings. This is not approval of the whole
 purposes section or the final notice.
 
+**Recipients and retention wording approval (owner, 2026-09-29,
+conversation):** the owner approved the redrafted second paragraph of “Who
+receives information and where” and first paragraph of “How long information
+is kept,” as they appear in this draft and the matching JSON candidate on
+branch `docs/t043-recipients-retention`. Both were redrafted from the
+[T076 agreement review](suppliers.md#t076-agreement-review-2026-09-29) and the
+owner's residual-risk decision on provider-internal copies. The other
+paragraphs of those two sections, purposes paragraph 3, the complete notice
+version and publication remain open.
+
 ### About this notice
 
 Gym Notebook is a private training log. This notice explains what happens to
@@ -138,19 +148,28 @@ receives messages sent to the privacy contact. The controller also keeps a
 minimal rights-request register on a restricted local device in Finland. A
 downloaded notebook export is saved to the device you choose.
 
-These providers may use their own supporting services or remote support
-access. Proton states that encrypted mail storage may be in Switzerland,
-Germany or Norway. Switzerland has an EU adequacy decision.
+Microsoft, Neon (a Databricks company) and Cloudflare act as processors under
+their data-processing terms. They may use their own subprocessors and support
+staff, some of them outside the EU and EEA, including in the United States.
+Neon's and Cloudflare's terms protect those transfers with the European
+Commission's standard contractual clauses, and Cloudflare also relies on the
+EU-US Data Privacy Framework; Microsoft's data-processing terms govern
+transfers for Azure. Proton, based in Switzerland, provides the contact mailbox
+under its own terms and states that encrypted mail storage may be in
+Switzerland, Germany or Norway. Switzerland has an EU adequacy decision.
 
 ### How long information is kept
 
 Account and notebook information remains in the active database until you
-delete the account. Withdrawing optional-details consent removes those
-details from the active notebook immediately. Deleting the account removes
-its active account, notebook and consent/acknowledgement records. Information
-in recovery copies may remain for no more than 30 calendar days from the
-deletion. It is restricted to recovery use, and a restore must remove deleted
-accounts before access resumes.
+delete the account. Withdrawing optional-details consent removes those details
+from the active notebook immediately. Deleting the account removes its active
+account, notebook and consent/acknowledgement records. Copies that Gym Notebook
+can use to recover the database may hold deleted information for no more than
+30 calendar days from the deletion. They are restricted to recovery use, and a
+restore must remove deleted accounts before access resumes. The hosting
+providers also keep internal backup and replication copies that Gym Notebook
+cannot access or restore from. The providers delete those copies under their
+data-processing terms; no exact date can be given for that.
 
 Identifying operational and security logs have an intended maximum of 30
 calendar days from the original log entry. After deletion, only minimal logs
@@ -197,8 +216,8 @@ making a complaint.
 | Controller, contact, Finnish authority | Name and address confirmed by owner; receipt, reply and personal workday monitoring reported. Authority identified in the processing decision. |
 | Required/optional information, consent distinction, rights, profiling | Owner approved the about, controller, information, rights and contact sections, plus the no-profiling/no-advertising purposes paragraph, on 2026-09-29. The complete purposes section still awaits final review. |
 | Purposes and lawful bases | Owner approved purposes paragraphs 1, 2 and 4 on 2026-09-29. Paragraph 3 remains open: P4 bases were chosen but are unsigned pending log findings; P7's basis is recorded, with the Article 9 point for volunteered health details open. P1, P2 and P5 were signed 2026-09-28, and the optional-details amendment was approved 2026-09-29. |
-| Recipients, locations and transfer safeguards | Current supplier inventory is a draft; T076 must settle account-specific agreements, support paths and transfer safeguards. |
-| Retention and restored copies | Draft reflects the schedule's intended limits; T075–T077 must verify actual content, copies and disposal before these claims are published. |
+| Recipients, locations and transfer safeguards | Second paragraph redrafted 2026-09-29 from the [T076 agreement review](suppliers.md#t076-agreement-review-2026-09-29): processor role, subprocessors and support outside the EU/EEA, SCCs for Neon and Cloudflare plus the DPF for Cloudflare, Microsoft's terms by reference (its DPA transfer clauses were not read), and Proton under consumer terms. Owner approved it 2026-09-29; T076's pre-release permission recheck and comparison with this final text remain. |
+| Retention and restored copies | First paragraph redrafted 2026-09-29 to follow the owner's residual-risk decision: the 30-day limit applies to copies Gym Notebook can restore from, and provider-internal copies are described without an erasure date. Owner approved it 2026-09-29. Settings and Neon's six-hour refusal were checked on 2026-09-29 ([research R7](../../specs/001-privacy-account-lifecycle/research.md#r7--retention-is-more-than-configuration-intent)); T077's observed row expiry waits until after about 2026-10-24. |
 | Version and effective date | `notice-candidate.json` has no effective or publication date and is not served. Create the reviewed version and index entry only after content and release evidence are settled. |
 
 The proposed public wording above presents legal bases as final because that
