@@ -48,6 +48,15 @@ account and notebook,” “Your choices and rights,” and “Contact and compl
 This approval is limited to those five sections. The purposes, recipients and
 retention sections, the complete notice version, and publication remain open.
 
+**Additional purposes wording approval (owner, 2026-09-29, conversation):** the
+owner approved paragraphs 1, 2 and 4 of “Why the information is used” as they
+appear in this draft and the matching JSON candidate at commit `7254cbc`:
+account/core notebook and notice acknowledgement, optional-details consent,
+and no automated decisions, profiling, advertising or notebook analytics.
+Paragraph 3, covering logs, deletion records, rights requests and the browser
+token, remains open with the P4/P7 findings. This is not approval of the whole
+purposes section or the final notice.
+
 ### About this notice
 
 Gym Notebook is a private training log. This notice explains what happens to
@@ -186,8 +195,8 @@ making a complaint.
 | Notice item | Current review state |
 | --- | --- |
 | Controller, contact, Finnish authority | Name and address confirmed by owner; receipt, reply and personal workday monitoring reported. Authority identified in the processing decision. |
-| Required/optional information, consent distinction, rights, profiling | Owner approved the about, controller, information, rights and contact sections on 2026-09-29; the purposes section, including the profiling statement in its context, still awaits final review. |
-| Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details; FR-029–FR-035 and the existing-value transition approved 2026-09-29 (T042). P1, P2 and P5 signed 2026-09-28. P4 bases chosen but unsigned pending log findings; P7 basis recorded, with the Article 9 point for volunteered health details open. |
+| Required/optional information, consent distinction, rights, profiling | Owner approved the about, controller, information, rights and contact sections, plus the no-profiling/no-advertising purposes paragraph, on 2026-09-29. The complete purposes section still awaits final review. |
+| Purposes and lawful bases | Owner approved purposes paragraphs 1, 2 and 4 on 2026-09-29. Paragraph 3 remains open: P4 bases were chosen but are unsigned pending log findings; P7's basis is recorded, with the Article 9 point for volunteered health details open. P1, P2 and P5 were signed 2026-09-28, and the optional-details amendment was approved 2026-09-29. |
 | Recipients, locations and transfer safeguards | Current supplier inventory is a draft; T076 must settle account-specific agreements, support paths and transfer safeguards. |
 | Retention and restored copies | Draft reflects the schedule's intended limits; T075–T077 must verify actual content, copies and disposal before these claims are published. |
 | Version and effective date | `notice-candidate.json` has no effective or publication date and is not served. Create the reviewed version and index entry only after content and release evidence are settled. |
