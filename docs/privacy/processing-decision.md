@@ -279,6 +279,8 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 - **Blocking (FR-023/FR-024, T076).** Account-specific agreements, transfer paths, internal copies and deletion assistance remain unverified for the suppliers in [suppliers.md](suppliers.md).
 - **Blocking (T076).** Cloudflare's DNS role/logging and Proton's terms/subprocessors/provider copies need review. Switzerland's adequacy decision covers transfers to Switzerland, not an unverified onward transfer.
 - **Blocking (T076, 2026-09-29 follow-up).** Public DNS and HTTP checks again support Cloudflare DNS-only routing, and live Neon/Azure customer-side access settings were rechecked. Account-specific agreements, support/transfer paths and provider-internal copies remain unknown. Proton's [public Mail policy](https://proton.me/mail/privacy-policy) allows offline backups for up to 30 days; deleting active rights correspondence at Q8's 12-month deadline could exceed its absolute maximum. Verify the actual mailbox path and set an earlier active-deletion schedule, or obtain a reviewed Q8 change before the first real case. See [supplier evidence](suppliers.md#t076-follow-up-2026-09-29-07480756-utc).
+- **Resolved (Q8 timing), 2026-09-29.** The owner set Proton deletion, including Trash, at closure + 11 calendar months, inside Q8's unchanged 12-month maximum; the mailbox is web-only, with no local copies. No Mac backup covers the local register, which stays outside the GitHub repository. Proton's agreement, location and subprocessor points above stay open.
+- **Resolved (Proton terms, T076), 2026-09-29.** The privacy contact is a free personal Proton Mail account, so there's no DPA to sign. The owner accepted Proton's consumer terms for this role (Swiss adequacy, encrypted storage, owner-only access with two-factor sign-in, expected low volume). The account shows no storage location, so the public policy's Switzerland/Germany/Norway is recorded; see [suppliers.md](suppliers.md).
 
 **Decision:** _(owner, date, evidence)_
 
@@ -301,7 +303,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 **Consent:** not required.
 
 **Findings:**
-- Proton's role, subprocessors and deletion (T076), and local backup behavior before the first real case, are tracked in [rights-requests.md](rights-requests.md) and [suppliers.md](suppliers.md).
+- Proton's role, subprocessors and deletion (T076) are tracked in [rights-requests.md](rights-requests.md) and [suppliers.md](suppliers.md).
 - The T083 practice cases must pass (SC-007).
 
 **Decision:** Art. 6(1)(c) chosen by the owner, Jouni Uusimaa, 2026-09-28; consent not required for ordinary request handling. The owner confirmed on 2026-09-29 that the Art. 9 point for volunteered health details stays open for focused review before a real case needs those details.
