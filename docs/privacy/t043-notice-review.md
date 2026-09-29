@@ -1,9 +1,11 @@
 # T043 privacy notice — owner review draft
 
-**Status:** Draft for controller review, 2026-09-28. This file is outside
-`notices/` and is not embedded or served by the API. Its proposed lawful bases
-come from the unsigned [processing decision](processing-decision.md); its
-retention and supplier claims require the checks in
+**Status:** Draft for controller review, updated 2026-09-29. This file and
+[the matching JSON candidate](notice-candidate.json) are outside `notices/`
+and are not embedded or served by the API. P1, P2 and P5 have signed decisions.
+The owner approved five wording sections on 2026-09-29, as recorded below;
+the other conclusions and public wording still require final review.
+Retention and supplier claims require the checks in
 [release-checklist.md](release-checklist.md). Do not publish this text or mark
 T043 complete until the decisions and evidence below are recorded.
 
@@ -39,6 +41,22 @@ privacy feature is enabled.
 
 ## Proposed public wording
 
+**Partial wording approval (owner, 2026-09-29, conversation):** the owner
+approved the text in this draft and the matching JSON candidate at commit
+`7254cbc` for “About this notice,” “Who is responsible,” “Information in your
+account and notebook,” “Your choices and rights,” and “Contact and complaints.”
+This approval is limited to those five sections. The purposes, recipients and
+retention sections, the complete notice version, and publication remain open.
+
+**Additional purposes wording approval (owner, 2026-09-29, conversation):** the
+owner approved paragraphs 1, 2 and 4 of “Why the information is used” as they
+appear in this draft and the matching JSON candidate at commit `7254cbc`:
+account/core notebook and notice acknowledgement, optional-details consent,
+and no automated decisions, profiling, advertising or notebook analytics.
+Paragraph 3, covering logs, deletion records, rights requests and the browser
+token, remains open with the P4/P7 findings. This is not approval of the whole
+purposes section or the final notice.
+
 ### About this notice
 
 Gym Notebook is a private training log. This notice explains what happens to
@@ -66,12 +84,14 @@ the chart values are not kept separately. Exercise names are needed to record
 sets. Please use lift names rather than health details in exercise names.
 
 A workout's title, location, notes and your bodyweight are optional. They can
-reveal health information. The service stores them only if you choose Allow on
+reveal health information. New details are stored only if you choose Allow on
 a separate consent screen. If you choose Not now, the four fields stay hidden
 and the rest of the notebook works. You can allow them later or withdraw from
 Privacy & account. Withdrawing removes those four fields from all your
-workouts; the other notebook information stays. Existing details from before
-this choice was introduced follow the transition explained on that screen.
+workouts; the other notebook information stays. If your account already held
+these details when this choice was introduced, you are asked whether to keep
+them. Choosing Not now removes them; if you do not answer, they are cleared
+30 calendar days after this feature is enabled. Silence is not consent.
 
 The browser stores your sign-in token on your device so you can stay signed
 in. The service also processes limited operational and security information,
@@ -175,11 +195,11 @@ making a complaint.
 | Notice item | Current review state |
 | --- | --- |
 | Controller, contact, Finnish authority | Name and address confirmed by owner; receipt, reply and personal workday monitoring reported. Authority identified in the processing decision. |
-| Required/optional information, consent distinction, rights, profiling | Drafted against the current product and specification; final wording awaits controller review. |
-| Purposes and lawful bases | Article 6(1)(a) plus Article 9(2)(a) chosen for optional details. P1 and P2 signed 2026-09-28: Article 6(1)(b), with 6(1)(c) for notice acknowledgement and deletion-recovery records, and P2 not health data. P4/P5/request decisions remain open. |
+| Required/optional information, consent distinction, rights, profiling | Owner approved the about, controller, information, rights and contact sections, plus the no-profiling/no-advertising purposes paragraph, on 2026-09-29. The complete purposes section still awaits final review. |
+| Purposes and lawful bases | Owner approved purposes paragraphs 1, 2 and 4 on 2026-09-29. Paragraph 3 remains open: P4 bases were chosen but are unsigned pending log findings; P7's basis is recorded, with the Article 9 point for volunteered health details open. P1, P2 and P5 were signed 2026-09-28, and the optional-details amendment was approved 2026-09-29. |
 | Recipients, locations and transfer safeguards | Current supplier inventory is a draft; T076 must settle account-specific agreements, support paths and transfer safeguards. |
 | Retention and restored copies | Draft reflects the schedule's intended limits; T075–T077 must verify actual content, copies and disposal before these claims are published. |
-| Version and effective date | Create the reviewed JSON version and index entry only after the content and release evidence are settled. |
+| Version and effective date | `notice-candidate.json` has no effective or publication date and is not served. Create the reviewed version and index entry only after content and release evidence are settled. |
 
 The proposed public wording above presents legal bases as final because that
 is how a published notice must read. The owner chose Article 6(1)(a) consent
@@ -198,13 +218,13 @@ The remaining purpose decisions to review are:
 
 | Record | Proposed conclusion to confirm or revise |
 | --- | --- |
-| P4 operational logs | Owner chose Article 6(1)(f) on 2026-09-28; the balance still needs the actual log content, access and retention from T075–T077. The first scan found a leaked credential that must be removed. |
+| P4 operational logs | Owner chose Article 6(1)(f) on 2026-09-28; the balance still needs actual log content, access and retention from T075–T077. The credential found in old startup lines was rotated; those lines still need observed expiry. |
 | P4 deletion evidence | Owner chose Article 6(1)(c) on 2026-09-28; signed with P4 once T075–T077 evidence exists. |
 | Rights correspondence/register | Owner chose Article 6(1)(c) on 2026-09-28 (P7); disposal and recipient handling still need T076/T083 evidence. |
 
 1. Sign P4 in [processing-decision.md](processing-decision.md) once its
    T075–T077 findings are resolved. (P1, P2 and P5 were signed on 2026-09-28,
-   P7 recorded the request-correspondence basis, and the registration service
+   T042 was approved on 2026-09-29, P7 recorded the request-correspondence basis, and the registration service
    description is live. The notice wording above already matches these bases.)
 2. The owner has confirmed the public name, reported successful receipt from
    Gmail and an outgoing reply, and committed to checking the contact mailbox
@@ -216,8 +236,10 @@ The remaining purpose decisions to review are:
    checks (T076), plus log-content and disposal checks (T075–T077). Reconcile
    their results with the recipients and retention sections above. A declared
    maximum is not proof of actual disposal.
-4. Review the final wording as controller, record reviewer/date/evidence, and
-   create a new immutable version in `notices/` with a reviewed `effectiveAt`,
+4. Reconcile the [JSON candidate](notice-candidate.json) with these findings,
+   including any transfers and safeguards, review its final wording as
+   controller, record reviewer/date/evidence, and create a new immutable
+   version in `notices/` with a reviewed `effectiveAt`,
    `publishedAt`, `materialChangeSummary`, `owner`, `reviewDate` and
    `reviewEvidence`. Update `index.json` to point at it. Keep the synthetic
    versions in Git for development history, but do not list them as published

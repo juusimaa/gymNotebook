@@ -8,21 +8,21 @@ tasks.md T041/T042).
 
 | | |
 | --- | --- |
-| **Status** | **Draft for owner review.** Nothing below is decided until the Decision line of each purpose is filled in and signed. |
+| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. |
 | **Controller** | Jouni Uusimaa, private individual, Finland |
 | **Privacy contact** | jouni.uu@proton.me |
 | **Supervisory authority** | Tietosuojavaltuutetun toimisto (Office of the Data Protection Ombudsman), Finland |
 | **Owner / reviewer** | Jouni Uusimaa |
-| **Version** | draft-1, 2026-09-25 |
-| **Review date** | _(set when signed)_ |
+| **Version** | draft-2, 2026-09-29 |
+| **Review date** | Per-purpose dates appear in the Decision lines; final whole-record review pending. |
 
 **What this document is not.** It is not legal advice and does not certify
-compliance. The facts were gathered from the code and from the read-only
-provider inspection of 2026-09-24 (research R7). The lawful bases,
-health-data assessments and consent conclusions are **proposals** drafted
-for the owner. Where evidence is missing, the purpose carries a **blocking
-finding**: that processing must not go live with the feature flag on until
-the finding is resolved (FR-004).
+compliance. The facts were gathered from the code and dated read-only
+provider inspections (research R7). Signed conclusions are identified in
+their Decision lines; the remaining conclusions are choices or proposals,
+not final approval. Where evidence is missing, the purpose carries a
+**blocking finding**: that processing must not go live with the feature flag
+on until the finding is resolved (FR-004).
 
 ## How to read each purpose
 
@@ -169,19 +169,20 @@ remaining short free-text fields, or B for notes only.
 **Consent:** **required** under the chosen option B (see Decision). T042 applies.
 
 **Findings:**
-- **Blocking (T042, FR-007).** Processing of these fields under consent needs an approved specification amendment, implemented and verified. It must define:
+- **Approved (T042, FR-007, 2026-09-29).** The owner approved the consent amendment in spec.md FR-029–FR-035, including its treatment of production's existing values. Its implementation is recorded in tasks.md T085–T098. The amendment defines:
   - separate consent for this purpose only, given by an affirmative action and never bundled with the notice's "Continue";
   - refusal that leaves the rest of the notebook fully usable;
   - withdrawal as easy as granting;
   - versioned evidence of what was agreed and when;
   - what happens to entries already stored, both on refusal and on withdrawal;
   - the transition for existing accounts.
-- **Accepted: processing already live.** These fields exist in production today, outside the feature flag, with no Art. 9 condition. The owner accepted this interim risk until the flag is switched on (see Decision). FR-035 governs the stored values afterwards.
+- **Accepted interim risk:** these fields exist in production today, outside the feature flag, with no Art. 9 condition. The owner accepted this interim risk until the flag is switched on (see Decision). FR-035 governs the stored values afterwards.
 
 **Decision:** Option **B**, explicit consent under Art. 9(2)(a), for the optional fields: `BodyweightKg`, `Title`, `Location` and `Notes`. Chosen by the owner, 2026-09-25.
 - **Article 6 basis:** The owner chose consent under Art. 6(1)(a) for these four fields on 2026-09-28. This replaces the earlier proposed contract basis; the notice must state the same basis. The consent remains separate from notice acknowledgement.
 - **Exercise names: outside consent** (owner, 2026-09-25). `Name` is required, since every set belongs to an exercise, so it can't depend on consent without breaking the notebook for anyone who refuses. Treated under option A's reasoning: the field names a lift, and the notice asks users not to put health details in names. **Residual risk accepted.**
-- **Interim period: risk accepted** (owner, 2026-09-25). Until the feature flag is switched on (T084), production keeps accepting these details without an Art. 9 condition. Accepted for the small invite-only user base. No unflagged change is shipped. Existing values follow the spec's transition (FR-035): they are kept only if the account consents, and are cleared 30 days after enabling otherwise. Evidence: the FR-007 amendment, [spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements), drafted 2026-09-25, awaiting approval. Sign when it is approved.
+- **Interim period: risk accepted** (owner, 2026-09-25). Until the feature flag is switched on (T084), production keeps accepting these details without an Art. 9 condition. Accepted for the small invite-only user base. No unflagged change is shipped. Existing values follow the spec's transition (FR-035): they are kept only if the account consents, and are cleared 30 days after enabling otherwise. Evidence: the FR-007 amendment, [spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements), drafted 2026-09-25 and approved below.
+- **Amendment approval (owner, 2026-09-29, conversation):** approved FR-029–FR-035 as written. Allow keeps existing optional details; Not now removes them; an unanswered account's details are cleared 30 calendar days after the feature is enabled. No consent is inferred from silence. This closes T042; it does not approve production rollout or settle P4/P6 findings.
 
 ---
 
@@ -199,7 +200,7 @@ remaining short free-text fields, or B for notes only.
 - **Frontend nginx access log:** turned off in PR #47 (T002). Lines from before that deployment (remote address, user agent, path, time) age out by about 2026-10-26. T075 verifies this.
 - **Rate limiting:** the per-IP `auth` limiter and per-account password throttle hold counters **in memory only**. Nothing is stored.
 
-**Where it lives:** Azure Log Analytics workspace `log-gymnote-prod-58dd`, with 30-day settings on the console/system tables that hold rows. Intended access is restricted to the operator; T076 verifies the effective permissions.
+**Where it lives:** Azure Log Analytics workspace `log-gymnote-prod-58dd`, with 30-day settings on the console/system tables that hold rows. Effective customer-side RBAC includes the operator and the GitHub deployment service principal, which inherits resource-group Contributor. The owner accepted that automation access on 2026-09-29, with the GitHub `production` environment restricted to protected branches as described below.
 
 **Necessity:** error logs are needed to run the service. The deletion lines make an erasure survive a restore; without them the fallback path can't work.
 
@@ -213,7 +214,10 @@ remaining short free-text fields, or B for notes only.
 
 **Findings:**
 - **Blocking (R7, T075–T077).** T069 set `immediatePurgeDataOn30Days: true` and pinned the twelve App\* tables to 30/30; a live table scan on 2026-09-28 found only `AzureActivity` and `Usage` at 90/90. Azure rejected 30 days for those two metadata tables. Their app-user content/routing, actual purge behavior, extra sinks and old rows still need T075–T077 evidence before a 30-day app-user claim holds.
-- **Blocking (R7, T075), partly done 2026-09-28.** A read-only scan of the console log table ([research R7](../../specs/001-privacy-account-lifecycle/research.md#r7--retention-is-more-than-configuration-intent)) found no addresses, tokens or username values in API lines, and no nginx access lines after 2026-09-24 03:09 UTC. The system log table still needs scanning.
+- **Blocking (R7, T075), partly done 2026-09-28.** A read-only scan of the console log table ([research R7](../../specs/001-privacy-account-lifecycle/research.md#r7--retention-is-more-than-configuration-intent)) found no addresses, tokens or username values in API lines, and no nginx access lines after 2026-09-24 03:09 UTC. The system log table was scanned in the 2026-09-29 follow-up below.
+- **System-log follow-up (T075, 2026-09-29).** Aggregate pattern counts over all 7,184 stored system-log rows found no IP, email marker, token-like text, connection-string marker, notebook path or sensitive field word; no raw lines were returned. Frontend access lines still stopped at 2026-09-24 03:09 UTC. This is scoped content evidence, not proof of expiry, other sinks or the live limiter's client address; see research R7/R10.
+- **Azure access/routing follow-up (T076, 2026-09-29).** The production environment sends logs to the recorded workspace. No diagnostic export settings were listed for the apps, environment, workspace or subscription Activity Log. Inherited workspace RBAC includes the operator as subscription Owner and `gymnotebook-production-deploy` as resource-group Contributor; that automation identity can read logs. Its federated credential is scoped to this repository's `production` GitHub environment. The owner's access decision follows; see [supplier inventory](suppliers.md#t076-read-only-checks-2026-09-29).
+- **Owner access decision (T076, 2026-09-29).** Keep the deployment identity's Contributor role, including log reads, as restricted operational access used by the current resource-group deployment workflow. The owner approved restricting the GitHub `production` environment to protected branches; this was applied and read back on 2026-09-29. `main` was the only protected branch and the owner was the only repository writer at inspection time. A future protected branch would also be eligible, and repository administrators retain the environment's existing bypass ability. Recheck that scope if repository writers, protected branches, deployment workflows or Azure role assignments change. This settles the customer-side automation-access choice, not P4's log-content or disposal findings.
 - **Resolved (security), 2026-09-28.** 15 API startup-exception lines from 2026-09-23 contained a connection URL with a role password for a separate Neon project. That role was rotated the same day, as was the production role, so the logged password no longer works. The owner confirmed that project holds no Gym Notebook data. The lines expire with the 30-day retention around 2026-10-23 (T077 observes this), and the API now refuses an unparseable connection string without logging it ([research R7](../../specs/001-privacy-account-lifecycle/research.md#r7--retention-is-more-than-configuration-intent)).
 - *Non-blocking (R10).* Whether the Container Apps ingress keeps its own request logs with client IPs is unverified. It's likely not exposed to this project, but check before the notice states it.
 
@@ -253,7 +257,7 @@ evidence.
 
 | Recipient | Role and data | Location | Evidence still needed |
 | --- | --- | --- | --- |
-| **Neon** | Processor: the whole database (P1–P3). On 2026-09-28 the project reported a 6-hour history window, no snapshots and one branch. | `aws-eu-central-1` (Frankfurt) | Applicable DPA/subprocessor list, internal durability copies, support-transfer paths and deletion assistance; see [suppliers.md](suppliers.md). |
+| **Neon / Databricks** | Processor: the whole database (P1–P3). On 2026-09-29 the project reported a 6-hour history window, no snapshots, one branch and one customer-side admin, with no listed API keys or invitations. | `aws-eu-central-1` (Frankfurt); support/affiliate paths unverified | Current public terms point to Databricks and list Grafana Labs in the US alongside the Databricks subprocessors. Applicable/executed DPA, internal durability copies, support-transfer paths and deletion assistance remain open; see [suppliers.md](suppliers.md#t076-read-only-checks-2026-09-29). |
 | **Microsoft Azure** | Processor: runs the API and frontend containers, and holds the P4 logs. | swedencentral | DPA/Product Terms coverage for this subscription, transfer safeguards and actual log disposal; see [suppliers.md](suppliers.md). |
 | **Cloudflare** | Authoritative DNS for `gymnotebook.fit` (`dawn`/`glen.ns.cloudflare.com`). **DNS-only, not proxied**, rechecked 2026-09-28: the A record resolved directly to the Azure frontend (20.240.228.206), the response had nginx's `server` header and no `cf-ray`, and public `/config.js` pointed the API directly to `azurecontainerapps.io`. Cloudflare sees DNS query metadata, usually from the visitor's resolver, rather than the page or API HTTP bodies. | global anycast | Applicable terms, role, DNS logging and transfers; see [suppliers.md](suppliers.md). **Keep the proxy off:** enabling it adds a new HTTP recipient and needs prior notice/inventory review. |
 | **Proton Mail** | Holds messages sent to the privacy contact, including rights requests (FR-025). Proton AG is the operator's email provider. | Switzerland, Germany or Norway for encrypted mail storage per Proton's public policy; account-specific path unverified. Switzerland has an EU adequacy decision. | Applicable account terms, role, subprocessors and actual deletion; routine correspondence is scheduled for 12 months after closure under Q8. See [suppliers.md](suppliers.md) and [rights-requests.md](rights-requests.md). |
@@ -289,7 +293,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 
 **Retention:** 12 calendar months after case closure for routine cases (Q8, approved 2026-09-28; [retention.md](retention.md)). A longer hold needs a specific reviewed obligation or dispute.
 
-**Health data (open point):** not collected by design, but a person may volunteer health details in a request, for example when asking about optional workout notes. Keep only what answering needs, protect other people named in free text, and dispose on the same schedule. Which Art. 9(2) condition covers such volunteered details is not settled here. Revisit it before the first real case holding them, or if requests start to contain them routinely.
+**Health data (open point):** not collected by design, but a person may volunteer health details in a request, for example when asking about optional workout notes. Keep only what answering needs, protect other people named in free text, and dispose on the same schedule. Which Art. 9(2) condition covers such volunteered details is not settled here. On 2026-09-29 the owner chose to keep this point open for focused legal review before any real case needs those details. No Art. 9 condition is inferred from the Article 6(1)(c) choice.
 
 **Consent:** not required.
 
@@ -297,7 +301,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 - Proton's role, subprocessors and deletion (T076), and local backup behavior before the first real case, are tracked in [rights-requests.md](rights-requests.md) and [suppliers.md](suppliers.md).
 - The T083 practice cases must pass (SC-007).
 
-**Decision:** Art. 6(1)(c) chosen by the owner, Jouni Uusimaa, 2026-09-28; consent not required. The Art. 9 point for volunteered health details stays open as recorded above.
+**Decision:** Art. 6(1)(c) chosen by the owner, Jouni Uusimaa, 2026-09-28; consent not required for ordinary request handling. The owner confirmed on 2026-09-29 that the Art. 9 point for volunteered health details stays open for focused review before a real case needs those details.
 
 ---
 
@@ -307,19 +311,19 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 | --- | --- | --- |
 | P1 Account administration | Not required: Article 6(1)(b), with 6(1)(c) for acknowledgement and restore safety (signed 2026-09-28) | No |
 | P2 Training log and progress | Not required: Article 6(1)(b), not health data in this context (signed 2026-09-28) | No |
-| P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner 2026-09-25 and 2026-09-28 | Yes, pending final amendment and release review |
+| P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner choices 2026-09-25/28; amendment approved 2026-09-29 | T042 complete; rollout still blocked by other release gates |
 | P4 Logs | Not required: Article 6(1)(f) and 6(1)(c) chosen 2026-09-28, unsigned | Log-content, credential and retention findings block |
 | P5 Browser storage | Not required: strictly necessary, Article 6(1)(b) (signed 2026-09-28) | No |
 | P6 Recipients | Not applicable | Supplier findings block |
 | P7 Rights requests | Not required: Article 6(1)(c) (owner, 2026-09-28) | Supplier and T083 findings block |
 
-**T042 outcome (updated 2026-09-28):** consent is required for P3's four
+**T042 outcome (approved 2026-09-29):** consent is required for P3's four
 optional workout details. The FR-007 amendment
 ([spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements))
 and its implementation are recorded in [tasks.md](../../specs/001-privacy-account-lifecycle/tasks.md#phase-7a-user-story-6--choose-whether-to-record-optional-workout-details-priority-p1).
-The feature remains behind the privacy flag. Final approval of the amendment,
-the treatment of existing P3 values and the open P4/P6 findings remain release
-gates; the recorded implementation alone does not sign off T042.
+The owner approved the amendment and treatment of existing P3 values on
+2026-09-29. The feature remains behind the privacy flag. Open P4/P6 findings,
+T043 and the other release gates still block production enablement.
 
 ## Change control
 
