@@ -279,6 +279,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 - **Blocking (FR-023/FR-024, T076).** Account-specific agreements, transfer paths, internal copies and deletion assistance remain unverified for the suppliers in [suppliers.md](suppliers.md).
 - **Blocking (T076).** Cloudflare's DNS role/logging and Proton's terms/subprocessors/provider copies need review. Switzerland's adequacy decision covers transfers to Switzerland, not an unverified onward transfer.
 - **Blocking (T076, 2026-09-29 follow-up).** Public DNS and HTTP checks again support Cloudflare DNS-only routing, and live Neon/Azure customer-side access settings were rechecked. Account-specific agreements, support/transfer paths and provider-internal copies remain unknown. Proton's [public Mail policy](https://proton.me/mail/privacy-policy) allows offline backups for up to 30 days; deleting active rights correspondence at Q8's 12-month deadline could exceed its absolute maximum. Verify the actual mailbox path and set an earlier active-deletion schedule, or obtain a reviewed Q8 change before the first real case. See [supplier evidence](suppliers.md#t076-follow-up-2026-09-29-07480756-utc).
+- **Resolved (Q8 timing), 2026-09-29.** The owner set Proton deletion, including Trash, at closure + 11 calendar months, inside Q8's unchanged 12-month maximum; the mailbox is web-only, with no local copies. Proton's agreement, location and subprocessor points above stay open.
 
 **Decision:** _(owner, date, evidence)_
 
