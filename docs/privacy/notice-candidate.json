@@ -1,0 +1,78 @@
+{
+  "_status": "UNREVIEWED CANDIDATE. Outside notices/; not embedded or served. Do not publish before T041-T043 and T075-T077 evidence and owner approval.",
+  "version": "candidate-review",
+  "effectiveAt": null,
+  "publishedAt": null,
+  "materialChangeSummary": "First production notice; final summary to be reviewed before publication.",
+  "owner": "Jouni Uusimaa",
+  "reviewDate": null,
+  "reviewEvidence": null,
+  "sections": [
+    {
+      "id": "about",
+      "heading": "About this notice",
+      "paragraphs": [
+        "Gym Notebook is a private training log. This notice explains what happens to information you give the service and how to exercise your privacy rights. Reading this notice or pressing Continue records only that you saw this version. It is not consent to optional workout details."
+      ]
+    },
+    {
+      "id": "controller",
+      "heading": "Who is responsible",
+      "paragraphs": [
+        "Jouni Uusimaa, a private individual in Finland, is the controller of Gym Notebook. For privacy questions and requests, email jouni.uu@proton.me."
+      ]
+    },
+    {
+      "id": "information",
+      "heading": "Information in your account and notebook",
+      "paragraphs": [
+        "To create and use an account, you provide a username and password. The service stores a password hash, not the password itself, plus account creation, session-control and privacy-notice acknowledgement records. Without a username and password, the service cannot maintain a private notebook for you. An invite code is checked at registration but is not stored with your account.",
+        "Your notebook contains workout dates and times, exercise names and whether an exercise is bodyweight based, sets, weights, repetitions and warm-up marks. The service calculates a progress chart from your sets when you ask to see it; the chart values are not kept separately. Exercise names are needed to record sets. Please use lift names rather than health details in exercise names.",
+        "A workout's title, location, notes and your bodyweight are optional. They can reveal health information. New details are stored only if you choose Allow on a separate consent screen. If you choose Not now, the four fields stay hidden and the rest of the notebook works. You can allow them later or withdraw from Privacy & account. Withdrawing removes those four fields from all your workouts; the other notebook information stays. If your account already held these details when this choice was introduced, you are asked whether to keep them. Choosing Not now removes them; if you do not answer, they are cleared 30 calendar days after this feature is enabled. Silence is not consent.",
+        "The browser stores your sign-in token on your device so you can stay signed in. The service also processes limited operational and security information, including error and deletion-recovery records. If you email the privacy contact, your message and minimal case-handling records are processed to answer your request. Please do not send your password or sign-in token by email."
+      ]
+    },
+    {
+      "id": "purposes",
+      "heading": "Why the information is used",
+      "paragraphs": [
+        "Account and core notebook information are used to provide your private training log and progress chart. The lawful basis is GDPR Article 6(1)(b), performance of the service you request. Notice acknowledgement is used to document which version you saw; the basis for that record is Article 6(1)(c), compliance with transparency obligations.",
+        "Optional workout details are used only to show them in your own notebook and include them in your export. The Article 6 basis is your consent under Article 6(1)(a). Because these fields can contain health information, they also require your explicit consent under Article 9(2)(a). You may withdraw that consent at any time without affecting earlier lawful processing or use of the rest of the notebook. Consent to these details is separate from pressing Continue on this notice.",
+        "Limited operational and security records are used to run and protect the service. The basis is Article 6(1)(f), the controller's legitimate interest in a working and secure service. Minimal deletion-recovery records help prevent a deleted account from reappearing after a database restore; the basis is Article 6(1)(c), compliance with erasure obligations. The privacy contact uses correspondence and a minimal request register to handle your rights request and document the response; the basis is Article 6(1)(c). The sign-in token in your browser supports the requested signed-in service; its GDPR basis is Article 6(1)(b).",
+        "Gym Notebook does not make automated decisions about you or profile you. It does not use your notebook for advertising or analytics."
+      ]
+    },
+    {
+      "id": "recipients",
+      "heading": "Who receives information and where",
+      "paragraphs": [
+        "Microsoft Azure runs the application and holds its operational logs in Sweden. Neon hosts the notebook database in Frankfurt, Germany. Cloudflare currently provides DNS for the site; it is not the site's HTTP proxy. Proton Mail receives messages sent to the privacy contact. The controller also keeps a minimal rights-request register on a restricted local device in Finland. A downloaded notebook export is saved to the device you choose.",
+        "These providers may use their own supporting services or remote support access. Proton states that encrypted mail storage may be in Switzerland, Germany or Norway. Switzerland has an EU adequacy decision."
+      ]
+    },
+    {
+      "id": "retention",
+      "heading": "How long information is kept",
+      "paragraphs": [
+        "Account and notebook information remains in the active database until you delete the account. Withdrawing optional-details consent removes those details from the active notebook immediately. Deleting the account removes its active account, notebook and consent/acknowledgement records. Information in recovery copies may remain for no more than 30 calendar days from the deletion. It is restricted to recovery use, and a restore must remove deleted accounts before access resumes.",
+        "Identifying operational and security logs have an intended maximum of 30 calendar days from the original log entry. After deletion, only minimal logs with a documented reason to keep them may remain until their original expiry; the deadline is not restarted by deletion. Minimal deletion-recovery evidence has an additional ceiling of 31 calendar days from the deletion, whichever deadline comes first. No notebook content or credentials are intended for these logs.",
+        "The sign-in token permits requests for up to 30 minutes after issue. The browser removes its stored copy on sign-out or when it observes an invalid session; an offline browser may retain the bytes until it is next used. The service does not keep a completed server-side export copy. Routine rights-request correspondence and the minimal register are scheduled for deletion no later than 12 calendar months after the case closes. A specific legal obligation or dispute may require a documented, limited exception."
+      ]
+    },
+    {
+      "id": "rights",
+      "heading": "Your choices and rights",
+      "paragraphs": [
+        "You can view and edit your notebook, download a JSON copy from Privacy & account, and delete your account there. For access to other information we may hold about you, or to ask for correction, erasure, restriction or portability where applicable, email jouni.uu@proton.me. You may object to processing based on legitimate interests. You may also withdraw the separate consent for optional workout details from Privacy & account.",
+        "We will respond without undue delay and within one calendar month of receiving a rights request, or explain a permitted extension within that month. We may need a proportionate identity check before disclosing or changing information. You do not need to send a password by email."
+      ]
+    },
+    {
+      "id": "contact",
+      "heading": "Contact and complaints",
+      "paragraphs": [
+        "Contact Jouni Uusimaa at jouni.uu@proton.me for privacy questions or rights requests. You may complain to Finland's Office of the Data Protection Ombudsman (Tietosuojavaltuutetun toimisto) at https://tietosuoja.fi/en/home. You do not need to contact Gym Notebook before making a complaint."
+      ]
+    }
+  ]
+}

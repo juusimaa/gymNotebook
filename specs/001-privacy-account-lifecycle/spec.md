@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-24
 
-**Status**: Draft. Amended 2026-09-25: consent for optional workout details (FR-029–FR-035), under FR-007.
+**Status**: Draft overall. Optional-details consent amendment (FR-029–FR-035) approved by the owner on 2026-09-29 under FR-007; operational release gates remain open.
 
 **Input**: User description: "A good first use would be the GDPR-shaped ‘privacy and account lifecycle’ feature: privacy notice, consent decision, data export, account deletion, backup-retention rules, and processor inventory. It has genuine requirements and edge cases, rather than merely adding a screen."
 
@@ -21,11 +21,12 @@
 
 ### Amendment 2026-09-25 — consent for optional workout details (FR-007, T042)
 
-- Owner decision (2026-09-25, processing decision P3, option B): workout title, location, notes and bodyweight may reveal health information. They are processed only with explicit consent under GDPR Art. 9(2)(a). T042 recorded that consent is required, so this processing is halted until this amendment is approved and implemented.
+- Owner decision (2026-09-25, processing decision P3, option B): workout title, location, notes and bodyweight may reveal health information. They require explicit consent under GDPR Art. 9(2)(a). T042 recorded that consent is required; the amendment was approved on 2026-09-29 and implementation is recorded in tasks.md, while production rollout remains behind T084 and the other release gates.
 - Owner decision (2026-09-25): withdrawing consent permanently clears those details from every workout and keeps the rest of the notebook. The owner first proposed deleting the whole account on withdrawal. That was rejected because losing the entire notebook is a detriment that would make the consent not freely given (Art. 7(3)–(4), EDPB Guidelines 05/2020). Account deletion (Story 4) stays available as a separate choice.
 - Owner decision (2026-09-25): exercise names stay outside consent. They are required, so making them depend on consent would break the notebook for anyone who refuses. The residual risk is recorded in the processing decision.
 - Owner decision (2026-09-25): interim period. Until the feature is enabled, production keeps accepting optional details as it does today. The owner accepts this risk for the small invite-only user base until the flag is switched on (T084). No unflagged change is shipped. The residual risk is recorded in the processing decision.
 - Owner decision (2026-09-25): the transition deadline is 30 calendar days after the feature is enabled.
+- Owner approval (2026-09-29, conversation): approved FR-029–FR-035 as written, including separate consent for title, location, notes and bodyweight; existing values are kept only after Allow, removed on Not now, and cleared at the 30-day deadline if the account does not answer. Silence is not consent. This closes the T042 amendment decision, not the production release.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -164,7 +165,7 @@ As a user, I can decide whether the service may store the optional details of my
 - **FR-004**: The operator MUST produce a reviewed processing decision covering account administration, notebook storage and progress calculations, security/operational logs, browser storage, and any discovered third-party collection. Each purpose MUST have an identified lawful basis and rationale or a rollout-blocking unresolved finding.
 - **FR-005**: The decision MUST explicitly assess workout, bodyweight, and free-text information for possible health-data treatment, recording the rationale and any additional special-category condition. A contract rationale alone MUST NOT be treated as resolving special-category requirements.
 - **FR-006**: This feature MUST deliver a consent decision record. It MUST NOT introduce a blanket acceptance checkbox, analytics consent banner, or implicit consent from continued use. A finding that consent is necessary MUST trigger a reviewed specification amendment and prevent rollout of that processing until satisfied.
-- **FR-007**: Any consent-flow amendment MUST define separate purposes, affirmative grant, refusal, withdrawal as accessible as grant, versioned evidence, effects on existing information, and existing-user transition before implementation. This is a decision gate, not an implemented consent feature in this draft.
+- **FR-007**: Any consent-flow amendment MUST define separate purposes, affirmative grant, refusal, withdrawal as accessible as grant, versioned evidence, effects on existing information, and existing-user transition before implementation. FR-029–FR-035 are the owner-approved amendment; their implementation remains behind the production privacy flag until the release gates pass.
 - **FR-008**: Signed-in users MUST be able to initiate their own export and account deletion from account privacy controls without operator assistance. Both actions MUST verify the current password; ordinary login and invite-based registration behavior remain unchanged, except that an account suspended during restore reconciliation (FR-022) cannot sign in. After correct-password verification, it is directed to the privacy contact.
 - **FR-009**: Export and deletion MUST operate only on the authenticated account. Unauthorized access MUST reveal no personal information; requests targeting specific missing or unowned notebook resources MUST preserve the established indistinguishable not-found behavior. Password attempts MUST be rate limited, and errors MUST NOT expose secrets or account existence.
 - **FR-010**: The export MUST include account identity, username and creation time; every owned exercise with name, classification and creation time; every workout's date, start/end times, title, location, notes, bodyweight and creation time; ordered exercise blocks and their relationships; and all sets with order, weight, repetitions and warm-up status. It MUST also include user-linked privacy records introduced by this feature that are still retained.

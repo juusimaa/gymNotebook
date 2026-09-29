@@ -8,21 +8,21 @@ tasks.md T041/T042).
 
 | | |
 | --- | --- |
-| **Status** | **Draft for owner review.** Nothing below is decided until the Decision line of each purpose is filled in and signed. |
+| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. |
 | **Controller** | Jouni Uusimaa, private individual, Finland |
 | **Privacy contact** | jouni.uu@proton.me |
 | **Supervisory authority** | Tietosuojavaltuutetun toimisto (Office of the Data Protection Ombudsman), Finland |
 | **Owner / reviewer** | Jouni Uusimaa |
-| **Version** | draft-1, 2026-09-25 |
-| **Review date** | _(set when signed)_ |
+| **Version** | draft-2, 2026-09-29 |
+| **Review date** | Per-purpose dates appear in the Decision lines; final whole-record review pending. |
 
 **What this document is not.** It is not legal advice and does not certify
-compliance. The facts were gathered from the code and from the read-only
-provider inspection of 2026-09-24 (research R7). The lawful bases,
-health-data assessments and consent conclusions are **proposals** drafted
-for the owner. Where evidence is missing, the purpose carries a **blocking
-finding**: that processing must not go live with the feature flag on until
-the finding is resolved (FR-004).
+compliance. The facts were gathered from the code and dated read-only
+provider inspections (research R7). Signed conclusions are identified in
+their Decision lines; the remaining conclusions are choices or proposals,
+not final approval. Where evidence is missing, the purpose carries a
+**blocking finding**: that processing must not go live with the feature flag
+on until the finding is resolved (FR-004).
 
 ## How to read each purpose
 
@@ -169,19 +169,20 @@ remaining short free-text fields, or B for notes only.
 **Consent:** **required** under the chosen option B (see Decision). T042 applies.
 
 **Findings:**
-- **Blocking (T042, FR-007).** Processing of these fields under consent needs an approved specification amendment, implemented and verified. It must define:
+- **Approved (T042, FR-007, 2026-09-29).** The owner approved the consent amendment in spec.md FR-029–FR-035, including its treatment of production's existing values. Its implementation is recorded in tasks.md T085–T098. The amendment defines:
   - separate consent for this purpose only, given by an affirmative action and never bundled with the notice's "Continue";
   - refusal that leaves the rest of the notebook fully usable;
   - withdrawal as easy as granting;
   - versioned evidence of what was agreed and when;
   - what happens to entries already stored, both on refusal and on withdrawal;
   - the transition for existing accounts.
-- **Accepted: processing already live.** These fields exist in production today, outside the feature flag, with no Art. 9 condition. The owner accepted this interim risk until the flag is switched on (see Decision). FR-035 governs the stored values afterwards.
+- **Accepted interim risk:** these fields exist in production today, outside the feature flag, with no Art. 9 condition. The owner accepted this interim risk until the flag is switched on (see Decision). FR-035 governs the stored values afterwards.
 
 **Decision:** Option **B**, explicit consent under Art. 9(2)(a), for the optional fields: `BodyweightKg`, `Title`, `Location` and `Notes`. Chosen by the owner, 2026-09-25.
 - **Article 6 basis:** The owner chose consent under Art. 6(1)(a) for these four fields on 2026-09-28. This replaces the earlier proposed contract basis; the notice must state the same basis. The consent remains separate from notice acknowledgement.
 - **Exercise names: outside consent** (owner, 2026-09-25). `Name` is required, since every set belongs to an exercise, so it can't depend on consent without breaking the notebook for anyone who refuses. Treated under option A's reasoning: the field names a lift, and the notice asks users not to put health details in names. **Residual risk accepted.**
-- **Interim period: risk accepted** (owner, 2026-09-25). Until the feature flag is switched on (T084), production keeps accepting these details without an Art. 9 condition. Accepted for the small invite-only user base. No unflagged change is shipped. Existing values follow the spec's transition (FR-035): they are kept only if the account consents, and are cleared 30 days after enabling otherwise. Evidence: the FR-007 amendment, [spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements), drafted 2026-09-25, awaiting approval. Sign when it is approved.
+- **Interim period: risk accepted** (owner, 2026-09-25). Until the feature flag is switched on (T084), production keeps accepting these details without an Art. 9 condition. Accepted for the small invite-only user base. No unflagged change is shipped. Existing values follow the spec's transition (FR-035): they are kept only if the account consents, and are cleared 30 days after enabling otherwise. Evidence: the FR-007 amendment, [spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements), drafted 2026-09-25 and approved below.
+- **Amendment approval (owner, 2026-09-29, conversation):** approved FR-029–FR-035 as written. Allow keeps existing optional details; Not now removes them; an unanswered account's details are cleared 30 calendar days after the feature is enabled. No consent is inferred from silence. This closes T042; it does not approve production rollout or settle P4/P6 findings.
 
 ---
 
@@ -307,19 +308,19 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 | --- | --- | --- |
 | P1 Account administration | Not required: Article 6(1)(b), with 6(1)(c) for acknowledgement and restore safety (signed 2026-09-28) | No |
 | P2 Training log and progress | Not required: Article 6(1)(b), not health data in this context (signed 2026-09-28) | No |
-| P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner 2026-09-25 and 2026-09-28 | Yes, pending final amendment and release review |
+| P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner choices 2026-09-25/28; amendment approved 2026-09-29 | T042 complete; rollout still blocked by other release gates |
 | P4 Logs | Not required: Article 6(1)(f) and 6(1)(c) chosen 2026-09-28, unsigned | Log-content, credential and retention findings block |
 | P5 Browser storage | Not required: strictly necessary, Article 6(1)(b) (signed 2026-09-28) | No |
 | P6 Recipients | Not applicable | Supplier findings block |
 | P7 Rights requests | Not required: Article 6(1)(c) (owner, 2026-09-28) | Supplier and T083 findings block |
 
-**T042 outcome (updated 2026-09-28):** consent is required for P3's four
+**T042 outcome (approved 2026-09-29):** consent is required for P3's four
 optional workout details. The FR-007 amendment
 ([spec.md FR-029–FR-035](../../specs/001-privacy-account-lifecycle/spec.md#functional-requirements))
 and its implementation are recorded in [tasks.md](../../specs/001-privacy-account-lifecycle/tasks.md#phase-7a-user-story-6--choose-whether-to-record-optional-workout-details-priority-p1).
-The feature remains behind the privacy flag. Final approval of the amendment,
-the treatment of existing P3 values and the open P4/P6 findings remain release
-gates; the recorded implementation alone does not sign off T042.
+The owner approved the amendment and treatment of existing P3 values on
+2026-09-29. The feature remains behind the privacy flag. Open P4/P6 findings,
+T043 and the other release gates still block production enablement.
 
 ## Change control
 
