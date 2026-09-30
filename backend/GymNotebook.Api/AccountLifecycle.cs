@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using GymNotebook.Api.Data;
@@ -215,6 +216,25 @@ public static class AccountLifecycle
             default:
                 throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "Only a failed guard maps to an error result.");
         }
+    }
+
+    // True when a database failure is at the root of the exception, as thrown or wrapped.
+    // The wrapping is the Npgsql EF provider's: its default (non-retrying) execution strategy
+    // rethrows a transient failure — lock_timeout (55P03), a dropped connection — as an
+    // InvalidOperationException "likely due to a transient failure", with the original
+    // DbException inside. A catch for DbException alone misses exactly those (T099, found by
+    // the restore exercise in research R6). Raw Npgsql calls, such as the guard above, and
+    // transaction commits don't go through the strategy, so they throw the DbException itself.
+    public static bool IsDatabaseFailure(Exception ex)
+    {
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is DbException)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // 503 temporarily_unavailable with Retry-After: the operation didn't happen and the

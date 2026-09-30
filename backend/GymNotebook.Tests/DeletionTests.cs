@@ -280,6 +280,22 @@ internal static class DeletionTestSupport
         CancellationToken cancellationToken = default) =>
         client.PostAsJsonAsync("/account/delete", new { currentPassword = password, confirmDeletion = confirm }, cancellationToken);
 
+    // Holds a row lock on the account's User row until the returned connection is disposed
+    // (closing it rolls the open transaction back). Plain reads still go through, so the
+    // lifecycle guard's check passes; anything that writes that row — the deletion's
+    // DELETE FROM users, change-password's UPDATE — waits, and gives up with lock_timeout
+    // (55P03) once the transaction's lock_timeout, set by the guard, runs out (T099).
+    public static async Task<NpgsqlConnection> HoldUserRowLockAsync(TwoHostGymNotebookFixture db, int userId)
+    {
+        var connection = new NpgsqlConnection(db.ConnectionString);
+        await connection.OpenAsync();
+        var transaction = await connection.BeginTransactionAsync();
+        await using var command = new NpgsqlCommand("SELECT 1 FROM users WHERE id = @id FOR UPDATE", connection, transaction);
+        command.Parameters.AddWithValue("id", userId);
+        await command.ExecuteNonQueryAsync();
+        return connection;
+    }
+
     // Every column of every row the account owns, as JSON text in a fixed order: two
     // snapshots are equal exactly when nothing about the account changed.
     public static async Task<List<string>> SnapshotAccountAsync(TwoHostGymNotebookFixture db, int userId)
