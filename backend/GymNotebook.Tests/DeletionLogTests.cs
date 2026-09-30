@@ -83,6 +83,45 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
     }
 
     [Fact]
+    public async Task Delete_LockTimeoutDuringDelete_Returns503LogsRolledBackAndKeepsNotebook()
+    {
+        // Arrange: a real transient failure rather than an injected one (T099). Another
+        // connection holds the User row, so the deletion gets its exclusive access, deletes
+        // the workouts and exercises, then waits on DELETE FROM users until the guard's
+        // lock_timeout (500 ms here; the write timeout must stay below it) gives up with
+        // 55P03, which EF's execution strategy hands back wrapped.
+        var logs = new CapturingLoggerProvider();
+        await using var host = db.CreateHost(
+            ExportTestSupport.FlagOn(("Lifecycle:ExclusiveLockTimeoutMs", "500"), ("Lifecycle:WriteTimeoutMs", "200")),
+            services: s => s.AddSingleton<ILoggerProvider>(logs));
+        var (userId, username, _) = await SeedAsync();
+        var before = await DeletionTestSupport.SnapshotAccountAsync(db, userId);
+        using var client = host.ClientFor(userId);
+        var token = client.DefaultRequestHeaders.Authorization!.Parameter!;
+        HttpResponseMessage response;
+
+        // Act
+        await using (await DeletionTestSupport.HoldUserRowLockAsync(db, userId))
+        {
+            response = await DeletionTestSupport.DeleteAsync(client);
+        }
+
+        // Assert: the same known rollback as any other pre-commit failure — safe to retry,
+        // intent then rolled_back, the notebook whole — and the failure really was the
+        // lock timeout, not some other error that happened to take this path.
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("temporarily_unavailable", (await response.Content.ReadFromJsonAsync<ErrorResponse>())?.Code);
+        Assert.True(response.Headers.RetryAfter?.Delta > TimeSpan.Zero);
+        var events = logs.DeletionEvents();
+        Assert.Equal(["deletion.intent", "deletion.rolled_back"], events.Select(EventName));
+        var warning = Assert.Single(logs.Entries, e => e.Category == typeof(AccountDeletion).FullName && e.Level == LogLevel.Warning);
+        Assert.Equal("55P03", FindPostgresException(warning.Exception)?.SqlState);
+        Assert.Equal(before, await DeletionTestSupport.SnapshotAccountAsync(db, userId));
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/auth/me")).StatusCode);
+        AssertNothingPersonal(logs, events, userId, username, token);
+    }
+
+    [Fact]
     public async Task Delete_CommitOutcomeUnknown_Returns503DeletionOutcomeUnknownWithIntentOnly()
     {
         // Arrange: the COMMIT reaches the database and applies, but the app sees it fail —
@@ -137,6 +176,19 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         await using var context = db.NewContext();
         var user = await context.Users.AsNoTracking().SingleAsync(u => u.Id == userId);
         return (userId, user.Username, user.PrivacyAccountId);
+    }
+
+    // The PostgresException anywhere in the chain: EF may have wrapped it.
+    private static PostgresException? FindPostgresException(Exception? ex)
+    {
+        for (; ex is not null; ex = ex.InnerException)
+        {
+            if (ex is PostgresException postgres)
+            {
+                return postgres;
+            }
+        }
+        return null;
     }
 
     private static string? EventName(CapturingLoggerProvider.Entry entry) => Property(entry, "Event") as string;

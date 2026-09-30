@@ -119,11 +119,15 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
             await db.Exercises.Where(e => e.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
             await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(CancellationToken.None);
         }
-        catch (DbException ex)
+        catch (Exception ex) when (AccountLifecycle.IsDatabaseFailure(ex))
         {
             // Nothing was committed — COMMIT was never sent — so this is a definite rollback
             // whether the database reported an error or the connection broke: an open
-            // transaction on a lost connection is rolled back by the server.
+            // transaction on a lost connection is rolled back by the server. The filter
+            // matches wrapped failures too: these statements go through EF's execution
+            // strategy, which hands a transient one (a lock_timeout on a row, say) back as
+            // an InvalidOperationException, and missing it was T099 — a 500 and no
+            // rolled_back line for a deletion that never happened.
             await transaction.DisposeAsync();
             logger.LogWarning(ex, "Account deletion failed before commit and was rolled back.");
             LogEvidence("deletion.rolled_back", account.PrivacyAccountId, boundary);

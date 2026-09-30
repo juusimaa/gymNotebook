@@ -594,11 +594,23 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
         // The new hash and the version bump land together or not at all. The bump is what
         // revokes every token issued so far (see PLAN.md, Auth section); the fresh token
         // minted below carries the new version, so the caller isn't logged out by it.
-        await db.Users
-            .Where(u => u.Id == userId)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(u => u.PasswordHash, newHash)
-                .SetProperty(u => u.TokenVersion, newVersion), ct);
+        //
+        // A database failure here — including one EF's execution strategy wraps, such as a
+        // lock_timeout on the user's row (T099) — is before COMMIT, so nothing changed and
+        // the old password and tokens still stand: 503 temporarily_unavailable, safe to
+        // retry, rather than an unhandled 500.
+        try
+        {
+            await db.Users
+                .Where(u => u.Id == userId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.PasswordHash, newHash)
+                    .SetProperty(u => u.TokenVersion, newVersion), ct);
+        }
+        catch (Exception ex) when (AccountLifecycle.IsDatabaseFailure(ex))
+        {
+            return AccountLifecycle.TemporarilyUnavailable(http);
+        }
         await transaction.CommitAsync(CancellationToken.None);
     }
 
