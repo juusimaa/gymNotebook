@@ -1,6 +1,6 @@
 # Design fix plan — from the 2026-10-04 critique
 
-Status: steps 1–3 done; steps 4–6 planned. Work through the steps in order; each step is its
+Status: steps 1–4 done; steps 5–6 planned. Work through the steps in order; each step is its
 own branch and PR (AGENTS.md: small, reviewable PRs), and each PR updates this
 spec ([README.md](./README.md)) and the [prototype](./prototype.html) when a
 screen changes. Tick a step off here in the PR that ships it.
@@ -35,12 +35,8 @@ are the strongest part of the product; the logging screen is the weakest.
 
 ## Open decisions (settle in the step that needs them)
 
-- **Main-action emphasis vs. "never a filled block".** This spec's Visual
-  direction says gold is "used as stroke … never as a filled block", so a
-  filled primary button would break it. Options for step 4: keep outlines but
-  make the one primary per screen heavier (thicker stroke, larger size,
-  accent-700 text, separated from secondary actions), or amend the spec to
-  allow one filled primary. Decide before step 4.
+- ~~**Main-action emphasis vs. "never a filled block".**~~ Settled in
+  step 4: no fill. The one primary per screen is a heavier outline.
 - ~~**Save page vs. Finish session emphasis.**~~ Settled in step 2: Finish
   session is primary on a new page.
 
@@ -129,10 +125,24 @@ action is the weakest element: "Open the notebook" is styled like "Sign out",
 "Start a new page" is a ghost button, and an in-progress session is
 reachable only through a 25 × 20 "Edit" link.
 
-- [ ] Autocomplete: existing matches first, the create option last.
-- [ ] One clearly primary action per screen (see open decision on fills).
-- [ ] "Continue logging" on an in-progress session page, and on in-progress
+- [x] Autocomplete: existing matches first, the create option last.
+- [x] One clearly primary action per screen (see open decision on fills).
+- [x] "Continue logging" on an in-progress session page, and on in-progress
       rows in the Sessions list (which also print the start time twice).
+
+Shipped decisions (owner, 2026-10-04): the primary stays a stroke, now 2px
+`--color-accent-700` with a 17px label and a 48px target (1.5px was tried and
+renders as 1px on 1× screens); the cover's "Open the notebook" gets its
+stroke back. The add-as choice says which case it is: "Not in the list? Add
+Taka as a new exercise:" under matches, "No exercise called Taka yet. Add it
+as:" when there are none. An in-progress session page shows **Continue
+logging** as its primary at the bottom and hides the header's Edit (one way
+into the editor, not two). An in-progress Sessions row reads "in progress" in
+place of its start time, ends its meta line "from 19.34", and carries a
+secondary **Continue logging** beside the row link; "Start a new page" stays
+the list's one primary. Not changed: a finished row still shows its start
+both beside the title and in "07.15–08.40". That is the spec'd layout, and it
+is what tells same-date sessions apart.
 
 ### 5. Contrast and hit targets — `/impeccable audit` → `/impeccable polish` *(issue 3, P1)*
 

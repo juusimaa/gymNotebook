@@ -1332,31 +1332,6 @@ function WorkoutEditor() {
                   </p>
                 )}
 
-                {canCreateExercise && (
-                  <div className="new-exercise-choice">
-                    <p>
-                      No exact match. Add{' '}
-                      <strong>{exerciseQuery.trim()}</strong> as:
-                    </p>
-                    <div>
-                      <button
-                        className="btn btn-secondary"
-                        type="button"
-                        onClick={() => selectNewExercise(false)}
-                      >
-                        Loaded (kg)
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        type="button"
-                        onClick={() => selectNewExercise(true)}
-                      >
-                        Bodyweight
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {exerciseQuery.trim() !== '' &&
                   !isExerciseSearchLoading &&
                   exerciseSearchMessage === null &&
@@ -1386,6 +1361,45 @@ function WorkoutEditor() {
                       ))}
                     </ul>
                   )}
+
+                {/* Existing names come first and the add-as choice last, so a
+                    near-miss like "Taka" offers "Takakyykky" before inviting a
+                    typo'd duplicate. The wording says which case this is. */}
+                {canCreateExercise && (
+                  <div className="new-exercise-choice">
+                    <p>
+                      {exerciseSuggestions.length > 0 ? (
+                        <>
+                          Not in the list? Add{' '}
+                          <strong>{exerciseQuery.trim()}</strong> as a new
+                          exercise:
+                        </>
+                      ) : (
+                        <>
+                          No exercise called{' '}
+                          <strong>{exerciseQuery.trim()}</strong> yet. Add it
+                          as:
+                        </>
+                      )}
+                    </p>
+                    <div>
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => selectNewExercise(false)}
+                      >
+                        Loaded (kg)
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => selectNewExercise(true)}
+                      >
+                        Bodyweight
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           </div>

@@ -203,6 +203,14 @@
   hyphens: auto;
 }
 
+/* Sits under the scrolling content, so it stays in reach of a thumb without
+   covering the last set. */
+.workout-detail-action {
+  flex: none;
+  padding: 14px 22px 22px;
+  border-top: 1px solid var(--color-divider);
+}
+
 .workout-detail-state {
   align-items: flex-start;
   justify-content: center;

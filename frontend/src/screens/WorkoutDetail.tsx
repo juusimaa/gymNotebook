@@ -115,6 +115,9 @@ export default function WorkoutDetail() {
     return <main className="page workout-detail-state">Opening page…</main>
   }
 
+  // No end time means the lifter is still at it, so the page's main action is
+  // getting back into the editor rather than reading.
+  const inProgress = workout.endedAt === null
   const startedAt = formatWorkoutTime(workout.startedAt)
   const timeRange =
     workout.endedAt === null
@@ -134,7 +137,9 @@ export default function WorkoutDetail() {
       <header className="workout-detail-header">
         <Link to="/workouts">← Sessions</Link>
         <nav className="workout-detail-actions" aria-label="Session actions">
-          <Link to={`/workouts/${workout.id}/edit`}>Edit</Link>
+          {/* While the session is in progress, "Continue logging" below is
+              the way into the editor; one control per action, not two. */}
+          {!inProgress && <Link to={`/workouts/${workout.id}/edit`}>Edit</Link>}
           <button type="button" onClick={() => setConfirmingDelete(true)}>
             Delete
           </button>
@@ -242,6 +247,17 @@ export default function WorkoutDetail() {
           </section>
         )}
       </div>
+
+      {inProgress && (
+        <footer className="workout-detail-action">
+          <Link
+            className="btn btn-primary btn-block"
+            to={`/workouts/${workout.id}/edit`}
+          >
+            Continue logging
+          </Link>
+        </footer>
+      )}
     </main>
   )
 }
