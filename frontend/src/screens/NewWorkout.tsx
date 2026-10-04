@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useRouteLoaderData } from 'react-router'
+import type { MeResponse } from '../api/auth'
 import { ApiError, isOptionalDetailsConsentRequired } from '../api/client'
 import {
   searchExercises,
@@ -14,6 +15,7 @@ import {
 } from '../api/workouts'
 import {
   addEmptySetToExercise,
+  type ExistingWorkoutDraft,
   createExistingWorkoutDraft,
   createInitialHeadingDraft,
   createLocalEndedAt,
@@ -26,24 +28,80 @@ import {
   type WorkoutHeadingDraft,
   type WorkoutSetDraftChanges,
 } from './newWorkoutDraft'
+import { getToken } from '../auth/token'
 import { createClientId } from './clientId'
+import {
+  countDraftSets,
+  describeDiscard,
+  describeDraftSavedAt,
+  draftFingerprint,
+  loadEditorDraft,
+  removeEditorDraft,
+  saveEditorDraft,
+  type EditorDraftRoute,
+} from './editorDraftStorage'
 import { describeLastSet, normalizeExerciseName } from './exerciseFormat'
 import { OptionalDetailsChoice } from './OptionalDetailsConsent'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import './NewWorkout.css'
 
+// /workouts/new and /workouts/:id/edit render the same component. The key
+// gives each route (and each workout) its own editor instance, so the state
+// initialised from that route's stored draft never carries over to another.
 export default function NewWorkout() {
+  const { workoutId } = useParams()
+  return <WorkoutEditor key={workoutId ?? 'new'} />
+}
+
+function WorkoutEditor() {
   const navigate = useNavigate()
+  const user = useRouteLoaderData('auth') as MeResponse
   const { workoutId: workoutIdParam } = useParams()
   const parsedWorkoutId = Number(workoutIdParam)
   const isEditing = workoutIdParam !== undefined
   const hasValidWorkoutId =
     Number.isSafeInteger(parsedWorkoutId) && parsedWorkoutId > 0
+
+  // Draft safety (editorDraftStorage.ts): the editor keeps a copy of its draft
+  // in this tab's sessionStorage, so a reload, a locked phone or an expired
+  // sign-in doesn't lose a half-logged session. The copy this route left is
+  // read once, at mount, and wins over a fresh page or the server's copy.
+  const draftRoute = useMemo<EditorDraftRoute | null>(() => {
+    if (!isEditing) return { kind: 'new' }
+    return hasValidWorkoutId
+      ? { kind: 'edit', workoutId: parsedWorkoutId }
+      : null
+  }, [hasValidWorkoutId, isEditing, parsedWorkoutId])
+  const [restoredDraft] = useState(() =>
+    draftRoute === null ? null : loadEditorDraft(draftRoute, user.userId),
+  )
+  // Shown as "Restored … from 09.42" until the page is saved or discarded.
+  const [restoredAt, setRestoredAt] = useState<string | null>(
+    isEditing ? null : (restoredDraft?.savedAt ?? null),
+  )
+  // What the draft started from: a fresh page, or the server's copy once it
+  // has loaded. Cancel asks before leaving only when the draft differs.
+  const [baseline, setBaseline] = useState(() =>
+    draftFingerprint({
+      heading: createInitialHeadingDraft(new Date()),
+      endTime: '',
+      exercises: [],
+    }),
+  )
+  const serverDraft = useRef<ExistingWorkoutDraft | null>(null)
+  // Set once the draft is saved or discarded: the copy has been removed, and
+  // the re-render before navigation must not write it back.
+  const isDraftClosed = useRef(false)
+
   const [heading, setHeading] = useState(() =>
-    createInitialHeadingDraft(new Date()),
+    !isEditing && restoredDraft !== null
+      ? restoredDraft.heading
+      : createInitialHeadingDraft(new Date()),
   )
   const [endTime, setEndTime] = useState('')
-  const [exercises, setExercises] = useState<WorkoutExerciseDraft[]>([])
+  const [exercises, setExercises] = useState<WorkoutExerciseDraft[]>(() =>
+    !isEditing && restoredDraft !== null ? restoredDraft.exercises : [],
+  )
   const [exerciseQuery, setExerciseQuery] = useState('')
   const [exerciseSuggestions, setExerciseSuggestions] = useState<
     ExerciseResponse[]
@@ -59,6 +117,13 @@ export default function NewWorkout() {
   const [isLoading, setIsLoading] = useState(isEditing)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
   const [confirmingFinish, setConfirmingFinish] = useState(false)
+  // Cancel or "Start over" on a changed draft asks first, inline: 'leave'
+  // goes back, 'reset' empties the editor and stays.
+  const [confirmingDiscard, setConfirmingDiscard] = useState<
+    'leave' | 'reset' | null
+  >(null)
+  const cancelRef = useRef<HTMLAnchorElement>(null)
+  const keepEditingRef = useRef<HTMLButtonElement>(null)
 
   // Title, bodyweight, gym and notes need the account's consent (specs/001
   // user story 6). Without it their inputs are hidden and one entry offers to
@@ -80,8 +145,12 @@ export default function NewWorkout() {
 
   // If the heading POST succeeds but a later request fails, retain its id. A
   // retry then updates that page instead of creating a duplicate empty page.
+  // A restored new page keeps the id too, so a retry after a reload can't
+  // create a duplicate either.
   const [savedWorkoutId, setSavedWorkoutId] = useState<number | null>(
-    isEditing && hasValidWorkoutId ? parsedWorkoutId : null,
+    isEditing && hasValidWorkoutId
+      ? parsedWorkoutId
+      : (restoredDraft?.savedWorkoutId ?? null),
   )
 
   useEffect(() => {
@@ -103,13 +172,29 @@ export default function NewWorkout() {
         const workout = await getWorkout(parsedWorkoutId)
         if (!cancelled) {
           const draft = createExistingWorkoutDraft(workout, createClientId)
-          setHeading(draft.heading)
-          setEndTime(draft.endTime)
-          setExercises(draft.exercises)
+          serverDraft.current = draft
+          setBaseline(draftFingerprint(draft))
+          // Unsaved changes from before a reload or sign-in win over the
+          // server's copy; "Discard changes" goes back to it.
+          const shown = restoredDraft ?? draft
+          setHeading(shown.heading)
+          setEndTime(shown.endTime)
+          setExercises(shown.exercises)
+          setRestoredAt(restoredDraft?.savedAt ?? null)
           setSavedWorkoutId(workout.id)
         }
       } catch (error: unknown) {
         if (!cancelled) {
+          // The page is gone (deleted elsewhere, or never this user's), so a
+          // stored copy of changes to it has nowhere to go. Any other failure
+          // keeps the copy for the next try.
+          if (
+            error instanceof ApiError &&
+            error.status === 404 &&
+            draftRoute !== null
+          ) {
+            removeEditorDraft(draftRoute)
+          }
           setLoadMessage(
             error instanceof ApiError && error.status === 404
               ? 'This session page could not be found.'
@@ -128,7 +213,101 @@ export default function NewWorkout() {
     return () => {
       cancelled = true
     }
-  }, [hasValidWorkoutId, isEditing, parsedWorkoutId])
+  }, [draftRoute, hasValidWorkoutId, isEditing, parsedWorkoutId, restoredDraft])
+
+  const cancelTarget = isEditing ? `/workouts/${parsedWorkoutId}` : '/workouts'
+
+  const isDirty =
+    !isLoading && draftFingerprint({ heading, endTime, exercises }) !== baseline
+
+  // Keeps the stored copy in step with the draft: written while it differs
+  // from where it started, removed when it doesn't. Without consent the four
+  // optional details are never stored (they're never shown or sent either).
+  useEffect(() => {
+    if (
+      draftRoute === null ||
+      isLoading ||
+      loadMessage !== null ||
+      isDraftClosed.current
+    ) {
+      return
+    }
+    // No token: the session has ended and invalidation has already cleared
+    // or held the copy. Writing now would undo that.
+    if (getToken() === null) {
+      return
+    }
+    if (!isDirty) {
+      removeEditorDraft(draftRoute)
+      return
+    }
+    saveEditorDraft(draftRoute, {
+      ownerId: user.userId,
+      savedWorkoutId,
+      heading:
+        optionalDetails.status === 'not-allowed'
+          ? dropOptionalDetails(heading)
+          : heading,
+      endTime,
+      exercises,
+    })
+  }, [
+    draftRoute,
+    endTime,
+    exercises,
+    heading,
+    isDirty,
+    isLoading,
+    loadMessage,
+    optionalDetails.status,
+    savedWorkoutId,
+    user.userId,
+  ])
+
+  // The discard question takes focus so a keyboard user lands on the safe
+  // answer; closing it without discarding returns focus to Cancel.
+  useEffect(() => {
+    if (confirmingDiscard !== null) keepEditingRef.current?.focus()
+  }, [confirmingDiscard])
+
+  function keepEditing() {
+    const wasLeaving = confirmingDiscard === 'leave'
+    setConfirmingDiscard(null)
+    if (wasLeaving) cancelRef.current?.focus()
+  }
+
+  // Discarding removes the stored copy; then either leave, or start the
+  // editor again from its baseline. A new page whose heading already reached
+  // the server keeps that page (describeDiscard says so) but forgets its id,
+  // so the fresh draft starts a page of its own.
+  function discardDraft(action: 'leave' | 'reset') {
+    if (draftRoute !== null) removeEditorDraft(draftRoute)
+    setConfirmingDiscard(null)
+    setRestoredAt(null)
+    setSaveMessage(null)
+    setConfirmingFinish(false)
+
+    if (action === 'leave') {
+      isDraftClosed.current = true
+      void navigate(cancelTarget)
+      return
+    }
+
+    if (isEditing && serverDraft.current !== null) {
+      setHeading(serverDraft.current.heading)
+      setEndTime(serverDraft.current.endTime)
+      setExercises(serverDraft.current.exercises)
+    } else {
+      const fresh = createInitialHeadingDraft(new Date())
+      setBaseline(
+        draftFingerprint({ heading: fresh, endTime: '', exercises: [] }),
+      )
+      setHeading(fresh)
+      setEndTime('')
+      setExercises([])
+      setSavedWorkoutId(null)
+    }
+  }
 
   // Cleanup marks the previous request as stale so a slower response cannot
   // replace results for a newer query.
@@ -327,6 +506,9 @@ export default function NewWorkout() {
         await updateWorkout(workoutId, { endedAt })
       }
 
+      // Saved: the stored copy has done its job.
+      isDraftClosed.current = true
+      if (draftRoute !== null) removeEditorDraft(draftRoute)
       void navigate(isEditing ? `/workouts/${workoutId}` : '/workouts')
     } catch (error: unknown) {
       // Consent was withdrawn elsewhere while this page was open, and the
@@ -379,15 +561,54 @@ export default function NewWorkout() {
     )
   }
 
-  const cancelTarget = isEditing ? `/workouts/${parsedWorkoutId}` : '/workouts'
-
   return (
     <main className="page new-workout">
       <header className="new-workout-header">
-        <Link to={cancelTarget}>← Cancel</Link>
+        <Link
+          ref={cancelRef}
+          to={cancelTarget}
+          onClick={(event) => {
+            // An unchanged draft leaves silently; a changed one asks first.
+            if (isDirty) {
+              event.preventDefault()
+              setConfirmingDiscard('leave')
+            }
+          }}
+        >
+          ← Cancel
+        </Link>
         <h1>{isEditing ? 'Edit page' : 'New page'}</h1>
         <span className="new-workout-header-spacer" aria-hidden="true"></span>
       </header>
+
+      {confirmingDiscard !== null && (
+        <section className="new-workout-discard" role="alert">
+          <p>
+            {describeDiscard({
+              isEditing,
+              setCount: countDraftSets(exercises),
+              partlySaved: !isEditing && savedWorkoutId !== null,
+            })}
+          </p>
+          <div>
+            <button
+              ref={keepEditingRef}
+              className="btn btn-ghost"
+              type="button"
+              onClick={keepEditing}
+            >
+              Keep editing
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => discardDraft(confirmingDiscard)}
+            >
+              Discard
+            </button>
+          </div>
+        </section>
+      )}
 
       <form
         className="new-workout-form"
@@ -395,6 +616,23 @@ export default function NewWorkout() {
       >
         <fieldset className="new-workout-fields" disabled={isSaving}>
           <div className="new-workout-content">
+            {restoredAt !== null && (
+              <p className="new-workout-restored" role="status">
+                <span>
+                  Restored your unsaved {isEditing ? 'changes' : 'page'} from{' '}
+                  <span className="num">
+                    {describeDraftSavedAt(restoredAt, new Date())}
+                  </span>
+                  .
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDiscard('reset')}
+                >
+                  {isEditing ? 'Discard changes' : 'Start over'}
+                </button>
+              </p>
+            )}
             <section className="form-stack" aria-labelledby="heading-title">
               <h2 id="heading-title">Page heading</h2>
               <div className="field">

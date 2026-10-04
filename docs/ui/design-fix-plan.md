@@ -1,6 +1,6 @@
 # Design fix plan — from the 2026-10-04 critique
 
-Status: planned, not started. Work through the steps in order; each step is its
+Status: step 1 done; steps 2–6 planned. Work through the steps in order; each step is its
 own branch and PR (AGENTS.md: small, reviewable PRs), and each PR updates this
 spec ([README.md](./README.md)) and the [prototype](./prototype.html) when a
 screen changes. Tick a step off here in the PR that ships it.
@@ -55,14 +55,21 @@ the draft lives only in React state — a phone lock, tab eviction or reload
 during a rest loses the session. Breaks principle 4, "Nothing is lost by
 accident".
 
-- [ ] Persist the editor draft to browser storage, keyed per route (new page
+- [x] Persist the editor draft to browser storage, keyed per route (new page
       vs. `workouts/{id}/edit`), and restore it with a short notice.
-- [ ] Clear it on successful save, on sign-out and on session invalidation
+- [x] Clear it on successful save, on sign-out and on session invalidation
       (`auth/invalidation.ts`), as the spec already requires for drafts.
-- [ ] Cancel asks "Discard N sets?" inline (no browser `confirm`) when the
+- [x] Cancel asks "Discard N sets?" inline (no browser `confirm`) when the
       draft has changed; leaves silently when it has not.
-- [ ] Vitest coverage for the draft serialise/restore helper
-      (`newWorkoutDraft.ts` is already the tested home for draft logic).
+- [x] Vitest coverage for the draft serialise/restore helper.
+
+Shipped decisions (owner, 2026-10-04): `sessionStorage`, not `localStorage`;
+a plain token expiry *holds* the draft for the same user instead of clearing
+it, because the 30-minute token would otherwise discard every long session's
+draft at Save; the four optional details are stored only with consent and
+stripped on withdrawal; P5 in `docs/privacy/processing-decision.md` was
+redrafted for owner signature. The helper lives in its own module,
+`screens/editorDraftStorage.ts`, next to `newWorkoutDraft.ts`.
 
 Goes first because the later editor changes build on a draft that survives.
 

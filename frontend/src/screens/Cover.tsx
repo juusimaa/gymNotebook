@@ -3,6 +3,7 @@ import { useNavigate, useRouteLoaderData, Link } from 'react-router'
 import type { MeResponse } from '../api/auth'
 import { getAccountPrivacy } from '../api/privacy'
 import { clearToken } from '../auth/token'
+import { clearEditorDrafts } from './editorDraftStorage'
 import './Cover.css'
 
 // docs/ui/README.md, screen 2: the closed cover of the book. Deliberately carries
@@ -39,6 +40,8 @@ export default function Cover() {
   // short of a password change, so dropping the token is the whole sign-out.
   function signOut() {
     clearToken()
+    // A deliberate sign-out leaves no draft behind in this tab.
+    clearEditorDrafts()
     void navigate('/login')
   }
 

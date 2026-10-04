@@ -32,6 +32,8 @@ function fakeEnvironment(): FakeEnvironment {
     clearToken: vi.fn(),
     abortPendingRequests: vi.fn(),
     revokeDownloads: vi.fn(),
+    clearDrafts: vi.fn(),
+    holdDrafts: vi.fn(),
     showSignedOut: vi.fn(),
     reload: vi.fn(),
   }
@@ -80,6 +82,28 @@ describe('endSession', () => {
     expect(hasInterruptedWrite()).toBe(false)
   })
 
+  // Editor drafts (screens/editorDraftStorage.ts): cleared with everything
+  // else, unless the token had merely expired.
+  it('clears the editor drafts when the session ends', () => {
+    const env = fakeEnvironment()
+
+    endSession(env)
+
+    expect(env.clearDrafts).toHaveBeenCalledOnce()
+    expect(env.holdDrafts).not.toHaveBeenCalled()
+  })
+
+  it('holds the editor drafts for the next sign-in when the token expired', () => {
+    const env = fakeEnvironment()
+
+    endSession(env, { tokenExpired: true })
+
+    expect(env.holdDrafts).toHaveBeenCalledOnce()
+    expect(env.clearDrafts).not.toHaveBeenCalled()
+    expect(env.clearToken).toHaveBeenCalledOnce()
+    expect(env.showSignedOut).toHaveBeenCalledOnce()
+  })
+
   it('clears everything but stays on the screen when asked to', () => {
     const env = fakeEnvironment()
 
@@ -101,6 +125,8 @@ describe('handleTokenStorageChange (another tab)', () => {
     expect(env.clearToken).toHaveBeenCalledOnce()
     expect(env.abortPendingRequests).toHaveBeenCalledOnce()
     expect(env.showSignedOut).toHaveBeenCalledOnce()
+    // A deliberate sign-out elsewhere is never an expiry.
+    expect(env.clearDrafts).toHaveBeenCalledOnce()
   })
 
   // key null is localStorage.clear(), which removes the token too.

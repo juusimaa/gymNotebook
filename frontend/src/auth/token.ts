@@ -19,3 +19,34 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
 }
+
+// Whether the token's own `exp` claim has passed. The server has already said
+// the token is no good (a 401); this only reads *why*, to tell a plain expiry
+// apart from a password change elsewhere or a deleted account. An expiry keeps
+// the editor draft for the same user's next sign-in (screens/editorDraftStorage.ts).
+// The server tolerates some clock skew past `exp`, so by the time it refuses
+// an expired token this check agrees. Anything unreadable answers false, the
+// stricter path: the draft is cleared.
+export function isTokenExpired(token: string, now: Date = new Date()): boolean {
+  const payload = token.split('.')[1]
+  if (payload === undefined) {
+    return false
+  }
+  try {
+    // base64url → base64, which is what atob reads.
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+    const claims: unknown = JSON.parse(json)
+    if (
+      typeof claims === 'object' &&
+      claims !== null &&
+      'exp' in claims &&
+      typeof claims.exp === 'number'
+    ) {
+      // `exp` is seconds since the epoch (RFC 7519).
+      return claims.exp * 1000 <= now.getTime()
+    }
+  } catch {
+    // Not a JWT we can read: fall through to "not expired".
+  }
+  return false
+}

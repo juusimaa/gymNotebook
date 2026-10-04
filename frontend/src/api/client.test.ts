@@ -62,7 +62,7 @@ describe('401 handling', () => {
     const err = await rejectionOf(request('/workouts'))
 
     expect(err).toBeInstanceOf(ApiError)
-    expect(ended).toEqual([{ changesData: false }])
+    expect(ended).toEqual([{ changesData: false, tokenExpired: false }])
   })
 
   it('marks a 401 on a write as possibly saved', async () => {
@@ -71,7 +71,7 @@ describe('401 handling', () => {
 
     await rejectionOf(request('/workouts', { method: 'POST', body: {} }))
 
-    expect(ended).toEqual([{ changesData: true }])
+    expect(ended).toEqual([{ changesData: true, tokenExpired: false }])
   })
 
   it('lets a read-only POST say it changed nothing', async () => {
@@ -86,7 +86,19 @@ describe('401 handling', () => {
       }),
     )
 
-    expect(ended).toEqual([{ changesData: false }])
+    expect(ended).toEqual([{ changesData: false, tokenExpired: false }])
+  })
+
+  // A token whose own exp has passed: invalidation holds the editor draft for
+  // the next sign-in instead of clearing it.
+  it('says when the rejected token had simply expired', async () => {
+    const claims = btoa(JSON.stringify({ exp: Date.now() / 1000 - 60 }))
+    setToken(`header.${claims.replace(/=+$/, '')}.signature`)
+    respondWith(401)
+
+    await rejectionOf(request('/workouts', { method: 'PUT', body: {} }))
+
+    expect(ended).toEqual([{ changesData: true, tokenExpired: true }])
   })
 
   it('leaves a 401 to the caller when it handles it locally', async () => {

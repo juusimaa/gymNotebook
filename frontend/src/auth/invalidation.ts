@@ -15,10 +15,15 @@ import { TOKEN_KEY } from './token'
 //     before anything personal is on screen.
 //
 // Ending the session clears everything the app holds: the token, requests
-// still in flight, export files waiting in object URLs, and — by navigating to
-// /login, which unmounts every notebook screen — the notebook and editor state
-// held in React. Files already downloaded stay on the device; nothing here can
-// reach them.
+// still in flight, export files waiting in object URLs, the editor drafts kept
+// in sessionStorage, and — by navigating to /login, which unmounts every
+// notebook screen — the notebook and editor state held in React. Files already
+// downloaded stay on the device; nothing here can reach them.
+//
+// One exception: a 401 because the token simply expired *holds* the editor
+// drafts instead of clearing them. Tokens live 30 minutes with no refresh, so
+// that 401 is what a long session's save meets; the draft comes back when the
+// same user signs in again (screens/editorDraftStorage.ts).
 //
 // The browser pieces are passed in (InvalidationEnvironment), so the tests run
 // in plain Node.
@@ -27,6 +32,10 @@ export interface InvalidationEnvironment {
   clearToken(): void
   abortPendingRequests(): void
   revokeDownloads(): void
+  // Removes the editor drafts kept in sessionStorage.
+  clearDrafts(): void
+  // Keeps them for the same user's next sign-in (an expired token).
+  holdDrafts(): void
   // Shows the signed-out UI: navigates to /login.
   showSignedOut(): void
   // Reloads the page, so the route guards revalidate before anything renders.
@@ -56,9 +65,14 @@ export function clearInterruptedWrite(): void {
 
 // Ends the session in this tab. `showSignedOut: false` is for a screen that
 // explains the ending itself (account deletion) before offering sign-in.
+// `tokenExpired` holds the editor drafts rather than clearing them.
 export function endSession(
   env: InvalidationEnvironment,
-  options: { changesData?: boolean; showSignedOut?: boolean } = {},
+  options: {
+    changesData?: boolean
+    showSignedOut?: boolean
+    tokenExpired?: boolean
+  } = {},
 ): void {
   if (options.changesData) {
     interruptedWrite = true
@@ -66,6 +80,11 @@ export function endSession(
   env.clearToken()
   env.abortPendingRequests()
   env.revokeDownloads()
+  if (options.tokenExpired) {
+    env.holdDrafts()
+  } else {
+    env.clearDrafts()
+  }
   if (options.showSignedOut ?? true) {
     env.showSignedOut()
   }
@@ -111,7 +130,10 @@ export function installInvalidation(
 ): () => void {
   installed = env
   onSessionEnded((event: SessionEnded) =>
-    endSession(env, { changesData: event.changesData }),
+    endSession(env, {
+      changesData: event.changesData,
+      tokenExpired: event.tokenExpired,
+    }),
   )
   const onStorage = (event: StorageEvent) =>
     handleTokenStorageChange(event, env)

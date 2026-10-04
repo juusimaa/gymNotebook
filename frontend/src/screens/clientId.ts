@@ -1,8 +1,9 @@
 // Draft rows in the session editor need a stable identity before the server has
 // given them one: React keys, and the handles the update helpers in
 // newWorkoutDraft.ts address a single exercise or set by. They live only while the
-// page is being edited — never sent to the API, never stored — so all they have to
-// be is unique within the open page.
+// page is being edited — never sent to the API, and stored only in this tab's
+// draft copy (editorDraftStorage.ts) — so all they have to be is unique within
+// the open page.
 //
 // crypto.randomUUID() is declared [SecureContext] in the Web Crypto specification,
 // which means the browser defines it on HTTPS origins and on localhost but nowhere

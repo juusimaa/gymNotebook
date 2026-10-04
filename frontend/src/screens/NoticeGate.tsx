@@ -8,6 +8,7 @@ import {
 } from '../api/privacy'
 import { safeReturnPath } from '../auth/noticeGate'
 import { clearToken } from '../auth/token'
+import { clearEditorDrafts } from './editorDraftStorage'
 import NoticeContent from './NoticeContent'
 import './Privacy.css'
 
@@ -122,6 +123,8 @@ export default function NoticeGate() {
 
   function signOut() {
     clearToken()
+    // A deliberate sign-out leaves no draft behind in this tab.
+    clearEditorDrafts()
     void navigate('/login')
   }
 
