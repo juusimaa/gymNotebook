@@ -1,6 +1,6 @@
 # Design fix plan — from the 2026-10-04 critique
 
-Status: step 1 done; steps 2–6 planned. Work through the steps in order; each step is its
+Status: steps 1–2 done; steps 3–6 planned. Work through the steps in order; each step is its
 own branch and PR (AGENTS.md: small, reviewable PRs), and each PR updates this
 spec ([README.md](./README.md)) and the [prototype](./prototype.html) when a
 screen changes. Tick a step off here in the PR that ships it.
@@ -41,10 +41,8 @@ are the strongest part of the product; the logging screen is the weakest.
   make the one primary per screen heavier (thicker stroke, larger size,
   accent-700 text, separated from secondary actions), or amend the spec to
   allow one filled primary. Decide before step 4.
-- **Save page vs. Finish session emphasis.** The prototype makes "Save page"
-  primary; the React editor makes "Finish session" primary
-  (`NewWorkout.tsx` footer). Pick one in step 2 and update whichever artifact
-  is wrong.
+- ~~**Save page vs. Finish session emphasis.**~~ Settled in step 2: Finish
+  session is primary on a new page.
 
 ## Steps
 
@@ -80,12 +78,19 @@ the fold and under the sticky Save/Finish footer (top at y = 771) — because
 Date, Started, Title, Bodyweight, Gym and Notes come first. Exercise blocks
 are filled cards (`NewWorkout.css:68-73`) where the spec says hairlines.
 
-- [ ] Put exercises first; collapse the heading into one line
+- [x] Put exercises first; collapse the heading into one line
       ("Today 09.34 · add details") that expands on tap.
-- [ ] Replace block card fills with hairline rules.
-- [ ] One column header for WEIGHT / REPS instead of 10px labels on every row.
-- [ ] Keep the suggestion list and "Add exercise" clear of the sticky footer.
-- [ ] Settle the Save/Finish emphasis (open decision above).
+- [x] Replace block card fills with hairline rules.
+- [x] One column header for WEIGHT / REPS instead of 10px labels on every row.
+- [x] Keep the suggestion list and "Add exercise" clear of the sticky footer.
+- [x] Settle the Save/Finish emphasis (open decision above).
+
+Shipped decisions (owner, 2026-10-04): **Finish session** is the primary
+action on a new page and **Save changes** on the edit page; the prototype
+(which had Save page primary) was corrected to match. The folded heading
+reads "Today 09.34 · add details", opens in place, and reopens by itself
+when a save fails on one of its fields. With exercises first, "Add exercise"
+moves from y = 834 to y = 186 on an empty page at 390 × 844.
 
 ### 3. Set entry speed — `/impeccable optimize` *(issue 1 part 2, P1)*
 

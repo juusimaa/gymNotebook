@@ -20,6 +20,7 @@ import {
   createInitialHeadingDraft,
   createLocalEndedAt,
   createWorkoutExerciseDraft,
+  describeHeadingWhen,
   dropOptionalDetails,
   prepareWorkoutDraft,
   removeSetFromExercise,
@@ -117,6 +118,11 @@ function WorkoutEditor() {
   const [isLoading, setIsLoading] = useState(isEditing)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
   const [confirmingFinish, setConfirmingFinish] = useState(false)
+  // The page heading's fields start folded behind their one-line summary;
+  // a save that fails on one of them opens it again.
+  const [isHeadingOpen, setIsHeadingOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   // Cancel or "Start over" on a changed draft asks first, inline: 'leave'
   // goes back, 'reset' empties the editor and stays.
   const [confirmingDiscard, setConfirmingDiscard] = useState<
@@ -353,6 +359,17 @@ function WorkoutEditor() {
     }
   }, [exerciseQuery])
 
+  // The picker sits last in the scrolling column, right above the sticky
+  // footer, so its answers (suggestions or the add-as choice) can open below
+  // the visible area. While the search box has focus, bring them into view;
+  // 'nearest' scrolls no more than it has to, and not at all when they fit.
+  const pickerResultCount = exerciseSuggestions.length
+  useEffect(() => {
+    if (exerciseQuery.trim() === '' || isExerciseSearchLoading) return
+    if (document.activeElement !== searchRef.current) return
+    pickerRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [exerciseQuery, isExerciseSearchLoading, pickerResultCount])
+
   function updateHeadingField(field: keyof WorkoutHeadingDraft, value: string) {
     setHeading((current) => ({ ...current, [field]: value }))
   }
@@ -442,6 +459,7 @@ function WorkoutEditor() {
       exercises,
     )
     if (!prepared.ok) {
+      if (prepared.section === 'heading') setIsHeadingOpen(true)
       setSaveMessage(prepared.message)
       return
     }
@@ -455,6 +473,7 @@ function WorkoutEditor() {
         endTime,
       )
       if (endedAt === null) {
+        setIsHeadingOpen(true)
         setSaveMessage('Enter a valid finish time.')
         return
       }
@@ -543,6 +562,8 @@ function WorkoutEditor() {
         normalizeExerciseName(exerciseQuery),
     )
   const isSaving = savingAction !== null
+  // Shown on the folded heading line only when the account allows it.
+  const summaryTitle = detailsAllowed ? heading.title.trim() : ''
 
   if (isLoading) {
     return <main className="page workout-editor-state">Opening page…</main>
@@ -633,147 +654,189 @@ function WorkoutEditor() {
                 </button>
               </p>
             )}
-            <section className="form-stack" aria-labelledby="heading-title">
-              <h2 id="heading-title">Page heading</h2>
-              <div className="field">
-                <label className="label" htmlFor="workout-date">
-                  Date
-                </label>
-                <input
-                  className="input num"
-                  id="workout-date"
-                  type="date"
-                  required
-                  value={heading.date}
-                  onChange={(event) =>
-                    updateHeadingField('date', event.target.value)
-                  }
-                />
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="startTime">
-                  Started
-                </label>
-                <input
-                  className="input num"
-                  id="startTime"
-                  type="time"
-                  required
-                  value={heading.startTime}
-                  onChange={(event) =>
-                    updateHeadingField('startTime', event.target.value)
-                  }
-                />
-              </div>
-              {isEditing && (
-                <div className="field">
-                  <label className="label" htmlFor="endTime">
-                    Finished
-                  </label>
-                  <input
-                    className="input num"
-                    id="endTime"
-                    type="time"
-                    value={endTime}
-                    onChange={(event) => setEndTime(event.target.value)}
-                  />
-                  <span className="new-workout-field-hint">
-                    Leave empty to mark the session in progress.
+            {/* The page heading as one line. Date and start time already say
+                "now", so the fields wait behind the line and the exercises
+                come first (design-fix-plan step 2). */}
+            <section
+              className="new-workout-heading"
+              aria-labelledby="heading-title"
+            >
+              <h2 id="heading-title" className="visually-hidden">
+                Page heading
+              </h2>
+              <button
+                className="new-workout-heading-summary"
+                type="button"
+                aria-expanded={isHeadingOpen}
+                aria-controls="page-heading-fields"
+                onClick={() => setIsHeadingOpen((open) => !open)}
+              >
+                <span className="new-workout-heading-line">
+                  <span className="num">
+                    {describeHeadingWhen(heading, endTime, new Date())}
                   </span>
+                  {summaryTitle !== '' && <> · {summaryTitle}</>}
+                </span>
+                <span className="new-workout-heading-action">
+                  {isHeadingOpen
+                    ? 'hide'
+                    : isEditing || summaryTitle !== ''
+                      ? 'edit details'
+                      : 'add details'}
+                </span>
+              </button>
+              {isHeadingOpen && (
+                <div className="form-stack" id="page-heading-fields">
+                  <div className="new-workout-field-pair">
+                    <div className="field">
+                      <label className="label" htmlFor="workout-date">
+                        Date
+                      </label>
+                      <input
+                        className="input num"
+                        id="workout-date"
+                        type="date"
+                        required
+                        value={heading.date}
+                        onChange={(event) =>
+                          updateHeadingField('date', event.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label" htmlFor="startTime">
+                        Started
+                      </label>
+                      <input
+                        className="input num"
+                        id="startTime"
+                        type="time"
+                        required
+                        value={heading.startTime}
+                        onChange={(event) =>
+                          updateHeadingField('startTime', event.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                  {isEditing && (
+                    <div className="field">
+                      <label className="label" htmlFor="endTime">
+                        Finished
+                      </label>
+                      <input
+                        className="input num"
+                        id="endTime"
+                        type="time"
+                        value={endTime}
+                        onChange={(event) => setEndTime(event.target.value)}
+                      />
+                      <span className="new-workout-field-hint">
+                        Leave empty to mark the session in progress.
+                      </span>
+                    </div>
+                  )}
+                  {detailsAllowed && (
+                    <>
+                      <div className="field">
+                        <label className="label" htmlFor="title">
+                          Title
+                        </label>
+                        <input
+                          className="input"
+                          id="title"
+                          ref={titleRef}
+                          type="text"
+                          value={heading.title}
+                          onChange={(event) =>
+                            updateHeadingField('title', event.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="new-workout-field-pair">
+                        <div className="field">
+                          <label className="label" htmlFor="bodyweightKg">
+                            Bodyweight (kg)
+                          </label>
+                          <input
+                            className="input num"
+                            id="bodyweightKg"
+                            type="text"
+                            inputMode="decimal"
+                            value={heading.bodyweightKg}
+                            onChange={(event) =>
+                              updateHeadingField(
+                                'bodyweightKg',
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="field">
+                          <label className="label" htmlFor="location">
+                            Gym
+                          </label>
+                          <input
+                            className="input"
+                            id="location"
+                            type="text"
+                            value={heading.location}
+                            onChange={(event) =>
+                              updateHeadingField('location', event.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label className="label" htmlFor="notes">
+                          Notes
+                        </label>
+                        <textarea
+                          className="input"
+                          id="notes"
+                          value={heading.notes}
+                          onChange={(event) =>
+                            updateHeadingField('notes', event.target.value)
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
+                  {optionalDetails.status === 'not-allowed' &&
+                    (showingConsent ? (
+                      <OptionalDetailsChoice
+                        declineLabel="Not now"
+                        onAllowed={() => {
+                          focusAfterConsent.current = 'title'
+                          optionalDetails.setStatus('allowed')
+                          setShowingConsent(false)
+                        }}
+                        onDeclined={() => {
+                          focusAfterConsent.current = 'entry'
+                          setShowingConsent(false)
+                        }}
+                      />
+                    ) : (
+                      <button
+                        ref={entryRef}
+                        className="btn btn-secondary btn-block"
+                        type="button"
+                        onClick={() => setShowingConsent(true)}
+                      >
+                        Add title, location, notes and bodyweight
+                      </button>
+                    ))}
                 </div>
               )}
-              {detailsAllowed && (
-                <>
-                  <div className="field">
-                    <label className="label" htmlFor="title">
-                      Title
-                    </label>
-                    <input
-                      className="input"
-                      id="title"
-                      ref={titleRef}
-                      type="text"
-                      value={heading.title}
-                      onChange={(event) =>
-                        updateHeadingField('title', event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label className="label" htmlFor="bodyweightKg">
-                      Bodyweight (kg)
-                    </label>
-                    <input
-                      className="input num"
-                      id="bodyweightKg"
-                      type="text"
-                      inputMode="decimal"
-                      value={heading.bodyweightKg}
-                      onChange={(event) =>
-                        updateHeadingField('bodyweightKg', event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label className="label" htmlFor="location">
-                      Gym
-                    </label>
-                    <input
-                      className="input"
-                      id="location"
-                      type="text"
-                      value={heading.location}
-                      onChange={(event) =>
-                        updateHeadingField('location', event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label className="label" htmlFor="notes">
-                      Notes
-                    </label>
-                    <textarea
-                      className="input"
-                      id="notes"
-                      value={heading.notes}
-                      onChange={(event) =>
-                        updateHeadingField('notes', event.target.value)
-                      }
-                    />
-                  </div>
-                </>
-              )}
-              {optionalDetails.status === 'not-allowed' &&
-                (showingConsent ? (
-                  <OptionalDetailsChoice
-                    declineLabel="Not now"
-                    onAllowed={() => {
-                      focusAfterConsent.current = 'title'
-                      optionalDetails.setStatus('allowed')
-                      setShowingConsent(false)
-                    }}
-                    onDeclined={() => {
-                      focusAfterConsent.current = 'entry'
-                      setShowingConsent(false)
-                    }}
-                  />
-                ) : (
-                  <button
-                    ref={entryRef}
-                    className="btn btn-secondary btn-block"
-                    type="button"
-                    onClick={() => setShowingConsent(true)}
-                  >
-                    Add title, location, notes and bodyweight
-                  </button>
-                ))}
             </section>
 
             <section
-              className="form-stack new-workout-exercises"
+              className="new-workout-exercises"
               aria-labelledby="exercise-picker-title"
             >
-              <h2 id="exercise-picker-title">Exercises</h2>
+              <h2 id="exercise-picker-title" className="visually-hidden">
+                Exercises
+              </h2>
 
               {exercises.length === 0 && (
                 <p className="muted new-workout-empty">
@@ -828,6 +891,20 @@ function WorkoutEditor() {
                   )}
 
                   <div className="new-workout-sets">
+                    {/* One column header per block instead of a caption on
+                        every row. Hidden from screen readers: each input
+                        already names its exercise, set and column. */}
+                    <div className="new-workout-set-columns" aria-hidden="true">
+                      <span></span>
+                      <span>
+                        {!exercise.isBodyweight
+                          ? 'Weight'
+                          : exercise.isAddedWeightEnabled
+                            ? 'Added kg'
+                            : 'Load'}
+                      </span>
+                      <span>Reps</span>
+                    </div>
                     {exercise.sets.map((set, setIndex) => (
                       <div className="new-workout-set" key={set.clientId}>
                         <span className="new-workout-set-number num">
@@ -836,45 +913,36 @@ function WorkoutEditor() {
 
                         {exercise.isBodyweight &&
                         !exercise.isAddedWeightEnabled ? (
-                          <div className="new-workout-bodyweight-load">
-                            <span>Load</span>
-                            <strong>Bodyweight</strong>
-                          </div>
+                          <span className="new-workout-bodyweight-load">
+                            Bodyweight
+                          </span>
                         ) : (
-                          <label className="new-workout-set-field">
-                            <span>
-                              {exercise.isBodyweight ? 'Added kg' : 'Weight'}
-                            </span>
-                            <input
-                              className="input num"
-                              type="text"
-                              inputMode="decimal"
-                              aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, weight`}
-                              value={set.weight}
-                              onChange={(event) =>
-                                changeSet(exercise.clientId, set.clientId, {
-                                  weight: event.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                        )}
-
-                        <label className="new-workout-set-field">
-                          <span>Reps</span>
                           <input
                             className="input num"
                             type="text"
-                            inputMode="numeric"
-                            aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, reps`}
-                            value={set.reps}
+                            inputMode="decimal"
+                            aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, weight`}
+                            value={set.weight}
                             onChange={(event) =>
                               changeSet(exercise.clientId, set.clientId, {
-                                reps: event.target.value,
+                                weight: event.target.value,
                               })
                             }
                           />
-                        </label>
+                        )}
+
+                        <input
+                          className="input num"
+                          type="text"
+                          inputMode="numeric"
+                          aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, reps`}
+                          value={set.reps}
+                          onChange={(event) =>
+                            changeSet(exercise.clientId, set.clientId, {
+                              reps: event.target.value,
+                            })
+                          }
+                        />
 
                         <button
                           className={`new-workout-set-kind ${set.isWarmup ? 'is-warmup' : ''}`}
@@ -920,13 +988,14 @@ function WorkoutEditor() {
                 </article>
               ))}
 
-              <div className="field exercise-picker">
+              <div className="field exercise-picker" ref={pickerRef}>
                 <label className="label" htmlFor="exercise-search">
                   Add exercise
                 </label>
                 <input
                   className="input"
                   id="exercise-search"
+                  ref={searchRef}
                   type="search"
                   autoComplete="off"
                   placeholder="Search or enter a new exercise"

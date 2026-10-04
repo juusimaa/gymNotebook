@@ -6,6 +6,7 @@ import {
   createInitialHeadingDraft,
   createLocalEndedAt,
   createWorkoutExerciseDraft,
+  describeHeadingWhen,
   dropOptionalDetails,
   hasOptionalDetails,
   prepareWorkoutDraft,
@@ -384,8 +385,73 @@ describe('prepareWorkoutDraft', () => {
 
     expect(prepareWorkoutDraft(heading, exercises)).toEqual({
       ok: false,
+      section: 'exercises',
       message: expectedMessage,
     })
+  })
+
+  // The editor opens its collapsed heading for these, so the message never
+  // points at a field the user can't see.
+  it.each([
+    [
+      'an empty start time',
+      { startTime: '' },
+      'Enter a valid date and start time.',
+    ],
+    [
+      'a zero bodyweight',
+      { bodyweightKg: '0' },
+      'Bodyweight must be a number greater than zero.',
+    ],
+  ])('tags %s as a heading problem', (_scenario, changes, expectedMessage) => {
+    const heading = {
+      ...createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5)),
+      ...changes,
+    }
+
+    expect(prepareWorkoutDraft(heading, [])).toEqual({
+      ok: false,
+      section: 'heading',
+      message: expectedMessage,
+    })
+  })
+})
+
+describe('describeHeadingWhen', () => {
+  const now = new Date(2026, 9, 4, 9, 40)
+
+  it('calls the current date today', () => {
+    expect(
+      describeHeadingWhen({ date: '2026-10-04', startTime: '09:34' }, '', now),
+    ).toBe('Today 09.34')
+  })
+
+  it('shows another day of this year without the year', () => {
+    expect(
+      describeHeadingWhen({ date: '2026-10-03', startTime: '07:15' }, '', now),
+    ).toBe('3 Oct 07.15')
+  })
+
+  it('adds the year for a page from another year', () => {
+    expect(
+      describeHeadingWhen({ date: '2025-12-31', startTime: '18:00' }, '', now),
+    ).toBe('31 Dec 2025 18.00')
+  })
+
+  it('adds the finish time when there is one', () => {
+    expect(
+      describeHeadingWhen(
+        { date: '2026-10-03', startTime: '07:15' },
+        '08:20',
+        now,
+      ),
+    ).toBe('3 Oct 07.15–08.20')
+  })
+
+  it('reads half-cleared fields as they stand instead of failing', () => {
+    expect(describeHeadingWhen({ date: '', startTime: '' }, '', now)).toBe(
+      'No date',
+    )
   })
 })
 

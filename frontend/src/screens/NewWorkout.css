@@ -112,25 +112,89 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-3);
   overflow-y: auto;
-  padding: 20px 22px var(--space-6);
+  padding: var(--space-1) 22px var(--space-6);
 }
 
-.new-workout-exercises {
+/* The page heading folds into one dateline under the header: "Today 09.34"
+   on the left, the action to open it on the right, the whole line one
+   44px target. Opened, its fields follow in place. */
+.new-workout-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.new-workout-heading > .form-stack {
+  padding-bottom: var(--space-3);
+}
+
+.new-workout-heading-summary {
+  min-height: var(--hit-target);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-neutral-800);
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 15px;
+}
+
+.new-workout-heading-summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.new-workout-heading-line {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.new-workout-heading-action {
+  flex: 0 0 auto;
+  color: var(--color-accent-700);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Date beside start time, bodyweight beside gym: pairs that are read
+   together, as on the prototype's heading. */
+.new-workout-field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
 }
 
+.new-workout-field-pair > .field {
+  min-width: 0;
+}
+
+.new-workout-exercises {
+  display: flex;
+  flex-direction: column;
+}
+
 .new-workout-empty {
-  margin: 0;
+  margin: 0 0 var(--space-2);
   font-size: 13px;
 }
 
+/* Blocks are separated by hairline rules, not cards (spec, Visual
+   direction): a rule above the first block and one under each. */
 .new-workout-exercise {
-  padding: var(--space-3);
-  background: var(--color-surface);
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-lg);
+  padding: var(--space-4) 0 var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.new-workout-exercise:first-of-type {
+  border-top: 1px solid var(--color-divider);
 }
 
 .new-workout-exercise-heading {
@@ -175,11 +239,30 @@
   margin-top: var(--space-3);
 }
 
-.new-workout-set {
+/* The column header and the set rows share one grid. Every track is sized
+   without reference to its content, so the header's labels line up with
+   the inputs below even though the header has no buttons in it. */
+.new-workout-set,
+.new-workout-set-columns {
   display: grid;
-  grid-template-columns: 22px minmax(92px, 1fr) minmax(64px, 0.62fr) auto 30px;
-  align-items: end;
+  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 0.62fr) 68px 30px;
+  align-items: center;
   gap: 6px;
+}
+
+/* Right-aligned over the right-aligned figures; the inline padding is the
+   input's own (8px) plus its border. */
+.new-workout-set-columns > span {
+  padding-inline: 9px;
+  color: var(--color-neutral-700);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.new-workout-set-columns {
+  margin-bottom: calc(var(--space-1) * -1);
 }
 
 .new-workout-set-number {
@@ -189,32 +272,19 @@
   text-align: center;
 }
 
-.new-workout-set-field,
-.new-workout-bodyweight-load {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.new-workout-set-field > span,
-.new-workout-bodyweight-load > span {
-  color: var(--color-neutral-700);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.new-workout-set-field .input {
+.new-workout-set .input {
   min-width: 0;
   padding-inline: 8px;
   text-align: right;
 }
 
-.new-workout-bodyweight-load strong {
+.new-workout-bodyweight-load {
+  min-width: 0;
   min-height: var(--hit-target);
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  padding-inline: 9px;
   font-family: var(--font-heading);
   font-size: 15px;
   font-weight: var(--font-heading-weight);
@@ -261,7 +331,9 @@
 }
 
 .exercise-picker {
-  margin-top: var(--space-1);
+  margin-top: var(--space-4);
+  /* Room under the picker's answers when they are scrolled into view. */
+  scroll-margin-bottom: var(--space-3);
 }
 
 .exercise-search-status {
@@ -412,8 +484,9 @@
 }
 
 @media (max-width: 370px) {
-  .new-workout-set {
-    grid-template-columns: 20px minmax(76px, 1fr) 58px 62px 26px;
+  .new-workout-set,
+  .new-workout-set-columns {
+    grid-template-columns: 20px minmax(0, 1fr) 58px 62px 26px;
     gap: 4px;
   }
 
