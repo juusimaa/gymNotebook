@@ -121,6 +121,30 @@
   white-space: nowrap;
 }
 
+/* Status instead of a time: the meta line below already carries the start. */
+.session-in-progress {
+  color: var(--color-accent-700);
+  font-style: italic;
+}
+
+/* An in-progress row plus its "Continue logging" action share one rule
+   underneath, so they read as one entry. */
+.session-entry {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.session-entry .session-row {
+  border-bottom: 0;
+}
+
+/* Lined up with the title column: the 56px date column plus its 14px gap. */
+.session-continue {
+  width: calc(100% - 70px);
+  margin-left: 70px;
+  font-size: 15px;
+}
+
 .session-meta {
   margin: 5px 0 0;
   color: var(--color-neutral-600);
@@ -154,12 +178,6 @@
   left: 0;
   padding: 14px 22px 22px;
   background: linear-gradient(to top, var(--color-bg) 62%, transparent);
-}
-
-.sessions-action .btn {
-  min-height: 48px;
-  font-size: 17px;
-  letter-spacing: 0.04em;
 }
 
 @media (max-width: 360px) {

@@ -147,9 +147,13 @@ export default function Sessions() {
             // startedAt/endedAt are instants and do need local-time formatting.
             const { day, month } = formatWorkoutDate(workout.date)
             const startedAt = formatWorkoutTime(workout.startedAt)
+            const inProgress = workout.endedAt === null
+            // An in-progress row says so where a finished row shows its start
+            // time, and its meta line carries the start once ("from 09.34")
+            // instead of repeating it beside "–in progress".
             const timeRange =
               workout.endedAt === null
-                ? `${startedAt}–in progress`
+                ? `from ${startedAt}`
                 : `${startedAt}–${formatWorkoutTime(workout.endedAt)}`
 
             const exerciseSummary =
@@ -157,9 +161,9 @@ export default function Sessions() {
                 ? 'No exercises logged'
                 : workout.exerciseNames.join(' · ')
 
-            return (
-              // The whole row is one link, giving mouse, touch, and keyboard
-              // users a single generous target for opening the session page.
+            // The whole row is one link, giving mouse, touch, and keyboard
+            // users a single generous target for opening the session page.
+            const row = (
               <Link
                 className="session-row"
                 to={`/workouts/${workout.id}`}
@@ -173,7 +177,13 @@ export default function Sessions() {
                 <div className="session-content">
                   <div className="session-heading">
                     <h2>{workout.title ?? 'Untitled session'}</h2>
-                    <span className="session-time num">{startedAt}</span>
+                    {inProgress ? (
+                      <span className="session-time session-in-progress">
+                        in progress
+                      </span>
+                    ) : (
+                      <span className="session-time num">{startedAt}</span>
+                    )}
                   </div>
 
                   <p className="session-exercises">{exerciseSummary}</p>
@@ -184,6 +194,26 @@ export default function Sessions() {
                   </p>
                 </div>
               </Link>
+            )
+
+            if (!inProgress) {
+              return row
+            }
+
+            // A link can't hold another link, so "Continue logging" sits
+            // beside the row rather than inside it: reading the page and
+            // getting back to the rack stay two separate targets.
+            return (
+              <div className="session-entry" key={workout.id}>
+                {row}
+                <Link
+                  className="btn btn-secondary session-continue"
+                  to={`/workouts/${workout.id}/edit`}
+                  aria-label={`Continue logging ${workout.title ?? 'untitled session'}, started ${startedAt}`}
+                >
+                  Continue logging
+                </Link>
+              </div>
             )
           })
         )}

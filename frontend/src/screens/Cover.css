@@ -73,12 +73,6 @@
   font-size: 13px;
 }
 
-/* The cover opens with a quieter, text-first action; shared primary buttons
-   remain outlined on the notebook's working screens. */
-.cover-open-notebook {
-  border-color: transparent;
-}
-
 /* Account privacy, on its own line under the account actions and apart from
    workout navigation (docs/ui/README.md, privacy and account lifecycle). */
 .cover-privacy {

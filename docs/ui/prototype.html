@@ -327,12 +327,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         <div style="text-align:center;margin-top:28px;font-size:12px;color:var(--color-neutral-600)">Enjoying the notebook? <a href="https://buymeacoffee.com/jouni" target="_blank" rel="noreferrer">Buy me a coffee ↗</a></div>`;
     template = template.replace(coverSignOut, coverSignOut + supportLink);
 
-    // Test a quieter, text-first opening action without changing the shared
-    // outlined-button treatment used by the logging and management screens.
-    const coverOpenButton = `<button class="btn btn-primary" sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook</button>`;
-    const borderlessCoverOpenButton = `<button class="btn btn-primary" sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook</button>`;
-    template = template.replace(coverOpenButton, borderlessCoverOpenButton);
-
     // Links are colour-led navigation marks in this editorial system, not
     // underlined web prose. Individual controls may still add their own state.
     template = template.replace(
@@ -565,8 +559,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 ` + detailNotes + `
           </sc-if>`);
     replacePrivacyAnchor(
-      'sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook',
-      'sc-camel-on-click="{{ openNotebook }}" style="min-height:48px;width:100%;border:0;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook'
+      'sc-camel-on-click="{{ goHistory }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook',
+      'sc-camel-on-click="{{ openNotebook }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Open the notebook'
     );
 
     const privacyScreens = `
@@ -1043,6 +1037,97 @@ document.addEventListener('DOMContentLoaded', async function() {
   });
 
   removeSet = `
+    );
+
+    // Design fix plan step 4 (search order and main actions), matching the
+    // React app: one clearly primary action per screen, drawn as a heavier
+    // accent-700 stroke (still never a fill), and an in-progress session
+    // offers "Continue logging" on its page and its Sessions row. A sample
+    // in-progress page (10 Sep, no end time) shows both. Anchors fail
+    // visibly, like the editor and privacy patches.
+    const replaceMainActionAnchor = (anchor, replacement) => {
+      if (!template.includes(anchor)) throw new Error('Main-action prototype anchor missing: ' + anchor.slice(0, 90));
+      template = template.replace(anchor, replacement);
+    };
+    replaceMainActionAnchor(
+      '.btn-primary { color: var(--color-accent); border-color: var(--color-accent); }',
+      '.btn-primary { color: var(--color-accent-700); border: 2px solid var(--color-accent-700); }'
+    );
+    replaceMainActionAnchor(
+      'const DATA = [\n',
+      `const DATA = [
+  { id: 6, date: [2026,9,10], time: "17.45", end: null, title: "Press day", bw: 78.2, loc: "Liikuntamylly",
+    notes: "Bench rack taken, so pressing first.",
+    blocks: [
+      { name: "Overhead Press", sets: [[20,8,true],[35,6,false]] }
+    ] },
+`
+    );
+    replaceMainActionAnchor(
+      '        time: w.time,\n',
+      `        time: w.end ? w.time : "in progress",
+        timeStyle: "font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums;" +
+          (w.end ? "color:var(--color-neutral-600)" : "color:var(--color-accent-700);font-style:italic"),
+        inProgress: !w.end,
+        rowStyle: "display:grid;grid-template-columns:56px 1fr;gap:14px;padding:16px 0;cursor:pointer;" +
+          (w.end ? "border-bottom:1px solid var(--color-divider)" : ""),
+        entryStyle: w.end ? "" : "padding-bottom:16px;border-bottom:1px solid var(--color-divider)",
+        continueLog: this.go("new"),
+`
+    );
+    replaceMainActionAnchor(
+      '        meta: `${w.blocks.length} exercises · ${setCount} sets · ${w.time}–${w.end}`,',
+      '        meta: `${w.blocks.length} ${w.blocks.length === 1 ? "exercise" : "exercises"} · ${setCount} sets · ${w.end ? w.time + "–" + w.end : "from " + w.time}`,'
+    );
+    replaceMainActionAnchor(
+      '            <div sc-camel-on-click="{{ w.open }}" style="display:grid;grid-template-columns:56px 1fr;gap:14px;padding:16px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">',
+      `            <div style="{{ w.entryStyle }}">
+            <div sc-camel-on-click="{{ w.open }}" style="{{ w.rowStyle }}">`
+    );
+    replaceMainActionAnchor(
+      '<div style="font-size:12px;color:var(--color-neutral-600);font-variant-numeric:tabular-nums;white-space:nowrap">{{ w.time }}</div>',
+      '<div style="{{ w.timeStyle }}">{{ w.time }}</div>'
+    );
+    replaceMainActionAnchor(
+      `              </div>
+            </div>
+          </sc-for>
+          <div style="text-align:center;padding:22px 0;font-size:13px;color:var(--color-neutral-600)">Earlier pages</div>`,
+      `              </div>
+            </div>
+            <sc-if value="{{ w.inProgress }}" hint-placeholder-val="{{ false }}">
+              <button class="btn btn-secondary" sc-camel-on-click="{{ w.continueLog }}" style="width:calc(100% - 70px);margin-left:70px;min-height:44px;font-size:15px">Continue logging</button>
+            </sc-if>
+            </div>
+          </sc-for>
+          <div style="text-align:center;padding:22px 0;font-size:13px;color:var(--color-neutral-600)">Earlier pages</div>`
+    );
+    replaceMainActionAnchor(
+      '      clock: `${w.time}–${w.end}`,\n',
+      '      clock: w.end ? `${w.time}–${w.end}` : `${w.time}–in progress`,\n      inProgress: !w.end,\n'
+    );
+    replaceMainActionAnchor(
+      '            <a href="#" sc-camel-on-click="{{ goNew }}">Edit</a>\n',
+      `            <sc-if value="{{ page.finished }}" hint-placeholder-val="{{ true }}">
+              <a href="#" sc-camel-on-click="{{ goNew }}">Edit</a>
+            </sc-if>
+`
+    );
+    replaceMainActionAnchor('      inProgress: !w.end,\n      bodyweight:', '      inProgress: !w.end,\n      finished: !!w.end,\n      bodyweight:');
+    replaceMainActionAnchor(
+      `          <p style="margin:0;font-size:14px;line-height:1.65;text-align:justify;hyphens:auto;color:var(--color-neutral-800)">{{ page.notes }}</p>
+          </sc-if>
+        </div>
+`,
+      `          <p style="margin:0;font-size:14px;line-height:1.65;text-align:justify;hyphens:auto;color:var(--color-neutral-800)">{{ page.notes }}</p>
+          </sc-if>
+        </div>
+        <sc-if value="{{ page.inProgress }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:14px 22px 22px;border-top:1px solid var(--color-divider)">
+            <button class="btn btn-primary" sc-camel-on-click="{{ goNew }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Continue logging</button>
+          </div>
+        </sc-if>
+`
     );
 
     const resourceScript = '<script>window.__resources = ' +

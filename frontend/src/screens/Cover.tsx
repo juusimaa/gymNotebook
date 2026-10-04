@@ -68,10 +68,7 @@ export default function Cover() {
         </p>
       </div>
 
-      <Link
-        to="/workouts"
-        className="btn btn-primary btn-block cover-open-notebook"
-      >
+      <Link to="/workouts" className="btn btn-primary btn-block">
         Open the notebook
       </Link>
       <div className="cover-actions">

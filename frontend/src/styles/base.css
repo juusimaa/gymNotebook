@@ -136,9 +136,17 @@ a {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+/* The one main action on a screen. Still a stroke, never a fill (spec, Visual
+   direction), but it outranks everything else by weight: a 2px border,
+   larger type and a taller target. Text and stroke use accent-700 (5.97:1 on
+   the ground) because plain gold, at 3.02:1, is too faint for a label; gold
+   stays for decoration. Use it once per screen, plus once inside an inline
+   confirmation where that confirmation is the screen's current question. */
 .btn-primary {
-  color: var(--color-accent);
-  border-color: var(--color-accent);
+  min-height: 48px;
+  font-size: 17px;
+  color: var(--color-accent-700);
+  border: 2px solid var(--color-accent-700);
 }
 .btn-primary:hover {
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
