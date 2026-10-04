@@ -231,11 +231,11 @@ remaining short free-text fields, or B for notes only.
 
 **Information:** the session JWT in `localStorage` under `gymnotebook.token` (`frontend/src/auth/token.ts`). It holds the user id, `TokenVersion` and expiry, and is removed on sign-out or an invalid session. No other cookies, `localStorage` or `sessionStorage` keys, analytics or third-party scripts. Fonts are self-hosted since PR #48 (T001). Rechecked against `frontend/src` on 2026-09-28: `auth/token.ts` is the only storage access.
 
-**Proposed addition, 2026-10-04 (awaiting the owner's review and signature; design fix plan step 1):** the session editor's unsaved draft, in `sessionStorage` under `gymnotebook.draft.new` and `gymnotebook.draft.workout.{id}` (`frontend/src/screens/editorDraftStorage.ts`). It holds what the user is typing into a workout before saving it: the date and times, exercise names and sets, the owner's user id, and the title, bodyweight, gym and notes **only while optional-details consent is given** (P3). It is scoped to the tab and removed when the draft is saved or discarded, on sign-out, account deletion, another tab signing out, any 401 other than a plain token expiry, consent withdrawal (the four details only), or when the tab closes. A plain expiry holds it for the same user's next sign-in, and another account signing in removes it. Nothing leaves the device; the server receives the draft only when the user saves it, as before.
+**Editor draft, added 2026-10-04 (design fix plan step 1, PR #95):** the session editor's unsaved draft, in `sessionStorage` under `gymnotebook.draft.new` and `gymnotebook.draft.workout.{id}` (`frontend/src/screens/editorDraftStorage.ts`). It holds what the user is typing into a workout before saving it: the date and times, exercise names and sets, the owner's user id, and the title, bodyweight, gym and notes **only while optional-details consent is given** (P3). It is scoped to the tab and removed when the draft is saved or discarded, on sign-out, account deletion, another tab signing out, any 401 other than a plain token expiry, consent withdrawal (the four details only), or when the tab closes. A plain expiry holds it for the same user's next sign-in, and another account signing in removes it. Nothing leaves the device; the server receives the draft only when the user saves it, as before.
 
 **Where it lives:** the user's own browser.
 
-**Necessity:** without it the user would have to sign in again on every page load. *Proposed for the draft:* without it a reload, a locked phone or an expired 30-minute token would lose a session being logged. That is the service the user asked for, writing a workout down, and the copy exists only to complete it.
+**Necessity:** without it the user would have to sign in again on every page load. *For the draft:* without it a reload, a locked phone or an expired 30-minute token would lose a session being logged. That is the service the user asked for, writing a workout down, and the copy exists only to complete it.
 
 **Lawful basis (owner decision, 2026-09-28):**
 - Storing information on a device falls under the ePrivacy rule: Finland's Act on Electronic Communications Services (917/2014) §205.
@@ -246,13 +246,13 @@ remaining short free-text fields, or B for notes only.
 
 **Consent:** not required. No cookie banner is needed, and FR-006 forbids adding one without cause.
 
-*Proposed for the draft, for the owner to decide:* the draft can hold bodyweight and notes, which P3 treats as possibly revealing health information, but only while the user's explicit P3 consent stands, and it is stripped from the draft when that consent is withdrawn. The proposal is that this stays strictly necessary storage under §205 (it completes the user's own save) and that its content is covered by the P3 consent, with no new consent prompt.
+*For the draft:* the draft can hold bodyweight and notes, which P3 treats as possibly revealing health information, but only while the user's explicit P3 consent stands, and it is stripped from the draft when that consent is withdrawn. It stays strictly necessary storage under §205, because it completes the user's own save. Its content is covered by the P3 consent, so there is no new consent prompt.
 
 **Findings:** none. Adding any other browser storage, cookie or third-party script needs this purpose reviewed first.
 
 **Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Strictly necessary storage under §205 of Act 917/2014; GDPR basis Art. 6(1)(b) with P1; no health data; consent not required. Evidence: the code check above.
 
-**Re-review needed (2026-10-04):** the editor-draft addition above changes the "only storage access" fact this decision was signed on. It is **unsigned** until the owner reviews it. Do not merge the PR that introduces `editorDraftStorage.ts` without that sign-off.
+**Re-signed** by the owner, Jouni Uusimaa, 2026-10-04, with the editor draft added (PR #95). The draft is strictly necessary storage under §205 of Act 917/2014, with GDPR basis Art. 6(1)(b) with P1. Its optional details (possible health data) are stored only under, and for as long as, the P3 consent. No new consent is required. Evidence: `editorDraftStorage.ts` and `auth/token.ts` are the only storage access in `frontend/src`, and their clearing rules are unit-tested.
 
 ---
 
@@ -325,7 +325,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 | P2 Training log and progress | Not required: Article 6(1)(b), not health data in this context (signed 2026-09-28) | No |
 | P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner choices 2026-09-25/28; amendment approved 2026-09-29 | T042 complete; rollout still blocked by other release gates |
 | P4 Logs | Not required: Article 6(1)(f) and 6(1)(c) chosen 2026-09-28, unsigned | Log-content, credential and retention findings block |
-| P5 Browser storage | Not required: strictly necessary, Article 6(1)(b) (signed 2026-09-28) | No |
+| P5 Browser storage | Not required: strictly necessary, Article 6(1)(b) (signed 2026-09-28; re-signed 2026-10-04 with the editor draft) | No |
 | P6 Recipients | Not applicable | Supplier findings block |
 | P7 Rights requests | Not required: Article 6(1)(c) (owner, 2026-09-28) | Supplier and T083 findings block |
 
