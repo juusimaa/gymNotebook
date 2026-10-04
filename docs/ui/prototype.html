@@ -850,6 +850,55 @@ document.addEventListener('DOMContentLoaded', async function() {
 `
     );
 
+    // Design fix plan step 2 (editor structure): the exercises come first.
+    // The heading folds into one dateline ("Today 07.15 · add details") that
+    // opens its fields in place, Notes included; the blocks keep their
+    // hairline rules; and "Finish session" is the primary action, matching
+    // the React editor. Anchors fail visibly, like the privacy patches.
+    const replaceEditorAnchor = (anchor, replacement) => {
+      if (!template.includes(anchor)) throw new Error('Editor prototype anchor missing: ' + anchor.slice(0, 90));
+      template = template.replace(anchor, replacement);
+    };
+    const editorNotes = `          <label style="display:flex;flex-direction:column;gap:5px;margin-top:20px">
+            <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600)">Notes</span>
+            <textarea class="input" rows="3" placeholder="Bar felt heavy; belt from set 3." style="width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:14px;line-height:1.6"></textarea>
+          </label>
+`;
+    replaceEditorAnchor(editorNotes, '');
+    const editorHeadingStart = `          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600)">Date</span>`;
+    const editorHeadingEnd = `          <div class="hr" style="margin:22px 0 8px"></div>`;
+    const headingFrom = template.indexOf(editorHeadingStart);
+    const headingTo = template.indexOf(editorHeadingEnd, headingFrom);
+    if (headingFrom === -1 || headingTo === -1) throw new Error('Editor prototype anchor missing: page heading');
+    template = template.slice(0, headingFrom) +
+      `          <button sc-camel-on-click="{{ toggleHeading }}" aria-expanded="{{ headingOpen }}" style="width:100%;min-height:44px;margin-top:-14px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0;border:0;background:none;cursor:pointer;text-align:left;font-family:var(--font-body);font-size:15px;color:var(--color-neutral-800)">
+            <span style="font-variant-numeric:tabular-nums">Today 07.15</span>
+            <span style="font-size:14px;color:var(--color-accent-700);text-decoration:underline;text-underline-offset:3px">{{ headingAction }}</span>
+          </button>
+          <sc-if value="{{ headingOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:8px;padding-bottom:4px">
+` + template.slice(headingFrom, headingTo) + `          <sc-if value="{{ detailsConsent }}" hint-placeholder-val="{{ false }}">
+` + editorNotes.replace('margin-top:20px', 'margin-top:12px') + `          </sc-if>
+          </div>
+          </sc-if>
+          <div class="hr" style="margin:10px 0 0"></div>` + template.slice(headingTo + editorHeadingEnd.length);
+    replaceEditorAnchor(
+      `          <button class="btn btn-secondary" sc-camel-on-click="{{ askFinish }}" style="flex:1;min-height:48px;font-size:15px">Finish session</button>
+          <button class="btn btn-primary" sc-camel-on-click="{{ save }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Save page</button>`,
+      `          <button class="btn btn-secondary" sc-camel-on-click="{{ save }}" style="flex:1;min-height:48px;font-size:15px">Save page</button>
+          <button class="btn btn-primary" sc-camel-on-click="{{ askFinish }}" style="flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px">Finish session</button>`
+    );
+    replaceEditorAnchor(
+      '      confirmingFinish: this.state.confirmFinish,\n',
+      `      confirmingFinish: this.state.confirmFinish,
+      headingOpen: !!this.state.headingOpen,
+      headingAction: this.state.headingOpen ? "hide" : "add details",
+      toggleHeading: (e) => { if (e) e.preventDefault(); this.setState({ headingOpen: !this.state.headingOpen }); },
+`
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';

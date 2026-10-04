@@ -3,6 +3,7 @@ import type {
   PutWorkoutExercisesRequest,
   WorkoutDetailResponse,
 } from '../api/workouts'
+import { formatWorkoutDate } from './workoutFormat'
 
 // Form fields stay as strings so empty and partially entered values such as
 // "78." remain representable until the draft is validated for submission.
@@ -62,6 +63,43 @@ export function hasOptionalDetails(heading: WorkoutHeadingDraft): boolean {
     heading.location,
     heading.notes,
   ].some((value) => value.trim() !== '')
+}
+
+// The editor's page heading collapses to one line so the exercises come
+// first: "Today 09.34", "3 Oct 09.34–10.40", or with the year when it isn't
+// this year's page. Times follow the HH.mm convention (spec rule 11). Reads
+// the draft's own strings, so a half-typed field shows as it stands rather
+// than throwing; validation still happens at save.
+export function describeHeadingWhen(
+  heading: Pick<WorkoutHeadingDraft, 'date' | 'startTime'>,
+  endTime: string,
+  now: Date,
+): string {
+  const [year, month, day] = heading.date.split('-').map(Number)
+  const hasDate =
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    Number.isInteger(day) &&
+    month >= 1 &&
+    month <= 12
+
+  let date = 'No date'
+  if (hasDate) {
+    const isToday =
+      year === now.getFullYear() &&
+      month === now.getMonth() + 1 &&
+      day === now.getDate()
+    date = isToday
+      ? 'Today'
+      : `${day} ${formatWorkoutDate(heading.date).month}${year === now.getFullYear() ? '' : ` ${year}`}`
+  }
+
+  const start = heading.startTime.replace(':', '.')
+  const end = endTime.replace(':', '.')
+  if (start === '') {
+    return date
+  }
+  return end === '' ? `${date} ${start}` : `${date} ${start}–${end}`
 }
 
 export interface ExistingWorkoutDraft {
@@ -207,8 +245,12 @@ export interface PreparedWorkoutDraft {
   exercises: PutWorkoutExercisesRequest
 }
 
+// `section` says where the problem is, so the editor can open the collapsed
+// page heading when the fault is in one of its fields rather than leave the
+// message pointing at something the user can't see.
 export type PrepareWorkoutDraftResult =
-  { ok: true; value: PreparedWorkoutDraft } | { ok: false; message: string }
+  | { ok: true; value: PreparedWorkoutDraft }
+  | { ok: false; section: 'heading' | 'exercises'; message: string }
 
 function optionalText(value: string): string | null {
   const trimmed = value.trim()
@@ -308,7 +350,11 @@ export function prepareWorkoutDraft(
   const startedAt = createLocalStartedAt(heading.date, heading.startTime)
 
   if (startedAt === null) {
-    return { ok: false, message: 'Enter a valid date and start time.' }
+    return {
+      ok: false,
+      section: 'heading',
+      message: 'Enter a valid date and start time.',
+    }
   }
 
   let bodyweightKg: number | null = null
@@ -317,13 +363,18 @@ export function prepareWorkoutDraft(
     if (bodyweightKg === null || bodyweightKg === 0) {
       return {
         ok: false,
+        section: 'heading',
         message: 'Bodyweight must be a number greater than zero.',
       }
     }
   }
 
   if (exerciseDrafts.length === 0) {
-    return { ok: false, message: 'Add at least one exercise.' }
+    return {
+      ok: false,
+      section: 'exercises',
+      message: 'Add at least one exercise.',
+    }
   }
 
   const exercises: PutWorkoutExercisesRequest['exercises'] = []
@@ -339,6 +390,7 @@ export function prepareWorkoutDraft(
     if (exercise.exerciseName.trim() === '') {
       return {
         ok: false,
+        section: 'exercises',
         message: `Exercise ${exerciseNumber} needs a name.`,
       }
     }
@@ -346,6 +398,7 @@ export function prepareWorkoutDraft(
     if (exercise.sets.length === 0) {
       return {
         ok: false,
+        section: 'exercises',
         message: `${exercise.exerciseName} needs at least one set.`,
       }
     }
@@ -360,6 +413,7 @@ export function prepareWorkoutDraft(
       if (reps === null) {
         return {
           ok: false,
+          section: 'exercises',
           message: `${exercise.exerciseName}, set ${setNumber}: reps must be a whole number greater than zero.`,
         }
       }
@@ -373,6 +427,7 @@ export function prepareWorkoutDraft(
         if (weight === null) {
           return {
             ok: false,
+            section: 'exercises',
             message: `${exercise.exerciseName}, set ${setNumber}: enter a valid weight.`,
           }
         }
