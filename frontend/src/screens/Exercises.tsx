@@ -42,8 +42,12 @@ export default function Exercises() {
           <h1>Exercises</h1>
         </div>
         <nav aria-label="Exercise navigation">
-          <Link to="/workouts">Sessions</Link>
-          <Link to="/progress">Progress</Link>
+          <Link className="header-link" to="/workouts">
+            Sessions
+          </Link>
+          <Link className="header-link" to="/progress">
+            Progress
+          </Link>
         </nav>
       </header>
 

@@ -128,9 +128,15 @@ export default function Sessions() {
         </div>
 
         <nav className="sessions-nav" aria-label="Notebook">
-          <Link to="/progress">Progress</Link>
-          <Link to="/exercises">Exercises</Link>
-          <Link to="/">Cover</Link>
+          <Link className="header-link" to="/progress">
+            Progress
+          </Link>
+          <Link className="header-link" to="/exercises">
+            Exercises
+          </Link>
+          <Link className="header-link" to="/">
+            Cover
+          </Link>
         </nav>
       </header>
 

@@ -4,7 +4,7 @@
 
 .notice-meta {
   font-size: 13px;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   margin: 0 0 var(--space-4);
 }
 
@@ -49,10 +49,10 @@
   min-height: var(--hit-target);
   display: flex;
   align-items: center;
-  color: var(--color-accent);
+  color: var(--color-accent-700);
 }
 .notice-announced summary:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
 }
 

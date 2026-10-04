@@ -135,12 +135,22 @@ export default function WorkoutDetail() {
   return (
     <main className="page workout-detail">
       <header className="workout-detail-header">
-        <Link to="/workouts">← Sessions</Link>
+        <Link className="header-link" to="/workouts">
+          ← Sessions
+        </Link>
         <nav className="workout-detail-actions" aria-label="Session actions">
           {/* While the session is in progress, "Continue logging" below is
               the way into the editor; one control per action, not two. */}
-          {!inProgress && <Link to={`/workouts/${workout.id}/edit`}>Edit</Link>}
-          <button type="button" onClick={() => setConfirmingDelete(true)}>
+          {!inProgress && (
+            <Link className="header-link" to={`/workouts/${workout.id}/edit`}>
+              Edit
+            </Link>
+          )}
+          <button
+            className="header-link"
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+          >
             Delete
           </button>
         </nav>

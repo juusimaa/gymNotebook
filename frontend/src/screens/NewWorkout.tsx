@@ -849,6 +849,7 @@ function WorkoutEditor() {
     <main className="page new-workout">
       <header className="new-workout-header">
         <Link
+          className="header-link"
           ref={cancelRef}
           to={cancelTarget}
           onClick={(event) => {

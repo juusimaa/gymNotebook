@@ -1130,6 +1130,42 @@ document.addEventListener('DOMContentLoaded', async function() {
 `
     );
 
+    // Design fix plan step 5 (contrast and hit targets), matching the React
+    // app. Gold never carries text: every text use of --color-accent, plus
+    // focus rings, the input's focus border and the caret, moves to
+    // accent-700 (5.97:1). Muted text moves from neutral-600/500 to
+    // neutral-700 (5.83:1), nothing is set below 11px, the Progress caveat is
+    // no longer justified, and header text links get a 44px box. Each pattern
+    // must match at least once, so a stale anchor fails visibly.
+    const replaceContrastPattern = (pattern, replacement) => {
+      if (!pattern.test(template)) throw new Error('Contrast prototype pattern missing: ' + pattern);
+      template = template.replace(pattern, replacement);
+    };
+    replaceContrastPattern(
+      /line-height:1\.6;color:var\(--color-neutral-600\);text-align:justify;hyphens:auto/,
+      'line-height:1.6;color:var(--color-neutral-600)'
+    );
+    replaceContrastPattern(/(?<![-\w])color: ?var\(--color-neutral-[56]00\)/g, 'color:var(--color-neutral-700)');
+    // The same inks picked in script: a warm-up row and an unchanged figure.
+    replaceContrastPattern(/"var\(--color-neutral-[56]00\)"/g, '"var(--color-neutral-700)"');
+    replaceContrastPattern(/(?<![-\w])color: ?var\(--color-accent\)/g, 'color:var(--color-accent-700)');
+    replaceContrastPattern(/outline: ?2px solid var\(--color-accent\)/g, 'outline:2px solid var(--color-accent-700)');
+    replaceContrastPattern(/caret-color: var\(--color-accent\)/, 'caret-color: var(--color-accent-700)');
+    replaceContrastPattern(
+      /\.input:focus-visible \{ border-color: var\(--color-accent\)/,
+      '.input:focus-visible { border-color: var(--color-accent-700)'
+    );
+    replaceContrastPattern(/font-size: ?10px/g, 'font-size:11px');
+    replaceContrastPattern(
+      /input\.input::placeholder \{ color:var\(--color-neutral-700\); \}/,
+      'input.input::placeholder { color:var(--color-neutral-700); }\n' +
+        '  .header-link { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; }'
+    );
+    replaceContrastPattern(
+      /<a href="#" (sc-camel-on-click="\{\{ \w+ \}\}")((?: style="font-size:13px")?)>(← Sessions|← Cancel|← Exercises|Edit|Progress|Exercises|Cover|Sessions)<\/a>/g,
+      '<a href="#" class="header-link" $1$2>$3</a>'
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';
