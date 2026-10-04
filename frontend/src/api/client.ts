@@ -1,4 +1,4 @@
-import { getToken } from '../auth/token'
+import { getToken, isTokenExpired } from '../auth/token'
 
 // Vite inlines import.meta.env.VITE_* at build time (PLAN.md, "The VITE_API_URL
 // trap"). The strict ImportMetaEnv in vite-env.d.ts makes the *name* a compile
@@ -104,6 +104,9 @@ interface RequestOptions {
 // What the app-wide handler learns about a 401 that ended the session.
 export interface SessionEnded {
   changesData: boolean
+  // The token had simply run out, rather than being invalidated by a password
+  // change or account deletion. An expiry keeps the editor draft.
+  tokenExpired: boolean
 }
 
 let sessionEndedHandler: ((event: SessionEnded) => void) | null = null
@@ -185,6 +188,7 @@ export async function send<T>(
       ) {
         sessionEndedHandler?.({
           changesData: init.changesData ?? method !== 'GET',
+          tokenExpired: isTokenExpired(token),
         })
       }
       throw new ApiError(response.status, await readErrorCode(response))

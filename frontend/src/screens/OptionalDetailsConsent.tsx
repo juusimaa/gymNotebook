@@ -12,6 +12,10 @@ import {
 } from '../api/privacy'
 import { safeReturnPath } from '../auth/noticeGate'
 import { clearToken } from '../auth/token'
+import {
+  clearEditorDrafts,
+  stripEditorDraftDetails,
+} from './editorDraftStorage'
 import './Privacy.css'
 
 // Consent for a workout's title, location, notes and bodyweight (specs/001
@@ -221,6 +225,9 @@ export function WithdrawReview({
     setSubmitting(true)
     try {
       const result = await withdrawOptionalDetailsConsent()
+      // The details leave this tab's stored editor drafts too, not just the
+      // server (FR-032).
+      stripEditorDraftDetails()
       onDone(result.clearedWorkouts)
     } catch (err) {
       setMessage(
@@ -388,6 +395,8 @@ export default function OptionalDetailsConsent() {
 
   function signOut() {
     clearToken()
+    // A deliberate sign-out leaves no draft behind in this tab.
+    clearEditorDrafts()
     void navigate('/login')
   }
 

@@ -815,6 +815,41 @@ document.addEventListener('DOMContentLoaded', async function() {
       isLogin: screen === "login",`
     );
 
+    // Design fix plan step 1 (draft safety): Cancel on a changed draft asks
+    // first, in the same band under the header as "Tear out this page?". The
+    // sample draft always has sets, so here Cancel always asks.
+    template = template.replace(
+      `          <a href="#" sc-camel-on-click="{{ goHistory }}" style="font-size:13px">← Cancel</a>
+          <div style="font-family:var(--font-heading);font-size:18px;color:var(--color-text)">New page</div>
+          <a href="#" sc-camel-on-click="{{ save }}" style="font-size:13px">Save</a>
+        </div>
+`,
+      `          <a href="#" sc-camel-on-click="{{ askDiscard }}" style="font-size:13px">← Cancel</a>
+          <div style="font-family:var(--font-heading);font-size:18px;color:var(--color-text)">New page</div>
+          <a href="#" sc-camel-on-click="{{ save }}" style="font-size:13px">Save</a>
+        </div>
+        <sc-if value="{{ confirmingDiscard }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:14px 22px;border-bottom:1px solid var(--color-divider);background:var(--color-surface)">
+            <div style="font-size:14px;line-height:1.55;color:var(--color-neutral-800)">{{ discardQuestion }}</div>
+            <div style="display:flex;gap:10px;margin-top:12px">
+              <button class="btn btn-ghost" sc-camel-on-click="{{ cancelDiscard }}" style="flex:1;min-height:44px;font-size:14px">Keep editing</button>
+              <button class="btn btn-secondary" sc-camel-on-click="{{ discard }}" style="flex:1;min-height:44px;font-size:14px">Discard</button>
+            </div>
+          </div>
+        </sc-if>
+`
+    );
+    template = template.replace(
+      '      confirmingFinish: this.state.confirmFinish,\n',
+      `      confirmingFinish: this.state.confirmFinish,
+      confirmingDiscard: this.state.confirmDiscard,
+      discardQuestion: "Discard this page and its " + this.state.draft.reduce((n, b) => n + b.sets.length, 0) + " sets?",
+      askDiscard: (e) => { if (e) e.preventDefault(); this.setState({ confirmDiscard: true }); },
+      cancelDiscard: (e) => { if (e) e.preventDefault(); this.setState({ confirmDiscard: false }); },
+      discard: (e) => { if (e) e.preventDefault(); this.setState({ confirmDiscard: false, screen: "history" }); },
+`
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';

@@ -1,6 +1,7 @@
 import { redirect } from 'react-router'
 import { ApiError } from '../api/client'
 import { me, type MeResponse } from '../api/auth'
+import { adoptEditorDrafts } from '../screens/editorDraftStorage'
 import { clearToken, getToken } from './token'
 
 // Route loader for the layout route every signed-in screen sits under. A loader
@@ -17,7 +18,12 @@ export async function requireAuth(): Promise<MeResponse> {
   }
 
   try {
-    return await me()
+    const user = await me()
+    // An editor draft held through an expired token is this user's again, and
+    // one left by another account in this tab is removed before any screen
+    // could show it.
+    adoptEditorDrafts(user.userId)
+    return user
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       clearToken()
