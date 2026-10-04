@@ -85,7 +85,7 @@
 }
 
 .new-workout-restored button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
 }
 
@@ -147,7 +147,7 @@
 }
 
 .new-workout-heading-summary:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
 }
 
@@ -214,7 +214,7 @@
 .new-workout-exercise-kind,
 .exercise-suggestion-kind {
   flex: 0 0 auto;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -275,7 +275,7 @@
 
 .new-workout-set-number {
   align-self: center;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 13px;
   text-align: center;
 }
@@ -395,7 +395,7 @@
 }
 
 .new-workout-undo button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
 }
 
@@ -447,7 +447,7 @@
 .exercise-suggestion:focus-visible,
 .new-workout-set-kind:focus-visible,
 .new-workout-remove-set:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-700);
   outline-offset: -2px;
 }
 
@@ -543,7 +543,7 @@
 }
 
 .new-workout-field-hint {
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 12px;
 }
 

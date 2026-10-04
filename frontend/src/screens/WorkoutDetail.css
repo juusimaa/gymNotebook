@@ -38,7 +38,7 @@
 }
 
 .workout-detail-actions button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
 }
 
@@ -81,7 +81,7 @@
 .workout-detail-date {
   margin: 0 0 var(--space-2);
   color: var(--color-accent-700);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
 }
@@ -127,8 +127,8 @@
 }
 
 .workout-detail-exercise-kind {
-  color: var(--color-neutral-600);
-  font-size: 10px;
+  color: var(--color-neutral-700);
+  font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -158,11 +158,11 @@
 }
 
 .workout-detail-sets li.is-warmup {
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
 }
 
 .workout-detail-set-number {
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 12px;
   text-align: center;
 }
@@ -172,8 +172,8 @@
 }
 
 .workout-detail-set-tag {
-  color: var(--color-neutral-600);
-  font-size: 10px;
+  color: var(--color-neutral-700);
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -185,9 +185,9 @@
 
 .workout-detail-notes h2 {
   margin-bottom: 6px;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-family: var(--font-body);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.22em;
   text-transform: uppercase;

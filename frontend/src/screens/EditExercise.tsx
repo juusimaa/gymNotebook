@@ -115,7 +115,9 @@ export default function EditExercise() {
   return (
     <main className="page edit-exercise">
       <header className="edit-exercise-header">
-        <Link to="/exercises">← Exercises</Link>
+        <Link className="header-link" to="/exercises">
+          ← Exercises
+        </Link>
         <h1>Edit exercise</h1>
         <span aria-hidden="true"></span>
       </header>

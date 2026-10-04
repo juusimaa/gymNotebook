@@ -135,7 +135,9 @@ export default function Progress() {
           <h1>Progress</h1>
         </div>
         <nav className="progress-nav" aria-label="Notebook">
-          <Link to="/workouts">Sessions</Link>
+          <Link className="header-link" to="/workouts">
+            Sessions
+          </Link>
           <span aria-disabled="true">Exercises</span>
         </nav>
       </header>

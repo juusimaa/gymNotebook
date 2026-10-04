@@ -41,7 +41,7 @@
 .exercise-index-explanation,
 .exercise-index-empty {
   margin: 14px 0 4px;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -82,14 +82,14 @@
 .exercise-index-list small {
   display: block;
   margin-top: 3px;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .exercise-index-kind {
-  color: var(--color-neutral-500);
-  font-size: 10px;
+  color: var(--color-neutral-700);
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -134,7 +134,7 @@
 
 .edit-exercise-label {
   margin: 0;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -143,7 +143,7 @@
 .edit-exercise-meta,
 .edit-exercise-hint {
   margin: 4px 0 0;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -161,7 +161,7 @@
 
 .exercise-merge-notice > strong {
   color: var(--color-accent-700);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }

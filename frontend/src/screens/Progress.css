@@ -24,8 +24,11 @@
   line-height: 1.1;
 }
 
+/* Centred, so the plain-text "Exercises" sits level with the 44px "Sessions"
+   link beside it. */
 .progress-nav {
   display: flex;
+  align-items: center;
   gap: 14px;
   font-size: 13px;
 }
@@ -68,7 +71,7 @@
 }
 
 .progress-picker button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
 }
 
@@ -89,7 +92,7 @@
 
 .progress-metric {
   margin: 5px 0 0;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -133,8 +136,8 @@
   left: 0;
   width: 30px;
   transform: translateY(-50%);
-  color: var(--color-neutral-600);
-  font-size: 10px;
+  color: var(--color-neutral-700);
+  font-size: 11px;
   text-align: right;
 }
 
@@ -143,8 +146,8 @@
   justify-content: space-between;
   margin-top: 2px;
   padding-left: 38px;
-  color: var(--color-neutral-600);
-  font-size: 10px;
+  color: var(--color-neutral-700);
+  font-size: 11px;
 }
 
 .progress-stats {
@@ -156,8 +159,8 @@
 
 .progress-stats p {
   margin: 0;
-  color: var(--color-neutral-600);
-  font-size: 10px;
+  color: var(--color-neutral-700);
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -172,7 +175,7 @@
 
 .progress-stats span {
   display: block;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -207,8 +210,8 @@
 
 .progress-session-date span:last-child,
 .progress-session-set span {
-  color: var(--color-neutral-500);
-  font-size: 10px;
+  color: var(--color-neutral-700);
+  font-size: 11px;
 }
 
 .progress-session-set {
@@ -239,10 +242,9 @@
 
 .progress-caveat {
   margin: 16px 22px 0;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 12px;
   line-height: 1.6;
-  text-align: justify;
 }
 
 .progress-state {

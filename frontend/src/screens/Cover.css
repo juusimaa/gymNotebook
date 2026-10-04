@@ -61,7 +61,7 @@
   font-size: 13px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   margin: var(--space-2) 0 0;
 }
 
@@ -84,6 +84,6 @@
    it does not interrupt workout logging or management tasks. */
 .cover-support {
   margin: 28px 0 0;
-  color: var(--color-neutral-600);
+  color: var(--color-neutral-700);
   font-size: 12px;
 }

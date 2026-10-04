@@ -1,6 +1,6 @@
 # Design fix plan — from the 2026-10-04 critique
 
-Status: steps 1–4 done; steps 5–6 planned. Work through the steps in order; each step is its
+Status: steps 1–5 done; step 6 planned. Work through the steps in order; each step is its
 own branch and PR (AGENTS.md: small, reviewable PRs), and each PR updates this
 spec ([README.md](./README.md)) and the [prototype](./prototype.html) when a
 screen changes. Tick a step off here in the PR that ships it.
@@ -149,17 +149,31 @@ is what tells same-date sessions apart.
 Problems measured on the live app: the detector found 23 low-contrast and 15
 undersized-text instances across 6 screens.
 
-- [ ] Interactive text → `--color-accent-700` (decision above).
-- [ ] Muted ink `--color-neutral-600` (`#7d7979`, 3.8:1) → `--color-neutral-700`
+- [x] Interactive text → `--color-accent-700` (decision above).
+- [x] Muted ink `--color-neutral-600` (`#7d7979`, 3.8:1) → `--color-neutral-700`
       for kickers, meta lines, stat labels — clears 21 of the 23 contrast hits.
-- [ ] Placeholders off `--color-neutral-500` (2.6:1).
-- [ ] No text under 11px (all 15 hits are 10px: session-row month, "warm-up"
+- [x] Placeholders off `--color-neutral-500` (2.6:1).
+- [x] No text under 11px (all 15 hits are 10px: session-row month, "warm-up"
       tag, Notes heading, Latest/Best/Change, kg/bodyweight, chart ticks).
-- [ ] Header nav and back links get `min-height: var(--hit-target)` — they
+- [x] Header nav and back links get `min-height: var(--hit-target)` — they
       measure 20px tall today (`Sessions.css:30-36`, and the matching rules in
       `WorkoutDetail.css`, `Progress.css`, `NewWorkout.css`); "Edit" is 25 × 20
       next to a 39 × 44 "Delete".
-- [ ] Progress caveat: drop `text-align: justify` (`Progress.css:245`).
+- [x] Progress caveat: drop `text-align: justify` (`Progress.css:245`).
+
+Shipped decisions (owner, 2026-10-04): focus rings, the input's focus border
+and the caret move to `--color-accent-700` with the text, because plain gold
+measures 2.78:1 on `--color-surface` (the "Tear out this page?" band), under
+the 3:1 a focus indicator needs. Gold stays for hairline outlines, the chart
+line, the selected chip's border and the cover ornament. Every text use of
+`--color-neutral-600` and `-500` became `-700`; warm-up rows still recede
+(5.83:1 against full ink, plus their tag). Header text links share one
+`.header-link` class in `base.css` that gives them a 44 × 44 minimum box;
+"Delete" uses it too. Not changed: session notes stay justified, as the spec
+says. Measured at 390 × 844 on 14 routes (cover, sessions, both session page
+states, new and edit page, progress, exercise index and edit, the four
+privacy/account screens, change password): 0 text under 4.5:1 (was 23), 0 text
+under 11px (was 15), no header link under 44px, no horizontal overflow.
 
 ### 6. Final pass — `/impeccable polish`
 
@@ -177,4 +191,10 @@ undersized-text instances across 6 screens.
 - [ ] Edit exercise: disable "Save name" until the name changes.
 - [ ] "Last" hint: shows a warm-up when the latest session for that exercise
       had only warm-ups — decide whether that is honest enough.
+- [ ] Editing an in-progress session shows two primaries: **Save changes**
+      and **Finish session** are both `btn-primary` (`NewWorkout.tsx:1437`,
+      `:1449`). Found in the step 5 browser pass; step 2 says Save changes is
+      the edit page's primary.
+- [ ] The cover's "Buy me a coffee ↗" link is 15px tall — the one target
+      under 44px the step 5 pass found outside the headers.
 - [ ] Re-run `/impeccable critique http://localhost:5173` and record the score here.
