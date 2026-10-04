@@ -1,3 +1,4 @@
+import type { ExerciseResponse } from '../api/exercises'
 import type {
   CreateWorkoutRequest,
   PutWorkoutExercisesRequest,
@@ -179,6 +180,12 @@ export interface WorkoutExerciseDraft {
   isBodyweight: boolean
   // UI-only switch controlling the added-weight field for bodyweight exercises.
   isAddedWeightEnabled: boolean
+  // The exercise's most recent set before this page, shown as "last time" in
+  // the block. Only a block picked from autocomplete on a new page has one:
+  // that answer was fetched before this page logged anything. The edit page
+  // leaves it out, because there the latest set may be this page's own.
+  // Optional so drafts stored before it existed still restore. Never sent.
+  lastSet?: ExerciseResponse['lastSet']
   sets: WorkoutSetDraft[]
 }
 
@@ -190,6 +197,7 @@ export function createWorkoutExerciseDraft(
   exerciseId: number | null,
   exerciseName: string,
   isBodyweight: boolean,
+  lastSet: ExerciseResponse['lastSet'] = null,
 ): WorkoutExerciseDraft {
   return {
     clientId,
@@ -197,20 +205,38 @@ export function createWorkoutExerciseDraft(
     exerciseName,
     isBodyweight,
     isAddedWeightEnabled: false,
+    lastSet,
     sets: [createEmptySetDraft(initialSetClientId)],
   }
 }
 
-// Return a new block and set array so React can observe the state change; the
-// original draft remains untouched.
-export function addEmptySetToExercise(
+// "+ Add set" is the notebook's ditto mark (design-fix-plan step 3): the new
+// set repeats the one above it — weight, reps and the warm-up flag — so a
+// repeated set costs one tap instead of retyping both numbers. The first set
+// of a block has nothing above it and starts empty. Returns a new block and
+// set array so React can observe the change; the original stays untouched.
+export function addSetToExercise(
   exercise: WorkoutExerciseDraft,
   setClientId: string,
 ): WorkoutExerciseDraft {
-  return {
-    ...exercise,
-    sets: [...exercise.sets, createEmptySetDraft(setClientId)],
-  }
+  const previous = exercise.sets.at(-1)
+  const set =
+    previous === undefined
+      ? createEmptySetDraft(setClientId)
+      : { ...previous, clientId: setClientId }
+  return { ...exercise, sets: [...exercise.sets, set] }
+}
+
+// Undo for a removed set: puts it back where it was. The index is clamped, so
+// a block that has changed since still gets the set back, at its end.
+export function restoreSetToExercise(
+  exercise: WorkoutExerciseDraft,
+  set: WorkoutSetDraft,
+  index: number,
+): WorkoutExerciseDraft {
+  const sets = [...exercise.sets]
+  sets.splice(Math.min(index, sets.length), 0, set)
+  return { ...exercise, sets }
 }
 
 // Replace only the targeted set and preserve fields omitted from the partial
@@ -240,17 +266,47 @@ export function removeSetFromExercise(
   }
 }
 
+// What a set holds, as typed, in the same notation as the "last time" line:
+// "50 kg × 5", "+10 kg × 8", "12 reps". The Undo line names what was removed
+// with it. Empty fields are left out, and an empty set describes as ''.
+export function describeDraftSet(
+  exercise: Pick<WorkoutExerciseDraft, 'isBodyweight' | 'isAddedWeightEnabled'>,
+  set: Pick<WorkoutSetDraft, 'weight' | 'reps'>,
+): string {
+  const showsWeight = !exercise.isBodyweight || exercise.isAddedWeightEnabled
+  const weight = showsWeight ? set.weight.trim() : ''
+  const reps = set.reps.trim()
+  const load =
+    weight === '' ? '' : `${exercise.isBodyweight ? '+' : ''}${weight} kg`
+
+  if (load !== '' && reps !== '') return `${load} × ${reps}`
+  if (load !== '') return load
+  return reps === '' ? '' : `${reps} reps`
+}
+
 export interface PreparedWorkoutDraft {
   workout: CreateWorkoutRequest
   exercises: PutWorkoutExercisesRequest
 }
 
-// `section` says where the problem is, so the editor can open the collapsed
-// page heading when the fault is in one of its fields rather than leave the
-// message pointing at something the user can't see.
+// Where a validation problem is, so the editor can mark that field
+// (aria-invalid, described by the message) and move focus to it — opening the
+// collapsed page heading first when the fault is one of its fields. Problems
+// with no single field to point at ("Add at least one exercise.") say only
+// that they're in the exercises.
+export type DraftFieldRef =
+  | { area: 'heading'; field: 'date' | 'startTime' | 'bodyweightKg' }
+  | { area: 'exercises' }
+  | {
+      area: 'set'
+      exerciseIndex: number
+      setIndex: number
+      field: 'weight' | 'reps'
+    }
+
 export type PrepareWorkoutDraftResult =
   | { ok: true; value: PreparedWorkoutDraft }
-  | { ok: false; section: 'heading' | 'exercises'; message: string }
+  | { ok: false; at: DraftFieldRef; message: string }
 
 function optionalText(value: string): string | null {
   const trimmed = value.trim()
@@ -350,9 +406,14 @@ export function prepareWorkoutDraft(
   const startedAt = createLocalStartedAt(heading.date, heading.startTime)
 
   if (startedAt === null) {
+    // One message covers both fields; point at the date only when the date
+    // itself is malformed, otherwise the time is the one that doesn't exist.
     return {
       ok: false,
-      section: 'heading',
+      at: {
+        area: 'heading',
+        field: /^\d{4}-\d{2}-\d{2}$/.test(heading.date) ? 'startTime' : 'date',
+      },
       message: 'Enter a valid date and start time.',
     }
   }
@@ -363,7 +424,7 @@ export function prepareWorkoutDraft(
     if (bodyweightKg === null || bodyweightKg === 0) {
       return {
         ok: false,
-        section: 'heading',
+        at: { area: 'heading', field: 'bodyweightKg' },
         message: 'Bodyweight must be a number greater than zero.',
       }
     }
@@ -372,7 +433,7 @@ export function prepareWorkoutDraft(
   if (exerciseDrafts.length === 0) {
     return {
       ok: false,
-      section: 'exercises',
+      at: { area: 'exercises' },
       message: 'Add at least one exercise.',
     }
   }
@@ -390,7 +451,7 @@ export function prepareWorkoutDraft(
     if (exercise.exerciseName.trim() === '') {
       return {
         ok: false,
-        section: 'exercises',
+        at: { area: 'exercises' },
         message: `Exercise ${exerciseNumber} needs a name.`,
       }
     }
@@ -398,7 +459,7 @@ export function prepareWorkoutDraft(
     if (exercise.sets.length === 0) {
       return {
         ok: false,
-        section: 'exercises',
+        at: { area: 'exercises' },
         message: `${exercise.exerciseName} needs at least one set.`,
       }
     }
@@ -413,7 +474,7 @@ export function prepareWorkoutDraft(
       if (reps === null) {
         return {
           ok: false,
-          section: 'exercises',
+          at: { area: 'set', exerciseIndex, setIndex, field: 'reps' },
           message: `${exercise.exerciseName}, set ${setNumber}: reps must be a whole number greater than zero.`,
         }
       }
@@ -427,7 +488,7 @@ export function prepareWorkoutDraft(
         if (weight === null) {
           return {
             ok: false,
-            section: 'exercises',
+            at: { area: 'set', exerciseIndex, setIndex, field: 'weight' },
             message: `${exercise.exerciseName}, set ${setNumber}: enter a valid weight.`,
           }
         }

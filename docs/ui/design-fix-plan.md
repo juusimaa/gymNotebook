@@ -1,6 +1,6 @@
 # Design fix plan — from the 2026-10-04 critique
 
-Status: steps 1–2 done; steps 3–6 planned. Work through the steps in order; each step is its
+Status: steps 1–3 done; steps 4–6 planned. Work through the steps in order; each step is its
 own branch and PR (AGENTS.md: small, reviewable PRs), and each PR updates this
 spec ([README.md](./README.md)) and the [prototype](./prototype.html) when a
 screen changes. Tick a step off here in the PR that ships it.
@@ -99,17 +99,27 @@ Problem: "+ Add set" adds an empty row (`addEmptySetToExercise` in
 retyped for every set — paper's ditto mark (〃) costs about eight keystrokes.
 The last set is shown only inside autocomplete, not in the block.
 
-- [ ] "+ Add set" copies the previous set's weight and reps and focuses the
+- [x] "+ Add set" copies the previous set's weight and reps and focuses the
       new weight field (values selected for quick overwrite).
-- [ ] Show "last time: 50 × 5" under each block heading (`lastSet` already
+- [x] Show "last time: 50 × 5" under each block heading (`lastSet` already
       comes from `GET /exercises`).
-- [ ] Remove-set ×: 44px wide (it is 30px, `NewWorkout.css:179`), further
+- [x] Remove-set ×: 44px wide (it is 30px, `NewWorkout.css:179`), further
       from the warm-up toggle, with an inline "Removed … · Undo" line instead
       of instant loss. Same Undo for removing a whole block.
-- [ ] Warm-up toggle keeps a stable accessible name ("Warm-up", with
+- [x] Warm-up toggle keeps a stable accessible name ("Warm-up", with
       `aria-pressed`) instead of flipping between "Working" and "Warm-up".
-- [ ] Validation marks the offending field (`aria-invalid` +
+- [x] Validation marks the offending field (`aria-invalid` +
       `aria-describedby`) rather than only a footer message.
+
+Shipped decisions (owner, 2026-10-04): the ditto copies the warm-up flag
+too, so a run of warm-ups stays warm-ups; the Undo line has no timer and
+lasts until the next edit in that block (a removed block's, until the next
+removal or added exercise), one removal at a time. "last time" appears only
+on a new page's blocks picked from autocomplete — on the edit page the
+server's latest set may be the page's own. Measured at 390 × 844: a repeated
+set went from about 8 actions (tap Add set, tap weight, type 3 digits, tap
+reps, type 1) to 1, and the × is 44 × 44 with 10px to the toggle (was 30px
+wide, 6px away).
 
 ### 4. Search order and main actions — `/impeccable clarify` *(issues 4 and 5, P2)*
 

@@ -899,6 +899,152 @@ document.addEventListener('DOMContentLoaded', async function() {
 `
     );
 
+    // Design fix plan step 3 (set entry speed), matching the React editor:
+    // "Add set" repeats the set above (weight, reps, warm-up); each block shows
+    // "last time" from the exercise index; the toggle is always "Warm-up" with
+    // aria-pressed; × is a 44px target, and removing a set leaves a
+    // "Removed … · Undo" line. The prototype draws that line under the block's
+    // sets; the app draws it in the removed set's place.
+    template = template.split('grid-template-columns:26px 1fr 1fr 92px;gap:8px').join('grid-template-columns:26px 1fr 1fr 80px 48px;gap:8px');
+    replaceEditorAnchor(
+      `<button sc-camel-on-click="{{ s.toggle }}" class="tag {{ s.tagClass }}" style="min-height:44px;width:100%;cursor:pointer;background:none;font-family:var(--font-body);font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">{{ s.tagLabel }}</button>`,
+      `<button sc-camel-on-click="{{ s.toggle }}" aria-pressed="{{ s.pressed }}" style="{{ s.tagStyle }}">Warm-up</button>
+                  <button sc-camel-on-click="{{ s.remove }}" aria-label="{{ s.removeLabel }}" style="justify-self:end;width:44px;min-height:44px;padding:0;border:0;background:none;cursor:pointer;color:var(--color-neutral-700);font-size:22px">×</button>`
+    );
+    replaceEditorAnchor(
+      `              </sc-for>
+              <button class="btn btn-ghost" sc-camel-on-click="{{ b.addSet }}"`,
+      `              </sc-for>
+              <sc-if value="{{ b.hasUndo }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:44px;padding-left:34px;font-size:14px;color:var(--color-neutral-700)">
+                  <span>{{ b.undoText }}</span>
+                  <button sc-camel-on-click="{{ undoRemove }}" style="min-height:44px;padding:0 4px;border:0;background:none;cursor:pointer;font:inherit;color:var(--color-accent-700);text-decoration:underline;text-underline-offset:3px">Undo</button>
+                </div>
+              </sc-if>
+              <button class="btn btn-ghost" sc-camel-on-click="{{ b.addSet }}"`
+    );
+    replaceEditorAnchor(
+      `<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-500)">{{ b.kind }}</div>
+              </div>
+`,
+      `<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-500)">{{ b.kind }}</div>
+              </div>
+              <sc-if value="{{ b.hasLast }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:4px;font-size:13px;color:var(--color-neutral-700)">last time <span style="font-variant-numeric:tabular-nums">{{ b.last }}</span></div>
+              </sc-if>
+`
+    );
+    replaceEditorAnchor(
+      `sets: [...b.sets, { weight: "", reps: "", warmup: false }]`,
+      `sets: [...b.sets, b.sets.length ? { ...b.sets[b.sets.length - 1] } : { weight: "", reps: "", warmup: false }]`
+    );
+    replaceEditorAnchor(
+      `  toggleWarmup = (bi, si) => () => this.setState((s) => ({`,
+      `  removeSet = (bi, si) => (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => {
+      const block = s.draft[bi];
+      if (block.sets.length === 1) return null;
+      const set = block.sets[si];
+      const figures = [set.weight && set.weight + " kg", set.reps].filter(Boolean).join(" × ");
+      return {
+        draft: s.draft.map((b, i) => i !== bi ? b : { ...b, sets: b.sets.filter((x, j) => j !== si) }),
+        removed: { bi, si, set, text: "Removed set " + (si + 1) + (figures ? " · " + figures : "") + "." }
+      };
+    });
+  };
+
+  undoRemove = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => {
+      const r = s.removed;
+      if (!r) return null;
+      return {
+        removed: null,
+        draft: s.draft.map((b, i) => {
+          if (i !== r.bi) return b;
+          const sets = [...b.sets];
+          sets.splice(Math.min(r.si, sets.length), 0, r.set);
+          return { ...b, sets };
+        })
+      };
+    });
+  };
+
+  toggleWarmup = (bi, si) => () => this.setState((s) => ({`
+    );
+    replaceEditorAnchor(
+      `      addSet: this.addSet(bi),
+`,
+      `      addSet: this.addSet(bi),
+      last: (EXERCISES.find((x) => x.name === b.name) || {}).last || "",
+      hasLast: !!(EXERCISES.find((x) => x.name === b.name) || {}).last,
+      hasUndo: !!this.state.removed && this.state.removed.bi === bi,
+      undoText: this.state.removed ? this.state.removed.text : "",
+`
+    );
+    replaceEditorAnchor(
+      `        tagLabel: s.warmup ? "warm-up" : "working",
+        tagClass: s.warmup ? "tag-outline" : "tag-accent",
+`,
+      `        pressed: String(s.warmup),
+        tagStyle: "min-height:44px;width:100%;padding:0 6px;cursor:pointer;border-radius:var(--radius-md);font-family:var(--font-body);font-size:11px;white-space:nowrap;" +
+          (s.warmup
+            ? "background:var(--color-surface);border:1px solid var(--color-neutral-700);color:var(--color-text);font-weight:600"
+            : "background:none;border:1px solid var(--color-neutral-300);color:var(--color-neutral-700)"),
+        removeLabel: "Remove " + b.name + " set " + (si + 1),
+        remove: this.removeSet(bi, si),
+`
+    );
+    replaceEditorAnchor(
+      '      confirmingFinish: this.state.confirmFinish,\n',
+      `      confirmingFinish: this.state.confirmFinish,
+      undoRemove: this.undoRemove,
+`
+    );
+    // Controlled inputs, as in the app: the template's default values are
+    // matched to rows by position, so after a removal a row would keep
+    // showing the removed set's figures.
+    replaceEditorAnchor(
+      `<input class="input" type="text" sc-camel-default-value="{{ s.weight }}"`,
+      `<input class="input" type="text" sc-camel-value="{{ s.weight }}" sc-camel-on-change="{{ s.setWeight }}"`
+    );
+    replaceEditorAnchor(
+      `<input class="input" type="text" sc-camel-default-value="{{ s.reps }}"`,
+      `<input class="input" type="text" sc-camel-value="{{ s.reps }}" sc-camel-on-change="{{ s.setReps }}"`
+    );
+    replaceEditorAnchor(
+      `        remove: this.removeSet(bi, si),
+`,
+      `        remove: this.removeSet(bi, si),
+        setWeight: this.setSetField(bi, si, "weight"),
+        setReps: this.setSetField(bi, si, "reps"),
+`
+    );
+    replaceEditorAnchor(
+      `  undoRemove = (e) => {`,
+      `  setSetField = (bi, si, field) => (e) => {
+    const value = e.target.value;
+    this.setState((s) => ({
+      removed: s.removed && s.removed.bi === bi ? null : s.removed,
+      draft: s.draft.map((b, i) => i !== bi ? b : { ...b, sets: b.sets.map((x, j) => j !== si ? x : { ...x, [field]: value }) })
+    }));
+  };
+
+  undoRemove = (e) => {`
+    );
+    // Any other edit in the block ends the Undo offer, as in the app.
+    replaceEditorAnchor(
+      `    return { draft };
+  });
+
+  removeSet = `,
+      `    return s.removed && s.removed.bi === bi ? { draft, removed: null } : { draft };
+  });
+
+  removeSet = `
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';
