@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link, useNavigate, useParams, useRouteLoaderData } from 'react-router'
 import type { MeResponse } from '../api/auth'
 import { ApiError, isOptionalDetailsConsentRequired } from '../api/client'
@@ -14,7 +15,9 @@ import {
   updateWorkout,
 } from '../api/workouts'
 import {
-  addEmptySetToExercise,
+  addSetToExercise,
+  type DraftFieldRef,
+  describeDraftSet,
   type ExistingWorkoutDraft,
   createExistingWorkoutDraft,
   createInitialHeadingDraft,
@@ -24,9 +27,11 @@ import {
   dropOptionalDetails,
   prepareWorkoutDraft,
   removeSetFromExercise,
+  restoreSetToExercise,
   updateSetInExercise,
   type WorkoutExerciseDraft,
   type WorkoutHeadingDraft,
+  type WorkoutSetDraft,
   type WorkoutSetDraftChanges,
 } from './newWorkoutDraft'
 import { getToken } from '../auth/token'
@@ -41,10 +46,67 @@ import {
   saveEditorDraft,
   type EditorDraftRoute,
 } from './editorDraftStorage'
-import { describeLastSet, normalizeExerciseName } from './exerciseFormat'
+import {
+  describeLastSet,
+  formatLastSet,
+  normalizeExerciseName,
+} from './exerciseFormat'
 import { OptionalDetailsChoice } from './OptionalDetailsConsent'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import './NewWorkout.css'
+
+// The latest removal, kept so its "Removed … · Undo" line can put it back
+// where it was. One at a time: a newer removal replaces it.
+type Removal =
+  | {
+      kind: 'set'
+      exerciseClientId: string
+      set: WorkoutSetDraft
+      index: number
+      description: string
+    }
+  | {
+      kind: 'exercise'
+      exercise: WorkoutExerciseDraft
+      index: number
+      description: string
+    }
+
+// A field a failed save points at, by the set's client id rather than its
+// position, so the mark stays on the right row while rows come and go.
+type InvalidField =
+  | {
+      kind: 'heading'
+      field: 'date' | 'startTime' | 'bodyweightKg' | 'endTime'
+    }
+  | { kind: 'set'; setClientId: string; field: 'weight' | 'reps' }
+
+// The ids that let focus move to a set's inputs right after a render.
+function setFieldId(setClientId: string, field: 'weight' | 'reps'): string {
+  return `set-${setClientId}-${field}`
+}
+
+const HEADING_FIELD_IDS: Record<
+  Extract<InvalidField, { kind: 'heading' }>['field'],
+  string
+> = {
+  date: 'workout-date',
+  startTime: 'startTime',
+  bodyweightKg: 'bodyweightKg',
+  endTime: 'endTime',
+}
+
+const SAVE_MESSAGE_ID = 'new-workout-save-message'
+const UNDO_BUTTON_ID = 'new-workout-undo'
+
+// Moves focus to an input by id. `select` highlights its value, so typing
+// replaces a copied figure instead of appending to it.
+function focusInput(id: string, select = false) {
+  const element = document.getElementById(id)
+  if (!(element instanceof HTMLInputElement)) return
+  element.focus()
+  if (select) element.select()
+}
 
 // /workouts/new and /workouts/:id/edit render the same component. The key
 // gives each route (and each workout) its own editor instance, so the state
@@ -118,6 +180,8 @@ function WorkoutEditor() {
   const [isLoading, setIsLoading] = useState(isEditing)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
   const [confirmingFinish, setConfirmingFinish] = useState(false)
+  const [removal, setRemoval] = useState<Removal | null>(null)
+  const [invalidField, setInvalidField] = useState<InvalidField | null>(null)
   // The page heading's fields start folded behind their one-line summary;
   // a save that fails on one of them opens it again.
   const [isHeadingOpen, setIsHeadingOpen] = useState(false)
@@ -291,6 +355,8 @@ function WorkoutEditor() {
     setConfirmingDiscard(null)
     setRestoredAt(null)
     setSaveMessage(null)
+    setInvalidField(null)
+    setRemoval(null)
     setConfirmingFinish(false)
 
     if (action === 'leave') {
@@ -370,14 +436,26 @@ function WorkoutEditor() {
     pickerRef.current?.scrollIntoView({ block: 'nearest' })
   }, [exerciseQuery, isExerciseSearchLoading, pickerResultCount])
 
+  // Editing a field the last save complained about takes its mark off, and
+  // the message with it: it no longer describes what's on screen.
   function updateHeadingField(field: keyof WorkoutHeadingDraft, value: string) {
+    if (invalidField?.kind === 'heading' && invalidField.field === field) {
+      setInvalidField(null)
+      setSaveMessage(null)
+    }
     setHeading((current) => ({ ...current, [field]: value }))
   }
 
+  // Any edit to a block ends the Undo offer for a set removed from it: the
+  // block has moved on, so putting the set back could land it somewhere
+  // surprising (the agreed rule: the offer lasts until the next edit there).
   function changeExercise(
     clientId: string,
     change: (exercise: WorkoutExerciseDraft) => WorkoutExerciseDraft,
   ) {
+    if (removal?.kind === 'set' && removal.exerciseClientId === clientId) {
+      setRemoval(null)
+    }
     setExercises((current) =>
       current.map((exercise) =>
         exercise.clientId === clientId ? change(exercise) : exercise,
@@ -390,21 +468,206 @@ function WorkoutEditor() {
     setClientId: string,
     changes: WorkoutSetDraftChanges,
   ) {
+    if (
+      invalidField?.kind === 'set' &&
+      invalidField.setClientId === setClientId
+    ) {
+      setInvalidField(null)
+      setSaveMessage(null)
+    }
     changeExercise(exerciseClientId, (exercise) =>
       updateSetInExercise(exercise, setClientId, changes),
     )
   }
 
+  function isInvalid(field: InvalidField): boolean {
+    if (invalidField === null || invalidField.kind !== field.kind) return false
+    return invalidField.kind === 'set' && field.kind === 'set'
+      ? invalidField.setClientId === field.setClientId &&
+          invalidField.field === field.field
+      : invalidField.field === field.field
+  }
+
+  // aria-invalid plus a pointer to the footer message, so a screen reader
+  // hears why when it lands on the field.
+  function invalidProps(field: InvalidField) {
+    return isInvalid(field)
+      ? { 'aria-invalid': true, 'aria-describedby': SAVE_MESSAGE_ID }
+      : {}
+  }
+
+  // "+ Add set" repeats the set above (addSetToExercise) and puts the cursor
+  // in the new row with the copied figure selected: the same set again is
+  // one tap, a heavier one is one tap and the new number. flushSync renders
+  // the row first so it exists to focus, still inside the tap, which is what
+  // lets a phone open its keyboard. A bodyweight block without added weight
+  // has no weight field, so reps it is.
+  function addSet(exercise: WorkoutExerciseDraft) {
+    const setClientId = createClientId()
+    flushSync(() =>
+      changeExercise(exercise.clientId, (current) =>
+        addSetToExercise(current, setClientId),
+      ),
+    )
+    const hasWeight = !exercise.isBodyweight || exercise.isAddedWeightEnabled
+    focusInput(setFieldId(setClientId, hasWeight ? 'weight' : 'reps'), true)
+  }
+
+  // Removing never loses anything for good: the set or block goes, and an
+  // Undo line takes its place and the focus, so a mis-tap at the rack is one
+  // more tap to reverse.
+  function removeSet(exercise: WorkoutExerciseDraft, set: WorkoutSetDraft) {
+    const index = exercise.sets.findIndex(
+      (candidate) => candidate.clientId === set.clientId,
+    )
+    const figures = describeDraftSet(exercise, set)
+    flushSync(() => {
+      changeExercise(exercise.clientId, (current) =>
+        removeSetFromExercise(current, set.clientId),
+      )
+      setRemoval({
+        kind: 'set',
+        exerciseClientId: exercise.clientId,
+        set,
+        index,
+        description: `Removed set ${index + 1}${figures === '' ? '' : ` · ${figures}`}`,
+      })
+    })
+    document.getElementById(UNDO_BUTTON_ID)?.focus()
+  }
+
+  function removeExercise(exercise: WorkoutExerciseDraft) {
+    const index = exercises.findIndex(
+      (candidate) => candidate.clientId === exercise.clientId,
+    )
+    const setCount = exercise.sets.length
+    flushSync(() => {
+      setExercises((current) =>
+        current.filter((candidate) => candidate.clientId !== exercise.clientId),
+      )
+      setRemoval({
+        kind: 'exercise',
+        exercise,
+        index,
+        description: `Removed ${exercise.exerciseName} and its ${setCount === 1 ? 'set' : `${setCount} sets`}`,
+      })
+    })
+    document.getElementById(UNDO_BUTTON_ID)?.focus()
+  }
+
+  // Puts the removed set or block back at its old position (clamped, if the
+  // list has since shrunk) and returns focus to what came back.
+  function undoRemoval() {
+    if (removal === null) return
+    const restored = removal
+    flushSync(() => {
+      setRemoval(null)
+      if (restored.kind === 'set') {
+        setExercises((current) =>
+          current.map((exercise) =>
+            exercise.clientId === restored.exerciseClientId
+              ? restoreSetToExercise(exercise, restored.set, restored.index)
+              : exercise,
+          ),
+        )
+      } else {
+        setExercises((current) => {
+          const next = [...current]
+          next.splice(
+            Math.min(restored.index, next.length),
+            0,
+            restored.exercise,
+          )
+          return next
+        })
+      }
+    })
+    if (restored.kind === 'set') {
+      const weightId = setFieldId(restored.set.clientId, 'weight')
+      focusInput(
+        document.getElementById(weightId) === null
+          ? setFieldId(restored.set.clientId, 'reps')
+          : weightId,
+      )
+    } else {
+      document
+        .getElementById(`remove-block-${restored.exercise.clientId}`)
+        ?.focus()
+    }
+  }
+
+  // The Undo line, drawn where the removed item was. The button carries the
+  // description, so focus landing on it says what Undo would bring back.
+  function renderUndo(className: string) {
+    if (removal === null) return null
+    return (
+      <p className={`new-workout-undo ${className}`}>
+        <span id={`${UNDO_BUTTON_ID}-text`}>{removal.description}.</span>
+        <button
+          id={UNDO_BUTTON_ID}
+          type="button"
+          aria-describedby={`${UNDO_BUTTON_ID}-text`}
+          onClick={undoRemoval}
+        >
+          Undo
+        </button>
+      </p>
+    )
+  }
+
+  // A failed save marks the field it's about and moves focus there, opening
+  // the folded heading first when the field is in it. Problems that aren't
+  // one field's leave focus alone, except an empty page, whose fix is the
+  // exercise search.
+  function pointAtProblem(at: DraftFieldRef | InvalidField) {
+    if ('area' in at && at.area === 'exercises') {
+      setInvalidField(null)
+      if (exercises.length === 0) searchRef.current?.focus()
+      return
+    }
+
+    let field: InvalidField
+    if ('kind' in at) {
+      field = at
+    } else if (at.area === 'heading') {
+      field = { kind: 'heading', field: at.field }
+    } else {
+      const set = exercises[at.exerciseIndex]?.sets[at.setIndex]
+      if (set === undefined) return
+      field = { kind: 'set', setClientId: set.clientId, field: at.field }
+    }
+
+    flushSync(() => {
+      setInvalidField(field)
+      if (field.kind === 'heading') setIsHeadingOpen(true)
+    })
+    focusInput(
+      field.kind === 'heading'
+        ? HEADING_FIELD_IDS[field.field]
+        : setFieldId(field.setClientId, field.field),
+    )
+  }
+
   // Repeated exercise selections remain separate blocks by design.
   function selectExercise(exercise: ExerciseResponse) {
+    // "last time" only on a new page: on the edit page the server's latest
+    // set may already be one of this page's own (newWorkoutDraft.ts).
     const draft = createWorkoutExerciseDraft(
       createClientId(),
       createClientId(),
       exercise.id,
       exercise.name,
       exercise.isBodyweight,
+      isEditing ? null : exercise.lastSet,
     )
 
+    addExerciseBlock(draft)
+  }
+
+  // A new block ends the Undo offer for a removed block, whose position
+  // would otherwise be ambiguous.
+  function addExerciseBlock(draft: WorkoutExerciseDraft) {
+    if (removal?.kind === 'exercise') setRemoval(null)
     setExercises((current) => [...current, draft])
     clearExercisePicker()
   }
@@ -425,8 +688,7 @@ function WorkoutEditor() {
       isBodyweight,
     )
 
-    setExercises((current) => [...current, draft])
-    clearExercisePicker()
+    addExerciseBlock(draft)
   }
 
   function clearExercisePicker() {
@@ -459,8 +721,8 @@ function WorkoutEditor() {
       exercises,
     )
     if (!prepared.ok) {
-      if (prepared.section === 'heading') setIsHeadingOpen(true)
       setSaveMessage(prepared.message)
+      pointAtProblem(prepared.at)
       return
     }
 
@@ -473,8 +735,8 @@ function WorkoutEditor() {
         endTime,
       )
       if (endedAt === null) {
-        setIsHeadingOpen(true)
         setSaveMessage('Enter a valid finish time.')
+        pointAtProblem({ kind: 'heading', field: 'endTime' })
         return
       }
     }
@@ -482,6 +744,7 @@ function WorkoutEditor() {
 
     setSavingAction(finishSession ? 'finish' : 'save')
     setSaveMessage(null)
+    setInvalidField(null)
 
     try {
       if (workoutId === null) {
@@ -697,6 +960,7 @@ function WorkoutEditor() {
                         id="workout-date"
                         type="date"
                         required
+                        {...invalidProps({ kind: 'heading', field: 'date' })}
                         value={heading.date}
                         onChange={(event) =>
                           updateHeadingField('date', event.target.value)
@@ -712,6 +976,10 @@ function WorkoutEditor() {
                         id="startTime"
                         type="time"
                         required
+                        {...invalidProps({
+                          kind: 'heading',
+                          field: 'startTime',
+                        })}
                         value={heading.startTime}
                         onChange={(event) =>
                           updateHeadingField('startTime', event.target.value)
@@ -728,8 +996,17 @@ function WorkoutEditor() {
                         className="input num"
                         id="endTime"
                         type="time"
+                        {...invalidProps({ kind: 'heading', field: 'endTime' })}
                         value={endTime}
-                        onChange={(event) => setEndTime(event.target.value)}
+                        onChange={(event) => {
+                          if (
+                            isInvalid({ kind: 'heading', field: 'endTime' })
+                          ) {
+                            setInvalidField(null)
+                            setSaveMessage(null)
+                          }
+                          setEndTime(event.target.value)
+                        }}
                       />
                       <span className="new-workout-field-hint">
                         Leave empty to mark the session in progress.
@@ -763,6 +1040,10 @@ function WorkoutEditor() {
                             id="bodyweightKg"
                             type="text"
                             inputMode="decimal"
+                            {...invalidProps({
+                              kind: 'heading',
+                              field: 'bodyweightKg',
+                            })}
                             value={heading.bodyweightKg}
                             onChange={(event) =>
                               updateHeadingField(
@@ -844,149 +1125,182 @@ function WorkoutEditor() {
                 </p>
               )}
 
-              {exercises.map((exercise) => (
-                <article
-                  className="new-workout-exercise"
-                  key={exercise.clientId}
-                >
-                  <div className="new-workout-exercise-heading">
-                    <div>
-                      <h3>{exercise.exerciseName}</h3>
-                      <span className="new-workout-exercise-kind">
-                        {exercise.isBodyweight ? 'bodyweight' : 'kg'}
-                      </span>
-                    </div>
-                    <button
-                      className="btn btn-ghost new-workout-remove-exercise"
-                      type="button"
-                      onClick={() =>
-                        setExercises((current) =>
-                          current.filter(
-                            (candidate) =>
-                              candidate.clientId !== exercise.clientId,
-                          ),
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-
-                  {exercise.isBodyweight && (
-                    <button
-                      className="btn btn-secondary new-workout-added-weight"
-                      type="button"
-                      aria-pressed={exercise.isAddedWeightEnabled}
-                      onClick={() =>
-                        setAddedWeightEnabled(
-                          exercise.clientId,
-                          !exercise.isAddedWeightEnabled,
-                        )
-                      }
-                    >
-                      {exercise.isAddedWeightEnabled
-                        ? 'Use bodyweight only'
-                        : 'Add extra weight'}
-                    </button>
-                  )}
-
-                  <div className="new-workout-sets">
-                    {/* One column header per block instead of a caption on
-                        every row. Hidden from screen readers: each input
-                        already names its exercise, set and column. */}
-                    <div className="new-workout-set-columns" aria-hidden="true">
-                      <span></span>
-                      <span>
-                        {!exercise.isBodyweight
-                          ? 'Weight'
-                          : exercise.isAddedWeightEnabled
-                            ? 'Added kg'
-                            : 'Load'}
-                      </span>
-                      <span>Reps</span>
-                    </div>
-                    {exercise.sets.map((set, setIndex) => (
-                      <div className="new-workout-set" key={set.clientId}>
-                        <span className="new-workout-set-number num">
-                          {setIndex + 1}
+              {exercises.map((exercise, exerciseIndex) => (
+                <Fragment key={exercise.clientId}>
+                  {removal?.kind === 'exercise' &&
+                    removal.index === exerciseIndex &&
+                    renderUndo('new-workout-undo-block')}
+                  <article className="new-workout-exercise">
+                    <div className="new-workout-exercise-heading">
+                      <div>
+                        <h3>{exercise.exerciseName}</h3>
+                        <span className="new-workout-exercise-kind">
+                          {exercise.isBodyweight ? 'bodyweight' : 'kg'}
                         </span>
-
-                        {exercise.isBodyweight &&
-                        !exercise.isAddedWeightEnabled ? (
-                          <span className="new-workout-bodyweight-load">
-                            Bodyweight
-                          </span>
-                        ) : (
-                          <input
-                            className="input num"
-                            type="text"
-                            inputMode="decimal"
-                            aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, weight`}
-                            value={set.weight}
-                            onChange={(event) =>
-                              changeSet(exercise.clientId, set.clientId, {
-                                weight: event.target.value,
-                              })
-                            }
-                          />
+                        {/* The paper log's habit of glancing at last week's
+                            line before loading the bar. */}
+                        {exercise.lastSet != null && (
+                          <p className="new-workout-last">
+                            last time{' '}
+                            <span className="num">
+                              {formatLastSet(
+                                exercise.lastSet,
+                                exercise.isBodyweight,
+                              )}
+                            </span>
+                          </p>
                         )}
-
-                        <input
-                          className="input num"
-                          type="text"
-                          inputMode="numeric"
-                          aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, reps`}
-                          value={set.reps}
-                          onChange={(event) =>
-                            changeSet(exercise.clientId, set.clientId, {
-                              reps: event.target.value,
-                            })
-                          }
-                        />
-
-                        <button
-                          className={`new-workout-set-kind ${set.isWarmup ? 'is-warmup' : ''}`}
-                          type="button"
-                          aria-pressed={set.isWarmup}
-                          onClick={() =>
-                            changeSet(exercise.clientId, set.clientId, {
-                              isWarmup: !set.isWarmup,
-                            })
-                          }
-                        >
-                          {set.isWarmup ? 'Warm-up' : 'Working'}
-                        </button>
-
-                        <button
-                          className="new-workout-remove-set"
-                          type="button"
-                          aria-label={`Remove ${exercise.exerciseName} set ${setIndex + 1}`}
-                          disabled={exercise.sets.length === 1}
-                          onClick={() =>
-                            changeExercise(exercise.clientId, (current) =>
-                              removeSetFromExercise(current, set.clientId),
-                            )
-                          }
-                        >
-                          ×
-                        </button>
                       </div>
-                    ))}
-                  </div>
+                      <button
+                        id={`remove-block-${exercise.clientId}`}
+                        className="btn btn-ghost new-workout-remove-exercise"
+                        type="button"
+                        onClick={() => removeExercise(exercise)}
+                      >
+                        Remove
+                      </button>
+                    </div>
 
-                  <button
-                    className="btn btn-ghost new-workout-add-set"
-                    type="button"
-                    onClick={() =>
-                      changeExercise(exercise.clientId, (current) =>
-                        addEmptySetToExercise(current, createClientId()),
-                      )
-                    }
-                  >
-                    + Add set
-                  </button>
-                </article>
+                    {exercise.isBodyweight && (
+                      <button
+                        className="btn btn-secondary new-workout-added-weight"
+                        type="button"
+                        aria-pressed={exercise.isAddedWeightEnabled}
+                        onClick={() =>
+                          setAddedWeightEnabled(
+                            exercise.clientId,
+                            !exercise.isAddedWeightEnabled,
+                          )
+                        }
+                      >
+                        {exercise.isAddedWeightEnabled
+                          ? 'Use bodyweight only'
+                          : 'Add extra weight'}
+                      </button>
+                    )}
+
+                    <div className="new-workout-sets">
+                      {/* One column header per block instead of a caption on
+                          every row. Hidden from screen readers: each input
+                          already names its exercise, set and column. */}
+                      <div
+                        className="new-workout-set-columns"
+                        aria-hidden="true"
+                      >
+                        <span></span>
+                        <span>
+                          {!exercise.isBodyweight
+                            ? 'Weight'
+                            : exercise.isAddedWeightEnabled
+                              ? 'Added kg'
+                              : 'Load'}
+                        </span>
+                        <span>Reps</span>
+                      </div>
+                      {exercise.sets.map((set, setIndex) => (
+                        <Fragment key={set.clientId}>
+                          {removal?.kind === 'set' &&
+                            removal.exerciseClientId === exercise.clientId &&
+                            removal.index === setIndex &&
+                            renderUndo('new-workout-undo-set')}
+                          <div className="new-workout-set">
+                            <span className="new-workout-set-number num">
+                              {setIndex + 1}
+                            </span>
+
+                            {exercise.isBodyweight &&
+                            !exercise.isAddedWeightEnabled ? (
+                              <span className="new-workout-bodyweight-load">
+                                Bodyweight
+                              </span>
+                            ) : (
+                              <input
+                                className="input num"
+                                id={setFieldId(set.clientId, 'weight')}
+                                type="text"
+                                inputMode="decimal"
+                                aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, weight`}
+                                {...invalidProps({
+                                  kind: 'set',
+                                  setClientId: set.clientId,
+                                  field: 'weight',
+                                })}
+                                value={set.weight}
+                                onChange={(event) =>
+                                  changeSet(exercise.clientId, set.clientId, {
+                                    weight: event.target.value,
+                                  })
+                                }
+                              />
+                            )}
+
+                            <input
+                              className="input num"
+                              id={setFieldId(set.clientId, 'reps')}
+                              type="text"
+                              inputMode="numeric"
+                              aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, reps`}
+                              {...invalidProps({
+                                kind: 'set',
+                                setClientId: set.clientId,
+                                field: 'reps',
+                              })}
+                              value={set.reps}
+                              onChange={(event) =>
+                                changeSet(exercise.clientId, set.clientId, {
+                                  reps: event.target.value,
+                                })
+                              }
+                            />
+
+                            {/* A switch with one name: "Warm-up", pressed or
+                                not. A label that flipped between "Working"
+                                and "Warm-up" would make a screen reader
+                                announce the opposite of its state. */}
+                            <button
+                              className="new-workout-set-kind"
+                              type="button"
+                              aria-pressed={set.isWarmup}
+                              onClick={() =>
+                                changeSet(exercise.clientId, set.clientId, {
+                                  isWarmup: !set.isWarmup,
+                                })
+                              }
+                            >
+                              Warm-up
+                            </button>
+
+                            <button
+                              className="new-workout-remove-set"
+                              type="button"
+                              aria-label={`Remove ${exercise.exerciseName} set ${setIndex + 1}`}
+                              disabled={exercise.sets.length === 1}
+                              onClick={() => removeSet(exercise, set)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </Fragment>
+                      ))}
+                      {removal?.kind === 'set' &&
+                        removal.exerciseClientId === exercise.clientId &&
+                        removal.index >= exercise.sets.length &&
+                        renderUndo('new-workout-undo-set')}
+                    </div>
+
+                    <button
+                      className="btn btn-ghost new-workout-add-set"
+                      type="button"
+                      onClick={() => addSet(exercise)}
+                    >
+                      + Add set
+                    </button>
+                  </article>
+                </Fragment>
               ))}
+              {removal?.kind === 'exercise' &&
+                removal.index >= exercises.length &&
+                renderUndo('new-workout-undo-block')}
 
               <div className="field exercise-picker" ref={pickerRef}>
                 <label className="label" htmlFor="exercise-search">
@@ -1078,7 +1392,7 @@ function WorkoutEditor() {
 
           <footer className="new-workout-actions">
             {saveMessage !== null && (
-              <p className="form-message" role="alert">
+              <p id={SAVE_MESSAGE_ID} className="form-message" role="alert">
                 {saveMessage}
               </p>
             )}

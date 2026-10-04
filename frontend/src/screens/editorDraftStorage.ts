@@ -119,10 +119,22 @@ function isSet(value: unknown): value is WorkoutSetDraft {
   )
 }
 
+// The block's "last time" hint. Absent in drafts stored before it existed.
+function isLastSet(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    (isRecord(value) &&
+      (value.weight === null || typeof value.weight === 'number') &&
+      Number.isSafeInteger(value.reps))
+  )
+}
+
 function isExercise(value: unknown): value is WorkoutExerciseDraft {
   return (
     isRecord(value) &&
     hasStrings(value, ['clientId', 'exerciseName']) &&
+    isLastSet(value.lastSet) &&
     (value.exerciseId === null || Number.isSafeInteger(value.exerciseId)) &&
     typeof value.isBodyweight === 'boolean' &&
     typeof value.isAddedWeightEnabled === 'boolean' &&

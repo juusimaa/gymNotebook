@@ -18,7 +18,7 @@ import {
   type EditorDraftRoute,
 } from './editorDraftStorage'
 import {
-  addEmptySetToExercise,
+  addSetToExercise,
   createInitialHeadingDraft,
   createWorkoutExerciseDraft,
 } from './newWorkoutDraft'
@@ -60,7 +60,7 @@ const editPage: EditorDraftRoute = { kind: 'edit', workoutId: 12 }
 const savedAt = new Date(2026, 9, 4, 9, 42)
 
 function sampleContent(): EditorDraftContent {
-  const squat = addEmptySetToExercise(
+  const squat = addSetToExercise(
     createWorkoutExerciseDraft('block-1', 'set-1', 42, 'Back Squat', false),
     'set-2',
   )
@@ -200,6 +200,34 @@ describe('parseStoredEditorDraft', () => {
     ]
 
     expect(parseStoredEditorDraft(storedWith({ exercises }))).toBeNull()
+  })
+
+  // Drafts stored before blocks carried a "last time" set still restore.
+  it('accepts a block with or without a last set', () => {
+    const block = sampleContent().exercises[0]
+    const withoutLastSet: Record<string, unknown> = { ...block }
+    delete withoutLastSet.lastSet
+
+    expect(
+      parseStoredEditorDraft(storedWith({ exercises: [withoutLastSet] })),
+    ).not.toBeNull()
+    expect(
+      parseStoredEditorDraft(
+        storedWith({
+          exercises: [{ ...block, lastSet: { weight: null, reps: 12 } }],
+        }),
+      )?.exercises[0].lastSet,
+    ).toEqual({ weight: null, reps: 12 })
+  })
+
+  it('rejects a malformed last set', () => {
+    const block = sampleContent().exercises[0]
+
+    expect(
+      parseStoredEditorDraft(
+        storedWith({ exercises: [{ ...block, lastSet: { reps: '5' } }] }),
+      ),
+    ).toBeNull()
   })
 
   it('rejects a heading with a missing field', () => {

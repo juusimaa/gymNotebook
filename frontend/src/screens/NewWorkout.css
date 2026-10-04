@@ -220,6 +220,12 @@
   text-transform: uppercase;
 }
 
+.new-workout-last {
+  margin: var(--space-1) 0 0;
+  color: var(--color-neutral-700);
+  font-size: 13px;
+}
+
 .new-workout-remove-exercise {
   flex: 0 0 auto;
   min-height: var(--hit-target);
@@ -241,11 +247,13 @@
 
 /* The column header and the set rows share one grid. Every track is sized
    without reference to its content, so the header's labels line up with
-   the inputs below even though the header has no buttons in it. */
+   the inputs below even though the header has no buttons in it. The last
+   track is 4px wider than the 44px remove button, which sits at its end:
+   that space keeps a thumb aimed at the warm-up toggle off the ×. */
 .new-workout-set,
 .new-workout-set-columns {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 0.62fr) 68px 30px;
+  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 0.62fr) 68px 48px;
   align-items: center;
   gap: 6px;
 }
@@ -278,6 +286,11 @@
   text-align: right;
 }
 
+/* A warm-up row's figures recede, as they do on the session page. */
+.new-workout-set:has(.new-workout-set-kind[aria-pressed='true']) .input {
+  color: var(--color-neutral-700);
+}
+
 .new-workout-bodyweight-load {
   min-width: 0;
   min-height: var(--hit-target);
@@ -294,21 +307,26 @@
   min-height: var(--hit-target);
   padding: 0 8px;
   cursor: pointer;
-  color: var(--color-accent-700);
+  color: var(--color-neutral-700);
   background: transparent;
-  border: 1px solid var(--color-accent-400);
+  border: 1px solid var(--color-neutral-300);
   border-radius: var(--radius-md);
   font-family: var(--font-body);
   font-size: 11px;
 }
 
-.new-workout-set-kind.is-warmup {
-  color: var(--color-neutral-700);
-  border-color: var(--color-neutral-500);
+/* The label never changes, so the state must read at a glance: pressed is
+   a filled tab with a firm edge, unpressed is just its outline. */
+.new-workout-set-kind[aria-pressed='true'] {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-neutral-700);
+  font-weight: 600;
 }
 
 .new-workout-remove-set {
-  width: 30px;
+  justify-self: end;
+  width: var(--hit-target);
   min-height: var(--hit-target);
   padding: 0;
   cursor: pointer;
@@ -328,6 +346,57 @@
   min-height: var(--hit-target);
   margin-top: var(--space-2);
   font-size: 14px;
+}
+
+/* "Removed set 2 · 50 kg × 5." with its Undo, in the removed item's place:
+   quiet prose like the restored-draft note, its one action a text button
+   that still meets the 44px target. No timer — it waits through a rest. */
+.new-workout-undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--hit-target);
+  margin: 0;
+  color: var(--color-neutral-700);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.new-workout-undo-set {
+  padding-left: 28px;
+}
+
+/* A removed block's line keeps the rules: one under it, one over it when
+   no block comes before, and none doubled on the block that follows. */
+.new-workout-undo-block {
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.new-workout-undo-block:not(.new-workout-exercise ~ .new-workout-undo-block) {
+  border-top: 1px solid var(--color-divider);
+}
+
+.new-workout-undo-block + .new-workout-exercise {
+  border-top: 0;
+}
+
+.new-workout-undo button {
+  flex: 0 0 auto;
+  min-height: var(--hit-target);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--color-accent-700);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.new-workout-undo button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .exercise-picker {
@@ -486,12 +555,11 @@
 @media (max-width: 370px) {
   .new-workout-set,
   .new-workout-set-columns {
-    grid-template-columns: 20px minmax(0, 1fr) 58px 62px 26px;
+    grid-template-columns: 20px minmax(0, 1fr) 58px 62px 46px;
     gap: 4px;
   }
 
   .new-workout-set-kind {
     padding-inline: 4px;
-    font-size: 10px;
   }
 }

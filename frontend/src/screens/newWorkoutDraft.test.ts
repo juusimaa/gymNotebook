@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addEmptySetToExercise,
+  addSetToExercise,
   createEmptySetDraft,
   createExistingWorkoutDraft,
   createInitialHeadingDraft,
   createLocalEndedAt,
   createWorkoutExerciseDraft,
+  describeDraftSet,
   describeHeadingWhen,
   dropOptionalDetails,
   hasOptionalDetails,
   prepareWorkoutDraft,
   removeSetFromExercise,
+  restoreSetToExercise,
   updateSetInExercise,
 } from './newWorkoutDraft'
 
@@ -23,7 +25,7 @@ function createTwoSetExercise() {
     false,
   )
 
-  return addEmptySetToExercise(exercise, 'set-2')
+  return addSetToExercise(exercise, 'set-2')
 }
 
 describe('createInitialHeadingDraft', () => {
@@ -153,6 +155,7 @@ describe('createWorkoutExerciseDraft', () => {
       exerciseName: 'Back Squat',
       isBodyweight: false,
       isAddedWeightEnabled: false,
+      lastSet: null,
       sets: [
         {
           clientId: 'set-1',
@@ -179,6 +182,7 @@ describe('createWorkoutExerciseDraft', () => {
       exerciseName: 'Pull-up',
       isBodyweight: true,
       isAddedWeightEnabled: false,
+      lastSet: null,
       sets: [
         {
           clientId: 'set-2',
@@ -189,10 +193,84 @@ describe('createWorkoutExerciseDraft', () => {
       ],
     })
   })
+
+  // Picked from autocomplete, the block keeps the exercise's previous set
+  // for its "last time" line.
+  it('keeps the last set it was picked with', () => {
+    const draft = createWorkoutExerciseDraft(
+      'b',
+      's',
+      42,
+      'Back Squat',
+      false,
+      {
+        weight: 100,
+        reps: 5,
+      },
+    )
+
+    expect(draft.lastSet).toEqual({ weight: 100, reps: 5 })
+  })
 })
 
 describe('set draft operations', () => {
-  it('adds an empty set without changing the original exercise', () => {
+  it('starts an empty block with an empty set', () => {
+    const empty = {
+      ...createWorkoutExerciseDraft('b', 's', 42, 'Back Squat', false),
+      sets: [],
+    }
+
+    expect(addSetToExercise(empty, 'set-1').sets).toEqual([
+      { clientId: 'set-1', weight: '', reps: '', isWarmup: false },
+    ])
+  })
+
+  // The ditto mark: the new set repeats the one above, warm-up flag included.
+  it('repeats the previous set with a new client id', () => {
+    const block = createTwoSetExercise()
+    const filled = updateSetInExercise(block, 'set-2', {
+      weight: '60',
+      reps: '5',
+      isWarmup: true,
+    })
+
+    const result = addSetToExercise(filled, 'set-3')
+
+    expect(result.sets[2]).toEqual({
+      clientId: 'set-3',
+      weight: '60',
+      reps: '5',
+      isWarmup: true,
+    })
+    expect(result.sets[1]).toBe(filled.sets[1])
+    expect(filled.sets).toHaveLength(2)
+  })
+
+  it('restores a removed set at its old position', () => {
+    const block = createTwoSetExercise()
+    const removed = block.sets[0]
+    const without = removeSetFromExercise(block, 'set-1')
+
+    const result = restoreSetToExercise(without, removed, 0)
+
+    expect(result.sets.map((set) => set.clientId)).toEqual(['set-1', 'set-2'])
+    expect(without.sets).toHaveLength(1)
+  })
+
+  it('restores at the end when the block has since shrunk', () => {
+    const block = createTwoSetExercise()
+    const removed = { ...block.sets[1], clientId: 'set-9' }
+
+    const result = restoreSetToExercise(block, removed, 7)
+
+    expect(result.sets.map((set) => set.clientId)).toEqual([
+      'set-1',
+      'set-2',
+      'set-9',
+    ])
+  })
+
+  it('adds an empty set after an empty set without changing the original exercise', () => {
     const original = createWorkoutExerciseDraft(
       'block-1',
       'set-1',
@@ -201,7 +279,7 @@ describe('set draft operations', () => {
       false,
     )
 
-    const result = addEmptySetToExercise(original, 'set-2')
+    const result = addSetToExercise(original, 'set-2')
 
     expect(result).not.toBe(original)
     expect(result.sets).not.toBe(original.sets)
@@ -357,18 +435,20 @@ describe('prepareWorkoutDraft', () => {
   })
 
   it.each([
-    ['no exercises', [], 'Add at least one exercise.'],
+    ['no exercises', [], 'Add at least one exercise.', { area: 'exercises' }],
     [
       'missing reps',
       [{ weight: '100', reps: '' }],
       'Back Squat, set 1: reps must be a whole number greater than zero.',
+      { area: 'set', exerciseIndex: 0, setIndex: 0, field: 'reps' },
     ],
     [
       'missing loaded weight',
       [{ weight: '', reps: '5' }],
       'Back Squat, set 1: enter a valid weight.',
+      { area: 'set', exerciseIndex: 0, setIndex: 0, field: 'weight' },
     ],
-  ])('rejects %s', (_scenario, setValues, expectedMessage) => {
+  ])('rejects %s', (_scenario, setValues, expectedMessage, expectedAt) => {
     const heading = createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5))
     const exercises = setValues.map(({ weight, reps }) => {
       const exercise = createWorkoutExerciseDraft(
@@ -385,7 +465,7 @@ describe('prepareWorkoutDraft', () => {
 
     expect(prepareWorkoutDraft(heading, exercises)).toEqual({
       ok: false,
-      section: 'exercises',
+      at: expectedAt,
       message: expectedMessage,
     })
   })
@@ -397,23 +477,71 @@ describe('prepareWorkoutDraft', () => {
       'an empty start time',
       { startTime: '' },
       'Enter a valid date and start time.',
+      'startTime',
+    ],
+    [
+      'an empty date',
+      { date: '' },
+      'Enter a valid date and start time.',
+      'date',
     ],
     [
       'a zero bodyweight',
       { bodyweightKg: '0' },
       'Bodyweight must be a number greater than zero.',
+      'bodyweightKg',
     ],
-  ])('tags %s as a heading problem', (_scenario, changes, expectedMessage) => {
-    const heading = {
-      ...createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5)),
-      ...changes,
-    }
+  ])(
+    'points %s at its heading field',
+    (_scenario, changes, expectedMessage, field) => {
+      const heading = {
+        ...createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5)),
+        ...changes,
+      }
 
-    expect(prepareWorkoutDraft(heading, [])).toEqual({
-      ok: false,
-      section: 'heading',
-      message: expectedMessage,
+      expect(prepareWorkoutDraft(heading, [])).toEqual({
+        ok: false,
+        at: { area: 'heading', field },
+        message: expectedMessage,
+      })
+    },
+  )
+
+  it('points at the set that fails, not the first set', () => {
+    const block = updateSetInExercise(createTwoSetExercise(), 'set-1', {
+      weight: '100',
+      reps: '5',
     })
+    const second = updateSetInExercise(block, 'set-2', {
+      weight: '100',
+      reps: '0',
+    })
+    const heading = createInitialHeadingDraft(new Date(2026, 8, 15, 7, 5))
+
+    const result = prepareWorkoutDraft(heading, [second])
+
+    expect(result.ok === false && result.at).toEqual({
+      area: 'set',
+      exerciseIndex: 0,
+      setIndex: 1,
+      field: 'reps',
+    })
+  })
+})
+
+describe('describeDraftSet', () => {
+  const loaded = { isBodyweight: false, isAddedWeightEnabled: false }
+  const bodyweight = { isBodyweight: true, isAddedWeightEnabled: false }
+  const added = { isBodyweight: true, isAddedWeightEnabled: true }
+
+  it.each([
+    ['a loaded set', loaded, { weight: '50', reps: '5' }, '50 kg × 5'],
+    ['a bodyweight set', bodyweight, { weight: '', reps: '12' }, '12 reps'],
+    ['added weight', added, { weight: '10', reps: '8' }, '+10 kg × 8'],
+    ['a weight alone', loaded, { weight: '50', reps: '' }, '50 kg'],
+    ['an empty set', loaded, { weight: ' ', reps: '' }, ''],
+  ])('describes %s', (_scenario, exercise, set, expected) => {
+    expect(describeDraftSet(exercise, set)).toBe(expected)
   })
 })
 
