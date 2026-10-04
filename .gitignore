@@ -121,9 +121,15 @@ testcontainers/
 # Skill copies for each agent harness, with bundled platform binaries (~16 MB each)
 .agents/skills/impeccable/
 .github/skills/impeccable/
+.claude/skills/impeccable/
 # Subagent definitions and editor hooks the installer adds alongside the skill
 .github/agents/impeccable-*.agent.md
 .github/hooks/impeccable.json
+.claude/agents/impeccable-*.md
+# Claude Code machine-local settings (the installer writes the Impeccable hook here)
+.claude/settings.local.json
 .codex/
 # Per-machine settings (PRODUCT.md at the repo root stays tracked)
 .impeccable/config.local.json
+# Critique snapshots written per run on this machine
+.impeccable/critique/
