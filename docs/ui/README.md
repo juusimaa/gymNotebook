@@ -11,6 +11,8 @@ Editorial paper, not skeuomorphic notebook. Serif display type (Cormorant Garamo
 
 Tokens live in the prototype's stylesheet as CSS custom properties: `--color-bg #f3f2f2`, `--color-text #201f1d`, `--color-accent #b68235`, `--color-divider`, 100–900 ramps per role, a 4.6px-step spacing scale, 2/4/7px radii and three shadow levels. The frontend lifts these into `tokens.css` and references them by variable — no hard-coded hexes in components.
 
+**Dark mode** follows the OS setting (`prefers-color-scheme`); there is no in-app toggle. It is the same editorial page at night, not a new look: a warm ink-black ground (`--color-bg #191715`), warm off-white type (`--color-text #e1ddd8`) and the same gold, with `--color-surface` a step *lighter* than the ground. Only the colour tokens are redefined, in one `@media (prefers-color-scheme: dark)` block in `tokens.css`. Each 100–900 ramp is mirrored so a step keeps its role, not its hex, so the rules above hold unchanged: `--color-accent-700` labels (7.08:1), `--color-neutral-700` secondary text (6.19:1), plain `--color-accent` (4.81:1) decoration only. Shadows are built from `--color-shadow` (ink in light mode, black in dark), never from `--color-text`. The prototype shows the light theme only.
+
 **Component-library decision (the open item in PLAN.md):** none. The screens need inputs, buttons, tags, lists and one chart; the whole surface is small enough that hand-written CSS against the tokens is less work than restyling a library out of its own look. The chart is hand-drawn SVG (see Progress) and did not change this.
 
 ## Screens

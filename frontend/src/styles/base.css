@@ -9,8 +9,17 @@
   box-sizing: border-box;
 }
 
+/* Both schemes, so the browser's own parts (scrollbars, form controls, the
+   autofill tint) follow the OS setting along with tokens.css's dark block. */
 html {
-  color-scheme: light;
+  color-scheme: light dark;
+}
+
+/* Selected text, including the weight a set field pre-selects on focus, in
+   a gold wash rather than the browser's default blue, which reads as
+   foreign on both paper and ink. The text keeps its own colour. */
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
 body {
