@@ -24,17 +24,12 @@
   line-height: 1.1;
 }
 
-/* Centred, so the plain-text "Exercises" sits level with the 44px "Sessions"
-   link beside it. */
+/* Centred, so the nav sits level with the title block beside it. */
 .progress-nav {
   display: flex;
   align-items: center;
   gap: 14px;
   font-size: 13px;
-}
-
-.progress-nav span {
-  color: var(--color-neutral-500);
 }
 
 .progress-content {
@@ -50,6 +45,32 @@
   overflow-x: auto;
   padding: 0 22px 4px;
   scrollbar-width: thin;
+}
+
+/* The fade that says the row goes on (ExercisePicker in Progress.tsx). It
+   spans the 22px gutter plus a little of the chip under it, so a clipped chip
+   dissolves into the edge instead of being cut off square. Each side is only
+   masked while there is more to scroll that way. Black here is mask alpha,
+   not a colour, so it stays outside tokens.css. */
+.progress-picker.has-more-start,
+.progress-picker.has-more-end {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--fade-start),
+    #000 calc(100% - var(--fade-end)),
+    transparent
+  );
+}
+
+.progress-picker.has-more-start {
+  --fade-start: 40px;
+}
+
+.progress-picker.has-more-end {
+  --fade-end: 40px;
 }
 
 .progress-picker button {
@@ -150,6 +171,11 @@
   font-size: 11px;
 }
 
+/* One date for the whole axis (progressChart.ts, xLast). */
+.progress-chart-x.is-single {
+  justify-content: center;
+}
+
 .progress-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -167,10 +193,12 @@
 
 .progress-stats strong {
   display: block;
-  font-family: var(--font-heading);
-  font-size: 26px;
-  font-weight: var(--font-heading-weight);
-  line-height: 1.2;
+  /* Lora, not the heading face: Cormorant's tabular "11" reads as a Roman
+     "II", and these are the figures the screen exists to show. */
+  font-family: var(--font-body);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .progress-stats span {

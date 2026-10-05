@@ -170,7 +170,7 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
 
         var squat = Assert.Single(body!, e => e.Name == "Back Squat");
-        Assert.Equal(new LastSetResponse(90m, 5), squat.LastSet);
+        Assert.Equal(new LastSetResponse(90m, 5, IsWarmup: false), squat.LastSet);
 
         var bench = Assert.Single(body!, e => e.Name == "Bench Press");
         Assert.Null(bench.LastSet);
@@ -216,7 +216,7 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     }
 
     [Fact]
-    public async Task Search_falls_back_to_a_warm_up_when_the_latest_session_logged_nothing_else()
+    public async Task Search_falls_back_to_a_flagged_warm_up_when_the_latest_session_logged_nothing_else()
     {
         var (token, userId) = await RegisterAndGetUserAsync();
         var backSquat = await SeedExerciseAsync(userId, "Back Squat");
@@ -224,14 +224,14 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
             (SetNumber: 1, Reps: 5, Weight: 90m, IsWarmup: false));
         // Two sessions on the same date: the later start is "latest", and it only has a
-        // warm-up — which is still what "last time" was.
+        // warm-up — which is still what "last time" was, flagged so the hint can say so.
         await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 18, 0, 0, TimeSpan.Zero),
             (SetNumber: 1, Reps: 8, Weight: 40m, IsWarmup: true));
 
         var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
         var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
 
-        Assert.Equal(new LastSetResponse(40m, 8), Assert.Single(body!).LastSet);
+        Assert.Equal(new LastSetResponse(40m, 8, IsWarmup: true), Assert.Single(body!).LastSet);
     }
 
     [Fact]
@@ -328,7 +328,7 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         // the response already reflects the sets the merge re-pointed onto it.
         Assert.Equal(typo.Id, body!.Id);
         Assert.Equal("Bench Press", body.Name);
-        Assert.Equal(new LastSetResponse(65m, 5), body.LastSet);
+        Assert.Equal(new LastSetResponse(65m, 5, IsWarmup: false), body.LastSet);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

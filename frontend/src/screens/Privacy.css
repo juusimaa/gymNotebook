@@ -1,6 +1,7 @@
-/* The three privacy screens (PrivacyNotice, AccountPrivacy, NoticeGate) share
-   this sheet: the notice reads the same wherever it's shown. Layout follows the
-   privacy design preview in docs/ui/prototype.html. */
+/* The privacy and account screens (PrivacyNotice, AccountPrivacy, NoticeGate,
+   the consent, export and deletion screens, and ChangePassword for its title)
+   share this sheet: the notice reads the same wherever it's shown. Layout
+   follows the privacy design preview in docs/ui/prototype.html. */
 
 .notice-meta {
   font-size: 13px;
@@ -14,11 +15,18 @@
   outline: none;
 }
 
+/* The screen's h1, kept at the h2 size it had before it was promoted: these
+   are reading screens, and a 42px title would shout over the notice. */
+.privacy-heading {
+  font-size: 32px;
+}
+
 .notice-sections {
   border-top: 1px solid var(--color-accent);
   padding-top: var(--space-4);
 }
 
+.notice-section h2,
 .notice-section h3 {
   font-size: 21px;
   font-weight: 400;
@@ -39,7 +47,7 @@
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
 }
-.notice-announced h3 {
+.notice-announced h2 {
   font-size: 19px;
   font-weight: 400;
   margin: 0 0 var(--space-1);
@@ -82,7 +90,7 @@
   padding-top: var(--space-4);
   margin-top: var(--space-4);
 }
-.privacy-block h3 {
+.privacy-block h2 {
   font-size: 20px;
   margin: 0 0 var(--space-2);
 }

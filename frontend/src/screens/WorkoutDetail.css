@@ -136,9 +136,9 @@
 .workout-detail-best {
   flex: none;
   color: var(--color-accent-700);
-  font-family: var(--font-heading);
-  font-size: 16px;
-  font-weight: var(--font-heading-weight);
+  /* Lora, not the heading face: Cormorant's tabular "11" reads as "II". */
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
 }
 

@@ -111,9 +111,9 @@ export default function PrivacyNoticeScreen() {
     <main className="page">
       <p className="privacy-back">{back}</p>
       <p className="kicker">Privacy</p>
-      <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+      <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
         Privacy notice
-      </h2>
+      </h1>
       <NoticeContent notice={notice} />
     </main>
   )

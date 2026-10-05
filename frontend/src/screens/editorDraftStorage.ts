@@ -119,14 +119,17 @@ function isSet(value: unknown): value is WorkoutSetDraft {
   )
 }
 
-// The block's "last time" hint. Absent in drafts stored before it existed.
+// The block's "last time" hint. Absent in drafts stored before it existed, and
+// without isWarmup in drafts stored before that flag existed; such a hint just
+// reads as a working set, as it did when it was stored.
 function isLastSet(value: unknown): boolean {
   return (
     value === undefined ||
     value === null ||
     (isRecord(value) &&
       (value.weight === null || typeof value.weight === 'number') &&
-      Number.isSafeInteger(value.reps))
+      Number.isSafeInteger(value.reps) &&
+      (value.isWarmup === undefined || typeof value.isWarmup === 'boolean'))
   )
 }
 

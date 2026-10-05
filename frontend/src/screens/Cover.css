@@ -87,3 +87,14 @@
   color: var(--color-neutral-700);
   font-size: 12px;
 }
+
+/* The link is a full 44px-tall target (spec rule 10) though the type is 12px:
+   the box grows, the line doesn't. Negative margins keep the paragraph where
+   it was. */
+.cover-support a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit-target);
+  margin-block: -14px;
+  padding-inline: 4px;
+}

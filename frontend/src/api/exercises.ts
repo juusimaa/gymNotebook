@@ -2,10 +2,12 @@ import { request } from './client'
 
 // The most recently logged set shown as an autocomplete hint. Weight is null for
 // an unloaded bodyweight set; the whole LastSetResponse is null when the exercise
-// has never been logged.
+// has never been logged. isWarmup is true only when the latest session logged
+// nothing but warm-ups for it.
 interface LastSetResponse {
   weight: number | null
   reps: number
+  isWarmup: boolean
 }
 
 // One user-owned exercise returned by GET /exercises and PATCH /exercises/{id}.

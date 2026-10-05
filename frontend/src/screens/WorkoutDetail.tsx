@@ -234,9 +234,11 @@ export default function WorkoutDetail() {
                           set.reps,
                         )}
                       </span>
-                      <span className="workout-detail-set-tag">
-                        {set.isWarmup ? 'warm-up' : 'working'}
-                      </span>
+                      {/* Only warm-ups are tagged: a working set is the
+                          default, and tagging every row made the tag noise. */}
+                      {set.isWarmup && (
+                        <span className="workout-detail-set-tag">warm-up</span>
+                      )}
                     </li>
                   ))}
                 </ol>

@@ -70,8 +70,9 @@
 }
 
 .session-day {
-  font-family: var(--font-heading);
-  font-size: 23px;
+  /* Lora: in Cormorant a tabular "11" reads as a Roman "II". */
+  font-size: 21px;
+  font-weight: 500;
   line-height: 1;
 }
 

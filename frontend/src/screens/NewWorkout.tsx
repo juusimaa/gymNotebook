@@ -828,6 +828,10 @@ function WorkoutEditor() {
   // Shown on the folded heading line only when the account allows it.
   const summaryTitle = detailsAllowed ? heading.title.trim() : ''
 
+  // Still in progress: a new page, or an edit page without a finish time.
+  // This is what offers "Finish session" and makes it the footer's primary.
+  const canFinish = !isEditing || endTime === ''
+
   if (isLoading) {
     return <main className="page workout-editor-state">Opening page…</main>
   }
@@ -1088,6 +1092,7 @@ function WorkoutEditor() {
                     (showingConsent ? (
                       <OptionalDetailsChoice
                         declineLabel="Not now"
+                        sectionHeadingLevel={3}
                         onAllowed={() => {
                           focusAfterConsent.current = 'title'
                           optionalDetails.setStatus('allowed')
@@ -1433,8 +1438,11 @@ function WorkoutEditor() {
               </div>
             )}
             <div className="new-workout-action-buttons">
+              {/* One primary: Finish session while the session is still in
+                  progress (a new page, or an edit reached by "Continue
+                  logging"), Save changes once it has finished. */}
               <button
-                className={isEditing ? 'btn btn-primary' : 'btn btn-secondary'}
+                className={canFinish ? 'btn btn-secondary' : 'btn btn-primary'}
                 type="button"
                 onClick={() => void saveWorkout(false)}
               >
@@ -1444,7 +1452,7 @@ function WorkoutEditor() {
                     ? 'Save changes'
                     : 'Save page'}
               </button>
-              {(!isEditing || endTime === '') && (
+              {canFinish && (
                 <button
                   className="btn btn-primary"
                   type="button"

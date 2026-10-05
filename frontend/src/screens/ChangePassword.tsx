@@ -4,6 +4,7 @@ import { changePassword } from '../api/auth'
 import { describeAuthError } from '../api/authErrors'
 import { ApiError } from '../api/client'
 import { setToken } from '../auth/token'
+import './Privacy.css'
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
@@ -37,7 +38,7 @@ export default function ChangePassword() {
   return (
     <main className="page">
       <p className="kicker">Training log</p>
-      <h2>Change password</h2>
+      <h1 className="privacy-heading">Change password</h1>
 
       <form
         className="form-stack"

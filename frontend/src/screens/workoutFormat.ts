@@ -65,6 +65,17 @@ export function formatWorkoutTime(
   }).format(new Date(timestamp))
 }
 
+// A day from a timestamp, written out in the interface's English: "4 October
+// 2026". Used for the privacy screens' effective and acknowledgement dates.
+// The locale is fixed rather than the browser's, so a Finnish browser doesn't
+// turn one line of an English screen into "4. lokakuuta 2026"; 'en-FI' matches
+// the clock convention formatWorkoutTime uses.
+export function formatInstantDate(instant: string): string {
+  return new Intl.DateTimeFormat('en-FI', { dateStyle: 'long' }).format(
+    new Date(instant),
+  )
+}
+
 export function formatCount(count: number, singular: string): string {
   return `${count} ${count === 1 ? singular : `${singular}s`}`
 }

@@ -34,7 +34,7 @@ describe('buildProgressChart', () => {
     expect(chart.points).toHaveLength(2)
     expect(chart.points[0].cx).toBeLessThan(chart.points[1].cx)
     expect(chart.xFirst).toBe('8.9.')
-    expect(chart.xLast).toBe('8.9.')
+    expect(chart.xLast).toBeNull()
   })
 
   it('centres a single point in a non-zero snapped range', () => {
@@ -43,11 +43,7 @@ describe('buildProgressChart', () => {
     expect(chart.points[0].cx).toBe(188)
     expect(chart.points[0].cy).toBeGreaterThan(14)
     expect(chart.points[0].cy).toBeLessThan(150)
-    expect(chart.ticks.map((tick) => tick.label)).toEqual([
-      '102.5',
-      '100',
-      '97.5',
-    ])
+    expect(chart.ticks.map((tick) => tick.label)).toEqual(['101', '100', '99'])
   })
 
   it('uses whole-rep bounds for bodyweight history', () => {
@@ -59,7 +55,53 @@ describe('buildProgressChart', () => {
       true,
     )
 
-    expect(chart.ticks.map((tick) => tick.label)).toEqual(['11', '9', '7'])
+    expect(chart.ticks.map((tick) => tick.label)).toEqual([
+      '11',
+      '10',
+      '9',
+      '8',
+      '7',
+    ])
+  })
+
+  it('puts y-ticks on a round step instead of halving the range', () => {
+    // The 2026-10-04 critique's case: a 2.5 kg snap halved into 58.8.
+    const chart = buildProgressChart(
+      [point(1, '2026-10-01', 58), point(2, '2026-10-04', 59.5)],
+      false,
+    )
+
+    expect(chart.ticks.map((tick) => tick.label)).toEqual([
+      '60',
+      '59',
+      '58',
+      '57',
+    ])
+  })
+
+  it('picks a wider round step for a wide range', () => {
+    const chart = buildProgressChart(
+      [point(1, '2026-09-01', 60), point(2, '2026-10-01', 100)],
+      false,
+    )
+
+    expect(chart.ticks.map((tick) => tick.label)).toEqual([
+      '120',
+      '100',
+      '80',
+      '60',
+      '40',
+    ])
+  })
+
+  it('labels the x-axis at both ends when the dates differ', () => {
+    const chart = buildProgressChart(
+      [point(1, '2026-09-01', 90), point(2, '2026-10-04', 95)],
+      false,
+    )
+
+    expect(chart.xFirst).toBe('1.9.')
+    expect(chart.xLast).toBe('4.10.')
   })
 })
 

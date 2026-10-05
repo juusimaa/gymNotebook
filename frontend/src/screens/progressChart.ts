@@ -17,7 +17,9 @@ export interface ProgressChartGeometry {
   ticks: { key: string; y: number; label: string }[]
   points: { key: number; cx: number; cy: number }[]
   xFirst: string
-  xLast: string
+  // null when the first and last points share a date (one session, or two
+  // pages on the same day): the axis then shows that date once, centred.
+  xLast: string | null
 }
 
 function compactNumber(value: number, maximumFractionDigits = 1): string {
@@ -66,6 +68,18 @@ export function formatProgressSet(
   return `${compactNumber(point.weight ?? 0, 2)} kg × ${point.reps}`
 }
 
+// The smallest "round" step — 1, 2 or 5 times a power of ten, and never under
+// one whole kg or rep — that covers `raw`. Ticks on such a step read as
+// figures someone would write down (58 / 59 / 60), not as arithmetic
+// (57.5 / 58.8 / 60).
+function niceStep(raw: number): number {
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(raw, 1)))
+  const step =
+    [1, 2, 5, 10].map((factor) => factor * magnitude).find((s) => s >= raw) ??
+    10 * magnitude
+  return Math.max(step, 1)
+}
+
 export function buildProgressChart(
   points: ExerciseHistoryPointResponse[],
   isBodyweight: boolean,
@@ -78,12 +92,19 @@ export function buildProgressChart(
   const low = Math.min(...values)
   const high = Math.max(...values)
   const padding = (high - low || (isBodyweight ? 2 : 5)) * 0.12
-  const minimum = isBodyweight
-    ? Math.max(0, Math.floor(low - padding))
-    : Math.floor((low - padding) / 2.5) * 2.5
-  const maximum = isBodyweight
-    ? Math.ceil(high + padding)
-    : Math.ceil((high + padding) / 2.5) * 2.5
+  // Aim for about three intervals; snapping both ends outwards to the step
+  // can add one more. Fewer, wider steps would leave the line squeezed into
+  // the middle of the plot.
+  const step = niceStep((high - low + 2 * padding) / 3)
+  const minimum = Math.max(
+    isBodyweight ? 0 : -Infinity,
+    Math.floor((low - padding) / step) * step,
+  )
+  const maximum = Math.ceil((high + padding) / step) * step
+  const tickValues: number[] = []
+  for (let value = maximum; value >= minimum; value -= step) {
+    tickValues.push(value)
+  }
 
   const x = (index: number) =>
     LEFT +
@@ -106,13 +127,16 @@ export function buildProgressChart(
     plotLeft: LEFT,
     plotRight: WIDTH - RIGHT,
     line: chartPoints.map((point) => `${point.cx},${point.cy}`).join(' '),
-    ticks: [maximum, (maximum + minimum) / 2, minimum].map((value) => ({
+    ticks: tickValues.map((value) => ({
       key: String(value),
       y: y(value),
       label: compactNumber(value),
     })),
     points: chartPoints,
     xFirst: formatProgressShortDate(points[0].date),
-    xLast: formatProgressShortDate(points.at(-1)!.date),
+    xLast:
+      points[0].date === points.at(-1)!.date
+        ? null
+        : formatProgressShortDate(points.at(-1)!.date),
   }
 }
