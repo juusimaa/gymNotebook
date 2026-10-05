@@ -1,5 +1,7 @@
 .new-workout {
   height: 100dvh;
+  /* Follows the keyboard where dvh doesn't (iOS Brave/Firefox). */
+  height: var(--visual-viewport-height, 100dvh);
   min-height: 0;
   padding: 0;
   position: relative;
@@ -518,7 +520,6 @@
 
 .finish-confirmation {
   padding: var(--space-3);
-  margin-bottom: var(--space-3);
   background: var(--color-surface);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
