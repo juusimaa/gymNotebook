@@ -185,13 +185,15 @@ infra/                 Bicep for the Azure deployment: Container Apps environmen
 docs/privacy/          versioned privacy notices (notices/, embedded into the API image) + the processing decision
 docs/ui/               UI specification and a clickable HTML prototype
 specs/                 Spec Kit feature specs, plans and task lists (001: privacy and account lifecycle)
-.specify/              Spec Kit templates, scripts and the project constitution
+.specify/memory/       Spec Kit project constitution (the rest of .specify/ is regenerated locally)
 .github/workflows/     test.yml (format checks + tests), build-and-push.yml (images to GHCR), deploy.yml (to Azure)
 .githooks/             pre-commit formatter (dotnet format + prettier)
 docker-compose.yml     frontend + backend + postgres for local dev
 PLAN.md                design, decisions and milestone log
 AGENTS.md              working guidelines for AI assistants in this repo
 ```
+
+AI-tooling folders (`.agents/`, and everything in `.specify/` except `memory/`) are git-ignored and installed per machine. To restore them, reinstall the skills listed in `skills-lock.json` and run `specify init --here` for Spec Kit.
 
 ## Status
 
