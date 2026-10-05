@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useNavigate, useParams, useRouteLoaderData } from 'react-router'
 import type { MeResponse } from '../api/auth'
@@ -509,8 +516,42 @@ function WorkoutEditor() {
         addSetToExercise(current, setClientId),
       ),
     )
+    focusSetEntry(exercise, setClientId)
+  }
+
+  // A set's first field: weight, or reps when the block has no weight field
+  // (bodyweight without added weight). Selected, so a copied figure is typed
+  // over rather than appended to.
+  function focusSetEntry(exercise: WorkoutExerciseDraft, setClientId: string) {
     const hasWeight = !exercise.isBodyweight || exercise.isAddedWeightEnabled
     focusInput(setFieldId(setClientId, hasWeight ? 'weight' : 'reps'), true)
+  }
+
+  // Enter moves forward through a block, because a phone's numeric keypad
+  // has no Tab key: weight → reps → the next set's first field. On the
+  // block's last set it closes the keyboard ("done") rather than adding a
+  // set: a ditto row added by a stray Enter after the final set would be
+  // saved as a set nobody did. "+ Add set" stays the one way to add one.
+  function advanceFromSetField(
+    event: KeyboardEvent<HTMLInputElement>,
+    exercise: WorkoutExerciseDraft,
+    setIndex: number,
+    field: 'weight' | 'reps',
+  ) {
+    // isComposing: Enter that confirms an IME composition isn't "next".
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    const set = exercise.sets[setIndex]
+    if (field === 'weight') {
+      focusInput(setFieldId(set.clientId, 'reps'), true)
+      return
+    }
+    const next = exercise.sets[setIndex + 1]
+    if (next === undefined) {
+      event.currentTarget.blur()
+    } else {
+      focusSetEntry(exercise, next.clientId)
+    }
   }
 
   // Removing never loses anything for good: the set or block goes, and an
@@ -666,10 +707,17 @@ function WorkoutEditor() {
 
   // A new block ends the Undo offer for a removed block, whose position
   // would otherwise be ambiguous.
+  // Focus goes straight to the new block's first set, still inside the tap
+  // that picked it (flushSync renders the row first), so the keyboard opens
+  // on the figure to log. With "last time" written in, that figure is
+  // selected: the same set again is one tap away, a new one is typed over it.
   function addExerciseBlock(draft: WorkoutExerciseDraft) {
     if (removal?.kind === 'exercise') setRemoval(null)
-    setExercises((current) => [...current, draft])
-    clearExercisePicker()
+    flushSync(() => {
+      setExercises((current) => [...current, draft])
+      clearExercisePicker()
+    })
+    focusSetEntry(draft, draft.sets[0].clientId)
   }
 
   // There is deliberately no standalone create-exercise endpoint. A name with
@@ -1225,6 +1273,7 @@ function WorkoutEditor() {
                                 id={setFieldId(set.clientId, 'weight')}
                                 type="text"
                                 inputMode="decimal"
+                                enterKeyHint="next"
                                 aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, weight`}
                                 {...invalidProps({
                                   kind: 'set',
@@ -1237,6 +1286,14 @@ function WorkoutEditor() {
                                     weight: event.target.value,
                                   })
                                 }
+                                onKeyDown={(event) =>
+                                  advanceFromSetField(
+                                    event,
+                                    exercise,
+                                    setIndex,
+                                    'weight',
+                                  )
+                                }
                               />
                             )}
 
@@ -1245,6 +1302,11 @@ function WorkoutEditor() {
                               id={setFieldId(set.clientId, 'reps')}
                               type="text"
                               inputMode="numeric"
+                              enterKeyHint={
+                                setIndex === exercise.sets.length - 1
+                                  ? 'done'
+                                  : 'next'
+                              }
                               aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, reps`}
                               {...invalidProps({
                                 kind: 'set',
@@ -1256,6 +1318,14 @@ function WorkoutEditor() {
                                 changeSet(exercise.clientId, set.clientId, {
                                   reps: event.target.value,
                                 })
+                              }
+                              onKeyDown={(event) =>
+                                advanceFromSetField(
+                                  event,
+                                  exercise,
+                                  setIndex,
+                                  'reps',
+                                )
                               }
                             />
 

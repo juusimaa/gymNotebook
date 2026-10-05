@@ -227,3 +227,27 @@ warns about a second page while one is in progress; Progress opens on the
 alphabetically first exercise and mixes "4.10." with "04 Oct" and whole
 figures with one-decimal changes; "Untitled session" fills the title slot
 without consent; header link order differs per screen.
+
+## After the plan
+
+### First-set speed — `/impeccable optimize` *(2026-10-05 critique, P1)*
+
+Problem: picking an exercise left focus on `<body>` and set 1 empty, though
+"last time 55 kg × 3" sat right above it, and Enter did nothing in a set
+field — a first set cost about 5 actions (tap weight, type, tap reps, type,
+sometimes tap Warm-up), and the numeric keypad has no Tab key.
+
+- [x] After a pick, focus set 1's first field.
+- [x] Write "last time" into set 1 (weight, reps, warm-up flag), selected.
+- [x] Enter advances weight → reps → the next set.
+- [x] Vitest coverage for the prefill.
+
+Shipped decisions (owner, 2026-10-05): a warm-up "last time" is copied as a
+warm-up, like the ditto copies the flag. Enter on a block's last reps closes
+the keyboard ("done") instead of adding a set, as first planned: the new row
+would be a filled ditto, and a stray Enter after the final set would save a
+set nobody did; "+ Add set" stays the one way to add one. Measured: the same
+set as last time went from about 5 actions to 1 (the pick); a new weight with
+the same reps is the pick plus typing the weight; a new weight and reps is
+pick, weight, Enter, reps — no taps on fields.
+
