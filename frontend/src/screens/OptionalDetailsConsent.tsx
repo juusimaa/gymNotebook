@@ -16,6 +16,7 @@ import {
   clearEditorDrafts,
   stripEditorDraftDetails,
 } from './editorDraftStorage'
+import { formatInstantDate } from './workoutFormat'
 import './Privacy.css'
 
 // Consent for a workout's title, location, notes and bodyweight (specs/001
@@ -30,28 +31,31 @@ import './Privacy.css'
 //   - The /account/privacy/optional-details screen, which also asks the
 //     notebook gate's transition question.
 
-function formatDate(instant: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(
-    new Date(instant),
-  )
-}
-
 function pluralWorkouts(count: number): string {
   return count === 1 ? '1 workout' : `${count} workouts`
 }
 
 // The statement's text, rendered as text nodes only, like the notice.
-function StatementText({ statement }: { statement: OptionalDetailsStatement }) {
+// Its section headings sit one level under whatever heads the statement: h2 on
+// the consent screen (under its h1), h3 inside the editor's details section.
+function StatementText({
+  statement,
+  sectionHeadingLevel,
+}: {
+  statement: OptionalDetailsStatement
+  sectionHeadingLevel: 2 | 3
+}) {
+  const SectionHeading = sectionHeadingLevel === 2 ? 'h2' : 'h3'
   return (
     <>
       <p className="notice-meta num">
         Statement version {statement.version} · effective{' '}
-        {formatDate(statement.effectiveAt)}
+        {formatInstantDate(statement.effectiveAt)}
       </p>
       <div className="notice-sections">
         {statement.sections.map((section) => (
           <section key={section.id} className="notice-section">
-            <h3>{section.heading}</h3>
+            <SectionHeading>{section.heading}</SectionHeading>
             {section.paragraphs.map((paragraph, i) => (
               <p key={i}>{paragraph}</p>
             ))}
@@ -70,10 +74,12 @@ export function OptionalDetailsChoice({
   declineLabel,
   onAllowed,
   onDeclined,
+  sectionHeadingLevel = 2,
 }: {
   declineLabel: string
   onAllowed: (consent: Consent) => void
   onDeclined: () => void
+  sectionHeadingLevel?: 2 | 3
 }) {
   const [statement, setStatement] = useState<
     OptionalDetailsStatement | null | undefined
@@ -175,7 +181,10 @@ export function OptionalDetailsChoice({
 
   return (
     <div className="consent-panel">
-      <StatementText statement={statement} />
+      <StatementText
+        statement={statement}
+        sectionHeadingLevel={sectionHeadingLevel}
+      />
       {message !== null && (
         <p className="form-message" role="alert">
           {message}
@@ -462,9 +471,9 @@ export default function OptionalDetailsConsent() {
       <main className="page">
         {!fromGate && backLink}
         <p className="kicker">Optional workout details</p>
-        <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+        <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
           Details removed
-        </h2>
+        </h1>
         <p role="status">
           {step.clearedWorkouts === 0
             ? 'No optional details were left to remove.'
@@ -489,9 +498,9 @@ export default function OptionalDetailsConsent() {
       <main className="page">
         {!fromGate && backLink}
         <p className="kicker">Optional workout details</p>
-        <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+        <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
           Remove optional details?
-        </h2>
+        </h1>
         <WithdrawReview
           pendingWorkoutCount={
             details.transitionPending ? details.pendingWorkoutCount : null
@@ -509,13 +518,14 @@ export default function OptionalDetailsConsent() {
       <main className="page">
         {backLink}
         <p className="kicker">Optional workout details</p>
-        <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+        <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
           Title, location, notes and bodyweight
-        </h2>
+        </h1>
         {status !== null && <p role="status">{status}</p>}
         <p>
-          You allowed these details on {formatDate(details.consent.consentedAt)}{' '}
-          (statement version {details.consent.statementVersion}).
+          You allowed these details on{' '}
+          {formatInstantDate(details.consent.consentedAt)} (statement version{' '}
+          {details.consent.statementVersion}).
         </p>
         <p className="muted">
           Withdrawing removes them from every workout. The rest of your notebook
@@ -537,9 +547,9 @@ export default function OptionalDetailsConsent() {
       <main className="page">
         {!fromGate && backLink}
         <p className="kicker">Before you open the notebook</p>
-        <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+        <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
           Keep your optional details?
-        </h2>
+        </h1>
         <p>
           {pluralWorkouts(details.pendingWorkoutCount)} in your notebook{' '}
           {details.pendingWorkoutCount === 1 ? 'has' : 'have'} a title,
@@ -564,9 +574,9 @@ export default function OptionalDetailsConsent() {
     <main className="page">
       {backLink}
       <p className="kicker">Optional workout details</p>
-      <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+      <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
         Title, location, notes and bodyweight
-      </h2>
+      </h1>
       <OptionalDetailsChoice
         declineLabel="Not now"
         onAllowed={(consent) => allowed(consent, state)}

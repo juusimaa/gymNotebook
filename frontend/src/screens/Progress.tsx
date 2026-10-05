@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
   getExerciseHistory,
@@ -138,7 +138,9 @@ export default function Progress() {
           <Link className="header-link" to="/workouts">
             Sessions
           </Link>
-          <span aria-disabled="true">Exercises</span>
+          <Link className="header-link" to="/exercises">
+            Exercises
+          </Link>
         </nav>
       </header>
 
@@ -155,7 +157,7 @@ export default function Progress() {
           </section>
         ) : (
           <>
-            <div className="progress-picker" aria-label="Exercise">
+            <ExercisePicker>
               {exercises.map((exercise) => (
                 <button
                   className={
@@ -171,7 +173,7 @@ export default function Progress() {
                   {exercise.name}
                 </button>
               ))}
-            </div>
+            </ExercisePicker>
 
             {historyMessage !== null ? (
               <section className="progress-inline-state">
@@ -195,6 +197,59 @@ export default function Progress() {
         )}
       </div>
     </main>
+  )
+}
+
+// The chip row scrolls sideways, and at 390px a long name ("Ylätalja
+// vastaotteella") runs past the edge with nothing to say the row goes on. Each
+// edge fades while there is more to scroll that way, and stops fading once the
+// row reaches it, so the last chip never stays faded. The edge state is read
+// from the element on scroll and resize rather than computed from the chips.
+function ExercisePicker({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState({ start: false, end: false })
+
+  useEffect(() => {
+    const element = ref.current
+    if (element === null) {
+      return
+    }
+
+    function update() {
+      if (element === null) {
+        return
+      }
+      const { scrollLeft, scrollWidth, clientWidth } = element
+      // A pixel of slack: scroll positions are fractional on zoomed screens.
+      setMore({
+        start: scrollLeft > 1,
+        end: scrollLeft + clientWidth < scrollWidth - 1,
+      })
+    }
+
+    update()
+    element.addEventListener('scroll', update, { passive: true })
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    return () => {
+      element.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
+  }, [])
+
+  const className = [
+    'progress-picker',
+    more.start && 'has-more-start',
+    more.end && 'has-more-end',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  return (
+    // role="group": an aria-label on a plain div isn't announced.
+    <div className={className} role="group" aria-label="Exercise" ref={ref}>
+      {children}
+    </div>
   )
 }
 
@@ -293,9 +348,11 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
             </span>
           ))}
         </div>
-        <figcaption className="progress-chart-x num">
+        <figcaption
+          className={`progress-chart-x num${chart.xLast === null ? ' is-single' : ''}`}
+        >
           <span>{chart.xFirst}</span>
-          <span>{chart.xLast}</span>
+          {chart.xLast !== null && <span>{chart.xLast}</span>}
         </figcaption>
       </figure>
 

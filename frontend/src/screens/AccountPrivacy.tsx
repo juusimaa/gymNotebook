@@ -3,18 +3,13 @@ import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { getAccountPrivacy, type AccountPrivacyState } from '../api/privacy'
 import { clearToken } from '../auth/token'
+import { formatInstantDate } from './workoutFormat'
 import './Privacy.css'
 
 // /account/privacy — "Privacy & account", reached from the cover (specs/001
 // contracts/ui.md). Under the auth guard but outside the notice gate, so it
 // stays usable before the current notice is acknowledged; opening it records
 // nothing. It links to the notice, the export and account deletion.
-
-function formatDate(instant: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(
-    new Date(instant),
-  )
-}
 
 // The acknowledgement status in words. "Continued past" rather than "accepted"
 // or "agreed to": the record is that the notice was shown, not consent.
@@ -24,16 +19,16 @@ function describeStatus(state: AccountPrivacyState): string {
     return `You haven't continued past the current notice (version ${state.currentNoticeVersion}) yet. It will be shown when you next open the notebook.`
   }
   if (state.requiresAcknowledgement) {
-    return `A new notice (version ${state.currentNoticeVersion}) is in effect. You last continued past version ${ack.noticeVersion} on ${formatDate(ack.acknowledgedAt)}. The new version will be shown when you next open the notebook.`
+    return `A new notice (version ${state.currentNoticeVersion}) is in effect. You last continued past version ${ack.noticeVersion} on ${formatInstantDate(ack.acknowledgedAt)}. The new version will be shown when you next open the notebook.`
   }
-  return `You continued past the current notice (version ${ack.noticeVersion}) on ${formatDate(ack.acknowledgedAt)}.`
+  return `You continued past the current notice (version ${ack.noticeVersion}) on ${formatInstantDate(ack.acknowledgedAt)}.`
 }
 
 // User story 6's consent status in words, for the optional-details block.
 function describeOptionalDetails(state: AccountPrivacyState): string {
   const details = state.optionalDetails
   if (details.consent !== null) {
-    return `You allowed a title, location, notes and bodyweight on your workouts on ${formatDate(details.consent.consentedAt)}.`
+    return `You allowed a title, location, notes and bodyweight on your workouts on ${formatInstantDate(details.consent.consentedAt)}.`
   }
   if (details.transitionPending) {
     const workouts =
@@ -134,12 +129,12 @@ export default function AccountPrivacy() {
     <main className="page">
       <p className="privacy-back">{backToCover}</p>
       <p className="kicker">Account</p>
-      <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+      <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
         Privacy &amp; account
-      </h2>
+      </h1>
 
       <section className="privacy-block" aria-labelledby="privacy-notice">
-        <h3 id="privacy-notice">Privacy notice</h3>
+        <h2 id="privacy-notice">Privacy notice</h2>
         <p>{describeStatus(state)}</p>
         <p className="muted">
           Continuing past the notice records which version was shown to you. It
@@ -151,7 +146,7 @@ export default function AccountPrivacy() {
       </section>
 
       <section className="privacy-block" aria-labelledby="privacy-details">
-        <h3 id="privacy-details">Optional workout details</h3>
+        <h2 id="privacy-details">Optional workout details</h2>
         <p>{describeOptionalDetails(state)}</p>
         {state.optionalDetails.consent !== null ? (
           // Straight to the review step: withdrawing takes no more steps than
@@ -175,7 +170,7 @@ export default function AccountPrivacy() {
       </section>
 
       <section className="privacy-block" aria-labelledby="privacy-export">
-        <h3 id="privacy-export">Export your notebook</h3>
+        <h2 id="privacy-export">Export your notebook</h2>
         <p>
           Get one JSON file with your account, exercises, sessions and sets.
         </p>
@@ -185,7 +180,7 @@ export default function AccountPrivacy() {
       </section>
 
       <section className="privacy-block" aria-labelledby="privacy-delete">
-        <h3 id="privacy-delete">Delete your account</h3>
+        <h2 id="privacy-delete">Delete your account</h2>
         <p>
           Permanently remove your account and notebook, and sign out every
           session. The next screen explains what goes and what remains for a
@@ -197,7 +192,7 @@ export default function AccountPrivacy() {
       </section>
 
       <section className="privacy-block" aria-labelledby="privacy-contact">
-        <h3 id="privacy-contact">Questions and requests</h3>
+        <h2 id="privacy-contact">Questions and requests</h2>
         <p>
           For questions about your information, or to ask for access, correction
           or deletion, use the contact details in the notice.

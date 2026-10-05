@@ -81,9 +81,9 @@ export default function DeleteAccount() {
     return (
       <main className="page">
         <p className="kicker">Delete your account</p>
-        <h2 className="privacy-heading" ref={unknownRef} tabIndex={-1}>
+        <h1 className="privacy-heading" ref={unknownRef} tabIndex={-1}>
           {failure.heading}
-        </h2>
+        </h1>
         <p className="export-intro" role="alert">
           {failure.message}
         </p>
@@ -110,7 +110,7 @@ export default function DeleteAccount() {
       <main className="page">
         {back}
         <p className="kicker">Before you leave</p>
-        <h2 className="privacy-heading">Delete your account</h2>
+        <h1 className="privacy-heading">Delete your account</h1>
         <p className="export-intro">
           This permanently removes your account, exercises, sessions, notes and
           sets, and the record of which privacy notice you continued past. Every
@@ -121,7 +121,7 @@ export default function DeleteAccount() {
         </Link>
 
         <section className="privacy-block" aria-labelledby="deletion-remains">
-          <h3 id="deletion-remains">What remains for a limited time</h3>
+          <h2 id="deletion-remains">What remains for a limited time</h2>
           <p>
             Backup copies may keep your notebook for up to 30 calendar days
             after the deletion. They can&apos;t be used as your notebook.
@@ -158,9 +158,9 @@ export default function DeleteAccount() {
     <main className="page">
       {back}
       <p className="kicker">Delete your account</p>
-      <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+      <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
         Confirm with your password
-      </h2>
+      </h1>
       <p className="export-intro">
         Deleting your account can&apos;t be undone. Your account and notebook
         are removed as soon as you confirm.

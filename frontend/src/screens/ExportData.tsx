@@ -116,7 +116,7 @@ export default function ExportData() {
         </Link>
       </p>
       <p className="kicker">Your information</p>
-      <h2 className="privacy-heading">Take a copy</h2>
+      <h1 className="privacy-heading">Take a copy</h1>
       <p className="export-intro">
         Download one JSON file containing your account details, exercises,
         sessions, notes and sets. The file explains its fields and keeps each

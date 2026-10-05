@@ -168,9 +168,9 @@ export default function NoticeGate() {
   return (
     <main className="page">
       <p className="kicker">Before you open the notebook</p>
-      <h2 className="privacy-heading" ref={headingRef} tabIndex={-1}>
+      <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
         Privacy notice
-      </h2>
+      </h1>
       <NoticeContent notice={notice} />
 
       <div className="notice-gate-footer">

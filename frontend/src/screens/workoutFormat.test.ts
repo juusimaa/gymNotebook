@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatBestSet,
   formatCount,
+  formatInstantDate,
   formatWorkoutDate,
   formatWorkoutLongDate,
   formatSetLoad,
@@ -35,6 +36,13 @@ describe('formatWorkoutTime', () => {
     ['winter time', '2026-01-08T05:15:00Z', '07.15'],
   ])('formats %s in the Finnish convention', (_, timestamp, expected) => {
     expect(formatWorkoutTime(timestamp, 'Europe/Helsinki')).toBe(expected)
+  })
+})
+
+describe('formatInstantDate', () => {
+  it('writes the day in English whatever the browser locale', () => {
+    // Midday UTC, so the day is the same in any time zone the test runs in.
+    expect(formatInstantDate('2026-10-04T12:00:00Z')).toBe('4 October 2026')
   })
 })
 

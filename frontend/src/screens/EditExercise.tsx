@@ -67,8 +67,16 @@ export default function EditExercise() {
       normalizeExerciseName(candidate.name) === normalizedName,
   )
 
+  // Nothing to save until the form differs from the exercise as loaded; the
+  // primary stays disabled until then. Casing counts as a change (the user's
+  // to keep), so the comparison is on the trimmed text, not the normalized one.
+  const nameChanged = exercise !== null && name.trim() !== exercise.name
+  const loadChanged =
+    exercise !== null && isBodyweight !== exercise.isBodyweight
+  const hasChanges = nameChanged || loadChanged
+
   async function saveExercise() {
-    if (exercise === null || isSaving) {
+    if (exercise === null || isSaving || !hasChanges) {
       return
     }
 
@@ -204,12 +212,18 @@ export default function EditExercise() {
             <Link className="btn btn-ghost" to="/exercises">
               Cancel
             </Link>
-            <button className="btn btn-primary" type="submit">
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={!hasChanges}
+            >
               {isSaving
                 ? 'Saving…'
-                : collision === undefined
-                  ? 'Save name'
-                  : `Merge into ${collision.name}`}
+                : collision !== undefined
+                  ? `Merge into ${collision.name}`
+                  : loadChanged
+                    ? 'Save changes'
+                    : 'Save name'}
             </button>
           </div>
         </fieldset>
