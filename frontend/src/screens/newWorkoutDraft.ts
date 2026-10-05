@@ -189,8 +189,27 @@ export interface WorkoutExerciseDraft {
   sets: WorkoutSetDraft[]
 }
 
-// A new exercise block always begins with one editable set. Both client IDs are
-// supplied by the caller so this factory stays deterministic and easy to test.
+// The ditto mark across sessions: a block picked with a "last time" set
+// starts with that set written in, weight, reps and warm-up flag, because
+// "write what you did last time, then adjust" is how a paper log is filled
+// in. The figure is a draft like any other — the editor selects it on focus,
+// so a different number is simply typed over it.
+function createSetDraftFromLastSet(
+  clientId: string,
+  lastSet: NonNullable<ExerciseResponse['lastSet']>,
+): WorkoutSetDraft {
+  return {
+    clientId,
+    weight: lastSet.weight === null ? '' : String(lastSet.weight),
+    reps: String(lastSet.reps),
+    // Absent on a hint restored from a draft stored before the flag existed.
+    isWarmup: lastSet.isWarmup === true,
+  }
+}
+
+// A new exercise block always begins with one editable set: last time's, when
+// there is one, otherwise empty. Both client IDs are supplied by the caller so
+// this factory stays deterministic and easy to test.
 export function createWorkoutExerciseDraft(
   clientId: string,
   initialSetClientId: string,
@@ -204,9 +223,16 @@ export function createWorkoutExerciseDraft(
     exerciseId,
     exerciseName,
     isBodyweight,
-    isAddedWeightEnabled: false,
+    // A bodyweight exercise last done with added weight opens with the weight
+    // field showing, so the copied added weight is visible and editable.
+    isAddedWeightEnabled:
+      isBodyweight && lastSet !== null && lastSet.weight !== null,
     lastSet,
-    sets: [createEmptySetDraft(initialSetClientId)],
+    sets: [
+      lastSet === null
+        ? createEmptySetDraft(initialSetClientId)
+        : createSetDraftFromLastSet(initialSetClientId, lastSet),
+    ],
   }
 }
 

@@ -1220,6 +1220,24 @@ document.addEventListener('DOMContentLoaded', async function() {
       '<a href="https://buymeacoffee.com/jouni" target="_blank" rel="noreferrer" style="display:inline-flex;align-items:center;min-height:44px;margin-block:-14px;padding-inline:4px">'
     );
 
+    // First-set speed (after the design fix plan; critique 2026-10-05),
+    // matching the React editor: a block picked with a "last time" set starts
+    // with that set written in — the ditto mark across sessions — so the
+    // same set as last time costs no typing. The app also focuses that set's
+    // weight with the figure selected and makes Enter move weight → reps →
+    // the next set; the static preview shows only the prefill.
+    replacePolishAnchor(
+      'draft: [...s.draft, { name, sets: [{ weight: "", reps: "", warmup: false }] }]',
+      'draft: [...s.draft, { name, sets: [(() => {\n' +
+        '      const last = (EXERCISES.find((x) => x.name === name) || {}).last || "";\n' +
+        '      const loaded = last.match(/^\\+?([\\d.]+) kg × (\\d+)/);\n' +
+        '      const reps = last.match(/^(\\d+) reps/);\n' +
+        '      if (loaded) return { weight: loaded[1], reps: loaded[2], warmup: false };\n' +
+        '      if (reps) return { weight: "", reps: reps[1], warmup: false };\n' +
+        '      return { weight: "", reps: "", warmup: false };\n' +
+        '    })()] }]'
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';

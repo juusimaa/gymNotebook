@@ -212,6 +212,71 @@ describe('createWorkoutExerciseDraft', () => {
 
     expect(draft.lastSet).toEqual({ weight: 100, reps: 5, isWarmup: false })
   })
+
+  // The ditto mark across sessions: set 1 is last time's set, written in.
+  it('writes last time into the first set', () => {
+    const draft = createWorkoutExerciseDraft(
+      'b',
+      's',
+      42,
+      'Back Squat',
+      false,
+      {
+        weight: 92.5,
+        reps: 5,
+        isWarmup: false,
+      },
+    )
+
+    expect(draft.sets).toEqual([
+      { clientId: 's', weight: '92.5', reps: '5', isWarmup: false },
+    ])
+    expect(draft.isAddedWeightEnabled).toBe(false)
+  })
+
+  it('copies a warm-up last time as a warm-up', () => {
+    const draft = createWorkoutExerciseDraft(
+      'b',
+      's',
+      42,
+      'Overhead Press',
+      false,
+      {
+        weight: 20,
+        reps: 10,
+        isWarmup: true,
+      },
+    )
+
+    expect(draft.sets[0]).toMatchObject({
+      weight: '20',
+      reps: '10',
+      isWarmup: true,
+    })
+  })
+
+  it('leaves weight empty for an unloaded bodyweight last time', () => {
+    const draft = createWorkoutExerciseDraft('b', 's', 7, 'Pull-up', true, {
+      weight: null,
+      reps: 8,
+      isWarmup: false,
+    })
+
+    expect(draft.sets[0]).toMatchObject({ weight: '', reps: '8' })
+    expect(draft.isAddedWeightEnabled).toBe(false)
+  })
+
+  // Otherwise the copied added weight would sit in a hidden field.
+  it('shows the weight field for a bodyweight last time with added weight', () => {
+    const draft = createWorkoutExerciseDraft('b', 's', 7, 'Pull-up', true, {
+      weight: 10,
+      reps: 6,
+      isWarmup: false,
+    })
+
+    expect(draft.sets[0]).toMatchObject({ weight: '10', reps: '6' })
+    expect(draft.isAddedWeightEnabled).toBe(true)
+  })
 })
 
 describe('set draft operations', () => {
