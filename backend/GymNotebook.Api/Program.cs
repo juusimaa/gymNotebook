@@ -1334,7 +1334,8 @@ static int ParseUserId(ClaimsPrincipal user)
 // started_at desc — the same ordering the sessions list uses), then within it the last
 // block by position, then the highest set number — with non-warm-up sets ranked ahead of
 // warm-ups. So the hint is the final working set of the last session, and only degrades to
-// a warm-up when that session logged nothing else for the exercise. A working set from an
+// a warm-up when that session logged nothing else for the exercise — and then says so
+// through IsWarmup, which the UI prints next to the figure. A working set from an
 // older session is deliberately not preferred over a warm-up from the latest one: the hint
 // answers "what did I do last time", not "what is my best".
 //
@@ -1356,7 +1357,7 @@ static IQueryable<ExerciseResponse> ProjectExerciseResponses(AppDbContext db, IQ
          join w in db.Workouts on we.WorkoutId equals w.Id
          where we.ExerciseId == e.Id
          orderby w.Date descending, w.StartedAt descending, se.IsWarmup, we.Position descending, se.SetNumber descending
-         select new LastSetResponse(se.Weight, se.Reps))
+         select new LastSetResponse(se.Weight, se.Reps, se.IsWarmup))
             .FirstOrDefault()));
 
 // A local function to fetch a workout's exercises and their sets in one query. The

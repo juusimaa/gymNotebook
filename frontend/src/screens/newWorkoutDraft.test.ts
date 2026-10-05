@@ -206,10 +206,11 @@ describe('createWorkoutExerciseDraft', () => {
       {
         weight: 100,
         reps: 5,
+        isWarmup: false,
       },
     )
 
-    expect(draft.lastSet).toEqual({ weight: 100, reps: 5 })
+    expect(draft.lastSet).toEqual({ weight: 100, reps: 5, isWarmup: false })
   })
 })
 

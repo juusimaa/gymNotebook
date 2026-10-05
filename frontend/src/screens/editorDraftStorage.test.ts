@@ -220,12 +220,32 @@ describe('parseStoredEditorDraft', () => {
     ).toEqual({ weight: null, reps: 12 })
   })
 
+  // The flag arrived after "last time" did: a draft without it still restores.
+  it('accepts a last set with or without its warm-up flag', () => {
+    const block = sampleContent().exercises[0]
+    const lastSet = { weight: 40, reps: 8, isWarmup: true }
+
+    expect(
+      parseStoredEditorDraft(storedWith({ exercises: [{ ...block, lastSet }] }))
+        ?.exercises[0].lastSet,
+    ).toEqual(lastSet)
+  })
+
   it('rejects a malformed last set', () => {
     const block = sampleContent().exercises[0]
 
     expect(
       parseStoredEditorDraft(
         storedWith({ exercises: [{ ...block, lastSet: { reps: '5' } }] }),
+      ),
+    ).toBeNull()
+    expect(
+      parseStoredEditorDraft(
+        storedWith({
+          exercises: [
+            { ...block, lastSet: { weight: 40, reps: 8, isWarmup: 'yes' } },
+          ],
+        }),
       ),
     ).toBeNull()
   })
