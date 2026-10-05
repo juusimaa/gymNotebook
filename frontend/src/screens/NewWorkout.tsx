@@ -60,6 +60,7 @@ import {
 } from './exerciseFormat'
 import { OptionalDetailsChoice } from './OptionalDetailsConsent'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
+import { useVisualViewportHeight } from './useVisualViewportHeight'
 import './NewWorkout.css'
 
 // The latest removal, kept so its "Removed … · Undo" line can put it back
@@ -105,6 +106,7 @@ const HEADING_FIELD_IDS: Record<
 
 const SAVE_MESSAGE_ID = 'new-workout-save-message'
 const UNDO_BUTTON_ID = 'new-workout-undo'
+const FINISH_BUTTON_ID = 'new-workout-finish'
 
 // Moves focus to an input by id. `select` highlights its value, so typing
 // replaces a copied figure instead of appending to it.
@@ -192,7 +194,9 @@ function WorkoutEditor() {
   // The page heading's fields start folded behind their one-line summary;
   // a save that fails on one of them opens it again.
   const [isHeadingOpen, setIsHeadingOpen] = useState(false)
+  useVisualViewportHeight()
   const pickerRef = useRef<HTMLDivElement>(null)
+  const keepFinishEditingRef = useRef<HTMLButtonElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   // Cancel or "Start over" on a changed draft asks first, inline: 'leave'
   // goes back, 'reset' empties the editor and stays.
@@ -442,6 +446,28 @@ function WorkoutEditor() {
     if (document.activeElement !== searchRef.current) return
     pickerRef.current?.scrollIntoView({ block: 'nearest' })
   }, [exerciseQuery, isExerciseSearchLoading, pickerResultCount])
+
+  // The finish question replaces the buttons that opened it, so focus would
+  // be lost with them: move it to the safe answer, and back to "Finish
+  // session" when the question closes without finishing.
+  const wasConfirmingFinish = useRef(false)
+  useEffect(() => {
+    if (confirmingFinish) keepFinishEditingRef.current?.focus()
+    else if (wasConfirmingFinish.current) {
+      document.getElementById(FINISH_BUTTON_ID)?.focus()
+    }
+    wasConfirmingFinish.current = confirmingFinish
+  }, [confirmingFinish])
+
+  // Focusing the search box opens the keyboard, which shrinks the visible
+  // area (see useVisualViewportHeight). Once it has settled, scroll the
+  // picker back into view inside the editor's own scroller.
+  function revealPicker() {
+    window.setTimeout(() => {
+      if (document.activeElement !== searchRef.current) return
+      pickerRef.current?.scrollIntoView({ block: 'nearest' })
+    }, 300)
+  }
 
   // Editing a field the last save complained about takes its mark off, and
   // the message with it: it no longer describes what's on screen.
@@ -1391,6 +1417,7 @@ function WorkoutEditor() {
                   placeholder="Search or enter a new exercise"
                   value={exerciseQuery}
                   onChange={(event) => setExerciseQuery(event.target.value)}
+                  onFocus={revealPicker}
                 />
 
                 {isExerciseSearchLoading && (
@@ -1486,7 +1513,10 @@ function WorkoutEditor() {
                 {saveMessage}
               </p>
             )}
-            {confirmingFinish && (
+            {/* The confirmation takes the place of the action buttons rather
+                than stacking above them, so there is only one question and
+                one pair of buttons on screen. */}
+            {confirmingFinish ? (
               <div className="finish-confirmation" role="alert">
                 <p>Finish this session now? The current time will be saved.</p>
                 <div>
@@ -1494,6 +1524,7 @@ function WorkoutEditor() {
                     className="btn btn-ghost"
                     type="button"
                     onClick={() => setConfirmingFinish(false)}
+                    ref={keepFinishEditingRef}
                   >
                     Keep editing
                   </button>
@@ -1506,32 +1537,38 @@ function WorkoutEditor() {
                   </button>
                 </div>
               </div>
-            )}
-            <div className="new-workout-action-buttons">
-              {/* One primary: Finish session while the session is still in
+            ) : (
+              <div className="new-workout-action-buttons">
+                {/* One primary: Finish session while the session is still in
                   progress (a new page, or an edit reached by "Continue
                   logging"), Save changes once it has finished. */}
-              <button
-                className={canFinish ? 'btn btn-secondary' : 'btn btn-primary'}
-                type="button"
-                onClick={() => void saveWorkout(false)}
-              >
-                {savingAction === 'save'
-                  ? 'Saving…'
-                  : isEditing
-                    ? 'Save changes'
-                    : 'Save page'}
-              </button>
-              {canFinish && (
                 <button
-                  className="btn btn-primary"
+                  className={
+                    canFinish ? 'btn btn-secondary' : 'btn btn-primary'
+                  }
                   type="button"
-                  onClick={() => setConfirmingFinish(true)}
+                  onClick={() => void saveWorkout(false)}
                 >
-                  {savingAction === 'finish' ? 'Finishing…' : 'Finish session'}
+                  {savingAction === 'save'
+                    ? 'Saving…'
+                    : isEditing
+                      ? 'Save changes'
+                      : 'Save page'}
                 </button>
-              )}
-            </div>
+                {canFinish && (
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    id={FINISH_BUTTON_ID}
+                    onClick={() => setConfirmingFinish(true)}
+                  >
+                    {savingAction === 'finish'
+                      ? 'Finishing…'
+                      : 'Finish session'}
+                  </button>
+                )}
+              </div>
+            )}
           </footer>
         </fieldset>
       </form>
