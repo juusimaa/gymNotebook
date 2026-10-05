@@ -92,10 +92,16 @@
   --radius-md: 4px;
   --radius-lg: 7px;
 
-  /* Elevation — soft ink-tinted shadows on the light ground. */
-  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
-  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+  /* Elevation — soft ink-tinted shadows on the light ground. Shadows are
+     built from --color-shadow rather than --color-text, because in dark mode
+     the text is light and a light "shadow" would read as a glow. */
+  --color-shadow: #2d2b2b;
+  --shadow-sm: 0 1px 2px
+    color-mix(in srgb, var(--color-shadow) 14%, transparent);
+  --shadow-md: 0 3px 10px
+    color-mix(in srgb, var(--color-shadow) 16%, transparent);
+  --shadow-lg: 0 12px 32px
+    color-mix(in srgb, var(--color-shadow) 22%, transparent);
 
   /* Layout — phone-first single column, centred on wider screens (spec:
      "Primary device"). */
@@ -103,4 +109,72 @@
 
   /* Rule 7 in the spec: hit targets ≥ 44px, one-handed at a rack. */
   --hit-target: 44px;
+}
+
+/* Dark mode follows the OS setting (issue #104); there is no in-app toggle.
+   It is the same editorial page at night: warm ink-black paper, warm
+   off-white type, the same gold. Only colour tokens change here, so no
+   component stylesheet needs a dark-mode rule of its own.
+
+   The ramps keep their *meaning*, not their hex: each step is mirrored on
+   the lightness scale, so 100 is still "closest to the ground" and 900 is
+   still "furthest from it". That way --color-accent-700 is still the
+   readable accent for labels and --color-neutral-700 is still the secondary
+   text in both themes, and the contrast rules in docs/ui still hold:
+   neutral-700 is 6.19:1 on the ground (5.68:1 on --color-surface),
+   accent-700 is 7.08:1, body text is 13.2:1. Plain --color-accent (4.81:1)
+   stays decoration only, as in light mode. Values are generated in OKLCH
+   with the light theme's hues (neutral ≈17°, gold ≈74°). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #191715;
+    /* In light mode the surface sits a step darker than the ground; on a dark
+       ground "a step away" means lighter, which is also how raised looks. */
+    --color-surface: #211f1d;
+    --color-text: #e1ddd8;
+    --color-accent: #ad7b2f;
+    --color-accent-2: #9f7938;
+    --color-divider: color-mix(in srgb, #e1ddd8 16%, transparent);
+
+    --color-neutral-100: #1f1c1c;
+    --color-neutral-200: #292525;
+    --color-neutral-300: #3a3737;
+    --color-neutral-400: #524f4f;
+    --color-neutral-500: #6c6868;
+    --color-neutral-600: #837f7f;
+    --color-neutral-700: #9b9797;
+    --color-neutral-800: #b4b0b0;
+    --color-neutral-900: #cec9c9;
+
+    --color-accent-100: #2d2213;
+    --color-accent-200: #3e2d15;
+    --color-accent-300: #5a3f19;
+    --color-accent-400: #7c5518;
+    --color-accent-500: #996a20;
+    --color-accent-600: #b07e33;
+    --color-accent-700: #cc9a55;
+    --color-accent-800: #dfb680;
+    --color-accent-900: #eed3b0;
+
+    --color-accent-2-100: #2b2316;
+    --color-accent-2-200: #3b2e19;
+    --color-accent-2-300: #554121;
+    --color-accent-2-400: #755827;
+    --color-accent-2-500: #916d32;
+    --color-accent-2-600: #a88243;
+    --color-accent-2-700: #c49e62;
+    --color-accent-2-800: #d8b989;
+    --color-accent-2-900: #e9d4b6;
+
+    /* An ink-tinted shadow vanishes on ink; near-black at a higher strength
+       is what still separates a raised layer (the autocomplete list, the
+       sticky action bar) from the ground. */
+    --color-shadow: #000000;
+    --shadow-sm: 0 1px 2px
+      color-mix(in srgb, var(--color-shadow) 40%, transparent);
+    --shadow-md: 0 3px 10px
+      color-mix(in srgb, var(--color-shadow) 45%, transparent);
+    --shadow-lg: 0 12px 32px
+      color-mix(in srgb, var(--color-shadow) 55%, transparent);
+  }
 }
