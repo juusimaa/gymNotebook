@@ -1,6 +1,6 @@
 # Design fix plan — from the 2026-10-04 critique
 
-Status: steps 1–5 done; step 6 planned. Work through the steps in order; each step is its
+Status: steps 1–6 done. Work through the steps in order; each step is its
 own branch and PR (AGENTS.md: small, reviewable PRs), and each PR updates this
 spec ([README.md](./README.md)) and the [prototype](./prototype.html) when a
 screen changes. Tick a step off here in the PR that ships it.
@@ -177,24 +177,53 @@ under 11px (was 15), no header link under 44px, no horizontal overflow.
 
 ### 6. Final pass — `/impeccable polish`
 
-- [ ] Progress chip row clips at 390px ("Ylätalja vastaotteella" ends at
+- [x] Progress chip row clips at 390px ("Ylätalja vastaotteella" ends at
       x = 486) — add a scroll affordance.
-- [ ] Stat figures: Cormorant tabular "11" reads as Roman "II"; use Lora or
+- [x] Stat figures: Cormorant tabular "11" reads as Roman "II"; use Lora or
       old-style figures for numerals.
-- [ ] Chart: round y-ticks (not 57.5 / 58.8 / 60); no duplicate "4.10." x-ticks
+- [x] Chart: round y-ticks (not 57.5 / 58.8 / 60); no duplicate "4.10." x-ticks
       when sessions share a date.
-- [ ] Session page: drop the "WORKING" tag on normal sets; only warm-ups need one.
-- [ ] Progress header: the `aria-disabled` "Exercises" span looks like a link
+- [x] Session page: drop the "WORKING" tag on normal sets; only warm-ups need one.
+- [x] Progress header: the `aria-disabled` "Exercises" span looks like a link
       (`Progress.tsx:139`) — link it or remove it.
-- [ ] Privacy screens: add an `h1`; show the notice version and date in the UI
+- [x] Privacy screens: add an `h1`; show the notice version and date in the UI
       language (it shows "dev-2026-09-25" and "4. lokakuuta 2026").
-- [ ] Edit exercise: disable "Save name" until the name changes.
-- [ ] "Last" hint: shows a warm-up when the latest session for that exercise
+- [x] Edit exercise: disable "Save name" until the name changes.
+- [x] "Last" hint: shows a warm-up when the latest session for that exercise
       had only warm-ups — decide whether that is honest enough.
-- [ ] Editing an in-progress session shows two primaries: **Save changes**
+- [x] Editing an in-progress session shows two primaries: **Save changes**
       and **Finish session** are both `btn-primary` (`NewWorkout.tsx:1437`,
       `:1449`). Found in the step 5 browser pass; step 2 says Save changes is
       the edit page's primary.
-- [ ] The cover's "Buy me a coffee ↗" link is 15px tall — the one target
+- [x] The cover's "Buy me a coffee ↗" link is 15px tall — the one target
       under 44px the step 5 pass found outside the headers.
-- [ ] Re-run `/impeccable critique http://localhost:5173` and record the score here.
+- [x] Re-run `/impeccable critique http://localhost:5173` and record the score here.
+
+Shipped decisions (owner, 2026-10-05): the "last time" hint stays honest by
+saying so — `lastSet` gains `isWarmup` and the hint, the suggestions and the
+exercise index print "20 kg × 10 · warm-up"; the server's choice of set is
+unchanged. An edit page whose session is still in progress keeps **Finish
+session** as its one primary (it is reached by Continue logging, so it is a
+logging screen); a finished session's edit page keeps **Save changes**. Lora
+replaces Cormorant for every figure, not only the Progress stats: the
+Sessions day number and the session page's best line too. Y-ticks use a 1/2/5
+step aiming at three intervals, so a chart shows three to five ticks. The
+privacy screens' h1 keeps the old 32px size, and Change password gets the
+same h1. Not changed: the notice's version identifier ("dev-2026-09-25" is
+the dev config's value, shown as the server sends it). Edit exercise's Save
+reads "Save changes" once the load has changed, since it saves more than the
+name.
+
+Re-run, 2026-10-05, on `http://localhost:3000` (the Compose build of this
+branch; Chrome would not size below 500px, so the 430px column was measured
+in a 500 × 763 window): **27/40** (was 22/40). Detector: 0 CLI findings in
+`frontend/src` and the prototype; the overlay flags only the kicker above
+each h1, which is the spec'd notebook look. Measured on 8 routes: 0 text
+under 4.5:1, 0 text under 11px, 0 targets under 44px, no horizontal
+overflow. What the review still finds, for a next round: error text uses the
+link colour and the login error sits far below Sign in; the first set of a
+picked exercise starts blank with no focus and no Enter-to-advance; nothing
+warns about a second page while one is in progress; Progress opens on the
+alphabetically first exercise and mixes "4.10." with "04 Oct" and whole
+figures with one-decimal changes; "Untitled session" fills the title slot
+without consent; header link order differs per screen.

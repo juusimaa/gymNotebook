@@ -1166,6 +1166,60 @@ document.addEventListener('DOMContentLoaded', async function() {
       '<a href="#" class="header-link" $1$2>$3</a>'
     );
 
+    // Design fix plan step 6 (final polish), matching the React app. Figures
+    // move from Cormorant to Lora, where a tabular "11" no longer reads as a
+    // Roman "II"; the chart's y-ticks sit on a round 1/2/5 step instead of
+    // halving a 2.5 kg snap (57.5 / 58.8 / 60), and a same-date first and
+    // last point print their date once; the exercise chips fade at the right
+    // edge so a clipped name says the row scrolls; and the cover's support
+    // link gets a 44px-tall box. Anchors fail visibly, like step 5's.
+    const replacePolishAnchor = (anchor, replacement) => {
+      if (!template.includes(anchor)) throw new Error('Polish prototype anchor missing: ' + anchor.slice(0, 90));
+      template = template.split(anchor).join(replacement);
+    };
+    replacePolishAnchor(
+      'font-family:var(--font-heading);font-size:26px;line-height:1.2;',
+      'font-family:var(--font-body);font-size:24px;font-weight:500;line-height:1.25;'
+    );
+    replacePolishAnchor(
+      'font-family:var(--font-heading);font-size:23px;line-height:1;color:var(--color-text)">{{ w.day }}',
+      'font-family:var(--font-body);font-size:21px;font-weight:500;line-height:1;color:var(--color-text)">{{ w.day }}'
+    );
+    replacePolishAnchor(
+      `const min = bodyweight ? Math.max(0, Math.floor(lo - pad)) : Math.floor((lo - pad) / 2.5) * 2.5;
+    const max = bodyweight ? Math.ceil(hi + pad) : Math.ceil((hi + pad) / 2.5) * 2.5;`,
+      `const raw = (hi - lo + 2 * pad) / 3;
+    const mag = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 1))));
+    const step = Math.max(1, [1, 2, 5, 10].map((f) => f * mag).find((v) => v >= raw));
+    const min = Math.max(bodyweight ? 0 : -Infinity, Math.floor((lo - pad) / step) * step);
+    const max = Math.ceil((hi + pad) / step) * step;
+    const tickValues = [];
+    for (let v = max; v >= min; v -= step) tickValues.push(v);`
+    );
+    replacePolishAnchor(
+      'const ticks = [max, (max + min) / 2, min].map((v) => ({',
+      'const ticks = tickValues.map((v) => ({'
+    );
+    replacePolishAnchor(
+      'xLast: series[series.length - 1].short\n',
+      'xLast: series[series.length - 1].short === series[0].short ? "" : series[series.length - 1].short,\n' +
+        '      xJustify: series[series.length - 1].short === series[0].short ? "center" : "space-between"\n'
+    );
+    replacePolishAnchor(
+      'justify-content:space-between;padding-left:38px;margin-top:2px;',
+      'justify-content:{{ chart.xJustify }};padding-left:38px;margin-top:2px;'
+    );
+    // The React app fades each edge only while there is more to scroll that
+    // way; the static preview fades the right edge, where the sample clips.
+    replacePolishAnchor(
+      '<div class="gn-scroll" style="display:flex;gap:8px;overflow-x:auto;padding:0 22px 4px">',
+      '<div class="gn-scroll" style="display:flex;gap:8px;overflow-x:auto;padding:0 22px 4px;mask-image:linear-gradient(to right,#000 calc(100% - 40px),transparent)">'
+    );
+    replacePolishAnchor(
+      '<a href="https://buymeacoffee.com/jouni" target="_blank" rel="noreferrer">',
+      '<a href="https://buymeacoffee.com/jouni" target="_blank" rel="noreferrer" style="display:inline-flex;align-items:center;min-height:44px;margin-block:-14px;padding-inline:4px">'
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';
