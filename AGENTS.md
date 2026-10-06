@@ -123,5 +123,7 @@ Milestones 1–10 are done, including the Azure deployment (owner confirmation,
 see `.specify/memory/constitution.md` Q1). Feature work now goes through
 Spec Kit under `specs/`; the privacy and account lifecycle feature
 ([specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/))
-is next. See [PLAN.md → Milestones](PLAN.md#milestones) for the full list and
-what each one turned out to involve.
+is in progress, and email login with open signup
+([specs/002-email-login/](specs/002-email-login/), milestone 12) is planned.
+See [PLAN.md → Milestones](PLAN.md#milestones) for the full list and what each
+one turned out to involve.

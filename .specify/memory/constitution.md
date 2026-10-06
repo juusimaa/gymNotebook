@@ -81,24 +81,35 @@ sets. Requests for a specific missing or unowned resource MUST return 404, not
 403. Invalid pagination cursors MUST return 400, treating nonexistent and foreign
 cursors identically so the response does not reveal another user's resource.
 Preserve BCrypt password hashing, JWT bearer authentication and token-version
-revocation, the invite-code registration gate, configured CORS origins, and per-IP
-rate limiting on login and registration. Do not disable these controls for local
-testing. Login failures MUST NOT distinguish an unknown user from a wrong password.
+revocation, configured CORS origins, and per-IP rate limiting on login,
+registration and every route that sends email. Registration is open and protected
+instead by: email confirmation before an account can sign in; registration,
+resend and password-reset answers that do not reveal whether an address has an
+account; per-address and service-wide email caps; and a human check that fails
+closed on the routes that email an unproven address. Do not disable these controls
+for local testing. Login failures MUST NOT distinguish an unknown user from a wrong
+password.
 
 Never log secrets, tokens, or connection strings, commit real secrets, or expose
 exception details in API responses. Keep local secrets in the established
 gitignored environment file or .NET user-secrets, and production secrets in
 Container Apps secrets through `secretref`. Generate production values separately
-from development values and set the production invite code: an empty code opens
-registration. Preserve development-only OpenAPI/Scalar exposure.
+from development values. Emailed links are credentials: never log them outside
+local development, and never accept them as bearer tokens. Preserve
+development-only OpenAPI/Scalar exposure.
 
 Privacy by design here means preserving these established ownership and
-non-disclosure controls. It does not invent retention, analytics, email collection,
-or new account-management requirements.
+non-disclosure controls. It does not invent retention, analytics, or new
+account-management requirements. The account's email address is collected only to
+identify the account, confirm it and reset its password (`specs/002-email-login`);
+any other use of it needs its own reviewed amendment.
 
 Sources: `AGENTS.md` — Security; `PLAN.md` — Auth, Configuration, API documentation,
 Milestone 3; `README.md` — API documentation, Configuration;
 `docker-compose.yml`; `.github/workflows/deploy.yml`.
+Amended in 3.0.0 (owner, 2026-10-06): the invite-code gate is replaced by email
+confirmation and the open-signup protections of `specs/002-email-login`, and email
+collection is allowed for that purpose only.
 
 ### VI. Keep Behavior and Its Documentation Aligned
 
@@ -149,6 +160,9 @@ and preserving email on 401 in `docs/ui/README.md` are stale wording to correct 
 username in a separate documentation update. The UI specification is unchanged by
 this constitution-only task. Email-based login and password reset remain future
 proposals requiring separate review, not current product requirements.
+*Superseded in 3.0.0 (owner, 2026-10-06):* email login, confirmation and password
+reset were reviewed as `specs/002-email-login`. Existing username accounts are
+wiped rather than migrated; the username remains as a display name only.
 
 **Q3 — Frontend configuration and image publication: resolved by owner confirmation
 on 2026-09-24.** Retain the current implementation as the intended behavior.
@@ -250,4 +264,4 @@ and patch for non-semantic clarification. Version 1.0.0 was the initial draft;
 ratification records the owner's adoption of this constitution, not an
 application release.
 
-**Version**: 2.0.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-09-25
+**Version**: 3.0.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-10-06
