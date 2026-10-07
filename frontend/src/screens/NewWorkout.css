@@ -260,7 +260,7 @@
 .new-workout-set,
 .new-workout-set-columns {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 0.62fr) 68px 48px;
+  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 0.62fr) 72px 48px;
   align-items: center;
   gap: 6px;
 }
@@ -312,23 +312,30 @@
 
 .new-workout-set-kind {
   min-height: var(--hit-target);
-  padding: 0 8px;
+  padding: 0 4px;
   cursor: pointer;
   color: var(--color-neutral-700);
+  /* One word, one line: at 13px "Warm-up" otherwise breaks at its hyphen.
+     The track is 72px (66px on the narrowest phones) to hold it. */
+  white-space: nowrap;
   background: transparent;
-  border: 1px solid var(--color-neutral-300);
+  /* A hairline, not a box: on every row of every block, a heavier outline
+     made the toggles the loudest thing in the editor. */
+  border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* The label never changes, so the state must read at a glance: pressed is
    a filled tab with a firm edge, unpressed is just its outline. */
 .new-workout-set-kind[aria-pressed='true'] {
   color: var(--color-text);
-  background: var(--color-surface);
-  border-color: var(--color-neutral-700);
-  font-weight: 600;
+  /* neutral-300, not --color-surface: the surface is one step off the ground
+     and all but vanished in dark mode, leaving the state to the border. The
+     ramp's 300 is a clear tag in both themes, with ink well over 4.5:1. */
+  background: var(--color-neutral-300);
+  border-color: var(--color-neutral-500);
 }
 
 .new-workout-remove-set {
@@ -349,10 +356,19 @@
   cursor: not-allowed;
 }
 
+/* The block's next action, and the editor's most-tapped control: a full-width
+   row like a blank line waiting to be written on, not a small text link in
+   the corner. 48px tall, a little above the 44px floor, because it is hit
+   between sets with a tired, chalky thumb. */
 .new-workout-add-set {
-  min-height: var(--hit-target);
+  width: 100%;
+  min-height: 48px;
   margin-top: var(--space-2);
-  font-size: 14px;
+  justify-content: flex-start;
+  padding-inline: var(--space-3);
+  border: 1px dashed var(--color-neutral-400);
+  border-radius: var(--radius-md);
+  font-size: 15px;
 }
 
 /* "Removed set 2 · 50 kg × 5." with its Undo, in the removed item's place:
@@ -570,7 +586,7 @@
 @media (max-width: 370px) {
   .new-workout-set,
   .new-workout-set-columns {
-    grid-template-columns: 20px minmax(0, 1fr) 58px 62px 46px;
+    grid-template-columns: 20px minmax(0, 1fr) 58px 66px 46px;
     gap: 4px;
   }
 
