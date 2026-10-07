@@ -57,7 +57,7 @@ public class DeletionConcurrencyTests(TwoHostGymNotebookFixture db)
         // Renaming onto another exercise's name merges the two (PLAN.md).
         ["merge exercise"] = new(Kind.Write, (c, n) => c.PatchAsJsonAsync($"/exercises/{n.SecondExerciseId}", new { name = "Exercise 0" })),
         ["acknowledge notice"] = new(Kind.Write, AcknowledgeAsync),
-        ["me"] = new(Kind.Read, (c, _) => c.GetAsync("/auth/me"), Pause: sql => sql.Contains("SELECT u.username", StringComparison.Ordinal)),
+        ["me"] = new(Kind.Read, (c, _) => c.GetAsync("/auth/me"), Pause: sql => sql.Contains("SELECT u.id, u.display_name, u.email", StringComparison.Ordinal)),
         ["read workouts"] = new(Kind.Read, (c, _) => c.GetAsync("/workouts")),
         ["export"] = new(Kind.Read, (c, _) => ExportTestSupport.ExportAsync(c)),
     };
@@ -302,7 +302,7 @@ public class DeletionConcurrencyTests(TwoHostGymNotebookFixture db)
     }
 
     [Fact]
-    public async Task Delete_UsernameRegisteredAgain_IsNewAccountThatInheritsNothing()
+    public async Task Delete_EmailRegisteredAgain_IsNewAccountThatInheritsNothing()
     {
         // Arrange: A deleted.
         await using var host = CreateHost();
@@ -315,16 +315,15 @@ public class DeletionConcurrencyTests(TwoHostGymNotebookFixture db)
         using var oldSession = host.ClientFor(userId);
         Assert.Equal(HttpStatusCode.OK, (await DeletionTestSupport.DeleteAsync(oldSession)).StatusCode);
 
-        // Act: someone registers the freed username.
+        // Act: someone registers the freed address.
         using var anonymous = host.CreateClient();
-        var registered = await anonymous.PostAsJsonAsync("/auth/register",
-            new { username = deletedAccount.Username, password = "a-new-password-1234", inviteCode = (string?)null });
+        var registered = await EmailTestSupport.RegisterAsync(anonymous, deletedAccount.Email, "a-new-password-1234");
 
         // Assert: a different account in every identity that matters, with an empty
         // notebook, and the old session doesn't reach it.
-        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, registered.StatusCode);
         await using var check = db.NewContext();
-        var newAccount = await check.Users.AsNoTracking().SingleAsync(u => u.Username == deletedAccount.Username);
+        var newAccount = await check.Users.AsNoTracking().SingleAsync(u => u.Email == deletedAccount.Email);
         Assert.NotEqual(deletedAccount.Id, newAccount.Id);
         Assert.NotEqual(deletedAccount.PrivacyAccountId, newAccount.PrivacyAccountId);
         Assert.False(await check.Exercises.AnyAsync(e => e.UserId == newAccount.Id));

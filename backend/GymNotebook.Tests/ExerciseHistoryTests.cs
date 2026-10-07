@@ -17,7 +17,10 @@ public class ExerciseHistoryTests(GymNotebookFactory factory) : IClassFixture<Gy
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = new User
         {
-            Username = $"user-{Guid.NewGuid():N}",
+            DisplayName = $"user-{Guid.NewGuid():N}",
+            Email = $"{Guid.NewGuid():N}@example.test",
+            // Confirmed: a token for an unconfirmed account is rejected (specs/002 FR-004).
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-horse-battery-staple"),
             TokenVersion = 0,
             PrivacyAccountId = Guid.NewGuid(),

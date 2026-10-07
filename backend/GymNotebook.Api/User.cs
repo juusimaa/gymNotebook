@@ -10,8 +10,24 @@ public class User
     public int Id { get; set; }
 
     // `required` makes the compiler reject an object initializer that leaves these out —
-    // a User without a name or a hash is never meaningful, so it can't be constructed.
-    public required string Username { get; set; }
+    // a User without an address, a name or a hash is never meaningful, so it can't be
+    // constructed.
+    //
+    // The address signs the user in (specs/002 FR-001). Always stored trimmed and
+    // lowercased (AccountInput.NormalizeEmail), so "Ann@Example.com" and "ann@example.com" are one
+    // account; the unique index in AppDbContext is what guarantees it.
+    public required string Email { get; set; }
+
+    // Null until the address is confirmed by its link (or, from PR 4, by a completed
+    // password reset). Set once, never cleared. An unconfirmed account can't sign in and
+    // its tokens are rejected (specs/002 plan D5); the API only ever exposes "confirmed or
+    // not", the exact time appears only in the export.
+    public DateTimeOffset? EmailVerifiedAt { get; set; }
+
+    // The name printed on the notebook's cover. Renamed from Username (specs/002 O1): it
+    // no longer signs anyone in and is deliberately *not* unique — a unique name would let
+    // signup reveal which names already exist.
+    public required string DisplayName { get; set; }
 
     // Only ever a BCrypt hash. The plaintext password is hashed in the register handler
     // and never reaches the entity.
@@ -26,7 +42,7 @@ public class User
 
     // The account's permanent privacy identity (specs/001 data-model.md, research R5).
     // Integer ids can be reallocated after a point-in-time restore rewinds the sequence,
-    // and usernames can be registered again after a deletion, so neither can identify
+    // and email addresses can be registered again after a deletion, so neither can identify
     // "the account that was deleted" in deletion log lines or restore reconciliation. A
     // random UUID can. `required` + `init`: every creation site must supply one (the
     // register handler generates it), and nothing can reassign it afterwards —

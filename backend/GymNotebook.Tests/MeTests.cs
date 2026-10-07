@@ -15,18 +15,14 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
 {
     private readonly HttpClient _client = factory.CreateClient();
 
-    private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
-
-    // Returns the username too, since the tests below need it to find the user's row
+    // Signs up through the real flow (register, confirm from the email, sign in) and
+    // returns the address too, since the tests below need it to find the user's row
     // directly in the database.
-    private async Task<(string Token, string Username)> RegisterAndGetTokenAsync()
+    private async Task<(string Token, string Email)> RegisterAndGetTokenAsync()
     {
-        var username = UniqueUsername();
-        var response = await _client.PostAsJsonAsync(
-            "/auth/register",
-            new RegisterRequest(username, "correct-horse-battery-staple", null));
-        var body = await response.Content.ReadFromJsonAsync<AuthResponse>();
-        return (body!.Token, username);
+        var email = EmailTestSupport.UniqueEmail();
+        var token = await EmailTestSupport.RegisterConfirmedAsync(_client, factory.Services, email);
+        return (token, email);
     }
 
     // GetAsync can't take per-request headers, so an authenticated call needs a
@@ -47,9 +43,9 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
     }
 
     [Fact]
-    public async Task Me_with_a_valid_token_returns_the_users_id_and_username()
+    public async Task Me_with_a_valid_token_returns_the_users_id_display_name_and_email()
     {
-        var (token, username) = await RegisterAndGetTokenAsync();
+        var (token, email) = await RegisterAndGetTokenAsync();
 
         var response = await _client.SendAsync(AuthenticatedGet("/auth/me", token));
 
@@ -58,15 +54,16 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var user = await db.Users.SingleAsync(u => u.Username == username);
+        var user = await db.Users.SingleAsync(u => u.Email == email);
         Assert.Equal(user.Id, body?.UserId);
-        Assert.Equal(username, body?.Username);
+        Assert.Equal("Test user", body?.DisplayName);
+        Assert.Equal(email, body?.Email);
     }
 
     [Fact]
     public async Task Me_with_a_token_from_before_a_token_version_bump_returns_unauthorized()
     {
-        var (token, username) = await RegisterAndGetTokenAsync();
+        var (token, email) = await RegisterAndGetTokenAsync();
 
         // /auth/change-password is what normally bumps this, and ChangePasswordTests
         // covers that path end to end. Bumping the row directly here isolates the
@@ -75,7 +72,7 @@ public class MeTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFact
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var user = await db.Users.SingleAsync(u => u.Username == username);
+            var user = await db.Users.SingleAsync(u => u.Email == email);
             user.TokenVersion++;
             await db.SaveChangesAsync();
         }

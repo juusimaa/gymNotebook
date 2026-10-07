@@ -152,7 +152,9 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
             {
                 u.Id,
                 u.PrivacyAccountId,
-                u.Username,
+                u.Email,
+                u.EmailVerifiedAt,
+                u.DisplayName,
                 u.CreatedAt,
                 u.AcknowledgedPrivacyNoticeVersion,
                 u.PrivacyNoticeAcknowledgedAt,
@@ -170,7 +172,9 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
         json.WriteStartObject("account");
         json.WriteNumber("id", account.Id);
         json.WriteString("privacyAccountId", account.PrivacyAccountId);
-        json.WriteString("username", account.Username);
+        json.WriteString("email", account.Email);
+        WriteInstant(json, "emailVerifiedAt", account.EmailVerifiedAt);
+        json.WriteString("displayName", account.DisplayName);
         WriteInstant(json, "createdAt", account.CreatedAt);
         json.WriteEndObject();
 

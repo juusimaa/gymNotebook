@@ -11,7 +11,7 @@ namespace GymNotebook.Tests;
 
 // The account's privacy identity (specs/001 data-model.md → User additions, research R5):
 // the migration backfills a genuine UUID per existing account and never seeds an
-// acknowledgement, registration generates one server-side, and a username registered
+// acknowledgement, registration generates one server-side, and an email address registered
 // again after a deletion is a different account. Also the R6 Q2d invariant that account
 // deletion is the only code that removes User rows.
 [Collection("Lifecycle")]
@@ -20,6 +20,11 @@ public class AccountIdentityTests(TwoHostGymNotebookFixture db)
     // The migration just before AddPrivacyAccountIdentity: the schema existing
     // production rows were created under.
     private const string MigrationBeforePrivacy = "20260914091451_AddWorkoutDomain";
+
+    // The last migration before AddUserEmail (specs/002), which by design refuses to run
+    // on a users table with rows in it (UserEmailMigrationTests). The backfill below is
+    // checked as of this point, the schema it was written for.
+    private const string MigrationBeforeEmail = "20261006133659_AddEmailSends";
 
     // The ways C# in this codebase could delete a user row, for the Q2d scan below.
     private static readonly Regex[] _userRemovalPatterns =
@@ -48,20 +53,34 @@ public class AccountIdentityTests(TwoHostGymNotebookFixture db)
             await insert.ExecuteNonQueryAsync();
         }
 
-        // Act: apply the rest, including this feature's migration.
-        await using var migrated = db.NewContext(connectionString);
-        await migrated.Database.MigrateAsync();
+        // Act: apply the rest up to the email schema, including this feature's migration.
+        await using (var migrated = db.NewContext(connectionString))
+        {
+            await migrated.GetService<IMigrator>().MigrateAsync(MigrationBeforeEmail);
+        }
 
-        // Assert
-        var users = await migrated.Users.AsNoTracking().ToListAsync();
+        // Assert: read with plain SQL, because the User entity now describes the email
+        // schema, which this database deliberately hasn't reached.
+        var users = new List<(Guid PrivacyAccountId, bool AcknowledgementNull, bool SuspensionNull)>();
+        await using (var connection = new NpgsqlConnection(connectionString))
+        {
+            await connection.OpenAsync();
+            await using var select = new NpgsqlCommand(
+                "SELECT privacy_account_id, acknowledged_privacy_notice_version IS NULL AND privacy_notice_acknowledged_at IS NULL, sign_in_suspended_at IS NULL FROM users",
+                connection);
+            await using var reader = await select.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                users.Add((reader.GetGuid(0), reader.GetBoolean(1), reader.GetBoolean(2)));
+            }
+        }
         Assert.Equal(3, users.Count);
         Assert.All(users, u => Assert.NotEqual(Guid.Empty, u.PrivacyAccountId));
         Assert.Equal(3, users.Select(u => u.PrivacyAccountId).Distinct().Count());
         Assert.All(users, u =>
         {
-            Assert.Null(u.AcknowledgedPrivacyNoticeVersion);
-            Assert.Null(u.PrivacyNoticeAcknowledgedAt);
-            Assert.Null(u.SignInSuspendedAt);
+            Assert.True(u.AcknowledgementNull);
+            Assert.True(u.SuspensionNull);
         });
     }
 
@@ -71,34 +90,33 @@ public class AccountIdentityTests(TwoHostGymNotebookFixture db)
         // Arrange
         await using var host = db.CreateHost();
         using var client = host.CreateClient();
-        var username = $"user-{Guid.NewGuid():N}";
+        var email = EmailTestSupport.UniqueEmail();
 
         // Act
-        var response = await client.PostAsJsonAsync("/auth/register", new RegisterRequest(username, "correct-horse-battery-staple", null));
+        var response = await EmailTestSupport.RegisterAsync(client, email);
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var user = await FindUserAsync(username);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var user = await FindUserAsync(email);
         Assert.NotEqual(Guid.Empty, user.PrivacyAccountId);
         Assert.Null(user.AcknowledgedPrivacyNoticeVersion);
         Assert.Null(user.PrivacyNoticeAcknowledgedAt);
     }
 
     [Fact]
-    public async Task Register_UsernameReusedAfterDeletion_GetsDifferentPrivacyAccountId()
+    public async Task Register_EmailReusedAfterDeletion_GetsDifferentPrivacyAccountId()
     {
         // Arrange: an account registered, then deleted.
         await using var host = db.CreateHost();
         using var client = host.CreateClient();
-        var username = $"user-{Guid.NewGuid():N}";
-        var request = new RegisterRequest(username, "correct-horse-battery-staple", null);
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/auth/register", request)).StatusCode);
-        var first = await FindUserAsync(username);
+        var email = EmailTestSupport.UniqueEmail();
+        Assert.Equal(HttpStatusCode.Accepted, (await EmailTestSupport.RegisterAsync(client, email)).StatusCode);
+        var first = await FindUserAsync(email);
         await db.ExecuteAsync("DELETE FROM users WHERE id = @id", first.Id);
 
-        // Act: someone registers the same username.
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/auth/register", request)).StatusCode);
-        var second = await FindUserAsync(username);
+        // Act: someone registers the same address.
+        Assert.Equal(HttpStatusCode.Accepted, (await EmailTestSupport.RegisterAsync(client, email)).StatusCode);
+        var second = await FindUserAsync(email);
 
         // Assert: distinguishable from the deleted account in log lines and restore diffs.
         Assert.NotEqual(first.PrivacyAccountId, second.PrivacyAccountId);
@@ -147,10 +165,10 @@ public class AccountIdentityTests(TwoHostGymNotebookFixture db)
         Assert.All(samples, sample => Assert.Contains(_userRemovalPatterns, p => p.IsMatch(sample)));
     }
 
-    private async Task<User> FindUserAsync(string username)
+    private async Task<User> FindUserAsync(string email)
     {
         await using var context = db.NewContext();
-        return await context.Users.AsNoTracking().SingleAsync(u => u.Username == username);
+        return await context.Users.AsNoTracking().SingleAsync(u => u.Email == email);
     }
 
     private static bool IsUnder(string path, string directory) =>

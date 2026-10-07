@@ -26,16 +26,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         modelBuilder.Entity<User>(entity =>
         {
-            // The database-level guarantee behind /auth/register's 409 pre-check: two
-            // rows with the same username can't exist even if the check is raced.
-            entity.HasIndex(u => u.Username).IsUnique();
+            // One account per address. Register looks the address up first, but two
+            // signups at the same instant can both miss; this index makes the second
+            // INSERT fail, and the handler treats that as "account exists" (specs/002
+            // plan D4). Display names get no index at all: they aren't unique (O1) and
+            // nothing looks an account up by one. Both stay `text`; their length limits
+            // are input rules, checked in AccountInput, as for every other text column here.
+            entity.HasIndex(u => u.Email).IsUnique();
 
             // Let Postgres stamp the row at insert time — one clock for every row, and
             // EF Core omits the column from the INSERT when the C# value is still default.
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
 
             // Unique so two accounts can never share a privacy identity, even across a
-            // username being registered again. Throw-after-save makes EF refuse to write
+            // email address being registered again. Throw-after-save makes EF refuse to write
             // a changed value, backing up the entity's init-only setter at runtime.
             entity.HasIndex(u => u.PrivacyAccountId).IsUnique();
             entity.Property(u => u.PrivacyAccountId)

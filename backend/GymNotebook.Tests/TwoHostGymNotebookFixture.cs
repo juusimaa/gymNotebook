@@ -77,7 +77,10 @@ public sealed class TwoHostGymNotebookFixture : IAsyncLifetime
         await using var db = NewContext();
         var user = new User
         {
-            Username = $"lifecycle-{Guid.NewGuid():N}",
+            DisplayName = $"lifecycle-{Guid.NewGuid():N}",
+            Email = $"{Guid.NewGuid():N}@example.test",
+            // Confirmed: a token for an unconfirmed account is rejected (specs/002 FR-004).
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(Password, 4),
             PrivacyAccountId = Guid.NewGuid(),
         };
@@ -88,7 +91,7 @@ public sealed class TwoHostGymNotebookFixture : IAsyncLifetime
 
     public static string Token(int userId, int tokenVersion = 0) =>
         JwtTokenFactory.CreateToken(
-            new User { Id = userId, Username = "", PasswordHash = "", TokenVersion = tokenVersion, PrivacyAccountId = Guid.Empty },
+            new User { Id = userId, Email = "", DisplayName = "", PasswordHash = "", TokenVersion = tokenVersion, PrivacyAccountId = Guid.Empty },
             GymNotebookFactory.JwtSecret, GymNotebookFactory.JwtExpiryMinutes);
 
     // `workouts` workouts × `blocksPerWorkout` blocks × `setsPerBlock` sets, one exercise
@@ -458,6 +461,7 @@ public sealed class LifecycleTestHost : WebApplicationFactory<Program>
         builder.UseSetting("CORS_ORIGINS", GymNotebookFactory.AllowedOrigin);
         builder.UseSetting("Email:Backend", "memory");
         builder.UseSetting("APP_URL", GymNotebookFactory.AppUrl);
+        GymNotebookFactory.ApplyGenerousEmailLimits(builder);
         builder.UseSetting("Logging:LogLevel:Default", "Warning");
         foreach (var (key, value) in _settings)
         {

@@ -154,6 +154,20 @@ namespace GymNotebook.Api.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("email");
+
+                    b.Property<DateTimeOffset?>("EmailVerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("email_verified_at");
+
                     b.Property<string>("OptionalDetailsConsentVersion")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -184,21 +198,16 @@ namespace GymNotebook.Api.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("token_version");
 
-                    b.Property<string>("Username")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("username");
-
                     b.HasKey("Id")
                         .HasName("pk_users");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_email");
 
                     b.HasIndex("PrivacyAccountId")
                         .IsUnique()
                         .HasDatabaseName("ix_users_privacy_account_id");
-
-                    b.HasIndex("Username")
-                        .IsUnique()
-                        .HasDatabaseName("ix_users_username");
 
                     b.ToTable("users", null, t =>
                         {

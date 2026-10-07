@@ -301,8 +301,9 @@ public static class PrivacyEndpoints
 
     // Personal responses — and the errors on those routes — must not be stored by the
     // browser or any cache in between (contracts/api.md → Common behavior). Set before
-    // the handler runs, so it applies whatever result comes back.
-    private static ValueTask<object?> NoStore(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    // the handler runs, so it applies whatever result comes back. Internal: the /auth
+    // group in Program.cs uses it too (specs/002 contracts/api.md).
+    internal static ValueTask<object?> NoStore(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         context.HttpContext.Response.Headers.CacheControl = "no-store";
         return next(context);

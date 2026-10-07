@@ -209,8 +209,9 @@ export function request<T>(
 ): Promise<T> {
   return send(path, init, async (response) => {
     // 204 has no body; response.json() on it rejects. Milestone 9's delete
-    // routes return it, so handle it now rather than debug it then.
-    if (response.status === 204) {
+    // routes return it, so handle it now rather than debug it then. 202 is the
+    // same here: POST /auth/register answers it with no body (specs/002 FR-011).
+    if (response.status === 204 || response.status === 202) {
       return undefined as T
     }
 

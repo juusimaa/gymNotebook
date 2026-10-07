@@ -31,7 +31,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         // Arrange
         var logs = new CapturingLoggerProvider();
         await using var host = db.CreateHost(ExportTestSupport.FlagOn(), services: s => s.AddSingleton<ILoggerProvider>(logs));
-        var (userId, username, privacyAccountId) = await SeedAsync();
+        var (userId, email, privacyAccountId) = await SeedAsync();
         using var client = host.ClientFor(userId);
         var token = client.DefaultRequestHeaders.Authorization!.Parameter!;
 
@@ -50,7 +50,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
             Assert.Equal(body!.RetentionBoundaryAt, Property(e, "DeletionBoundaryAt"));
             Assert.Equal(LogLevel.Information, e.Level);
         });
-        AssertNothingPersonal(logs, events, userId, username, token);
+        AssertNothingPersonal(logs, events, userId, email, token);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
             s.AddSingleton<ILoggerProvider>(logs);
             s.ConfigureDbContext<AppDbContext>(o => o.AddInterceptors(new FailingCommand("DELETE FROM users")));
         });
-        var (userId, username, _) = await SeedAsync();
+        var (userId, email, _) = await SeedAsync();
         var before = await DeletionTestSupport.SnapshotAccountAsync(db, userId);
         using var client = host.ClientFor(userId);
         var token = client.DefaultRequestHeaders.Authorization!.Parameter!;
@@ -79,7 +79,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         Assert.Equal(["deletion.intent", "deletion.rolled_back"], events.Select(EventName));
         Assert.Equal(before, await DeletionTestSupport.SnapshotAccountAsync(db, userId));
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/auth/me")).StatusCode);
-        AssertNothingPersonal(logs, events, userId, username, token);
+        AssertNothingPersonal(logs, events, userId, email, token);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         await using var host = db.CreateHost(
             ExportTestSupport.FlagOn(("Lifecycle:ExclusiveLockTimeoutMs", "500"), ("Lifecycle:WriteTimeoutMs", "200")),
             services: s => s.AddSingleton<ILoggerProvider>(logs));
-        var (userId, username, _) = await SeedAsync();
+        var (userId, email, _) = await SeedAsync();
         var before = await DeletionTestSupport.SnapshotAccountAsync(db, userId);
         using var client = host.ClientFor(userId);
         var token = client.DefaultRequestHeaders.Authorization!.Parameter!;
@@ -118,7 +118,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         Assert.Equal("55P03", FindPostgresException(warning.Exception)?.SqlState);
         Assert.Equal(before, await DeletionTestSupport.SnapshotAccountAsync(db, userId));
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/auth/me")).StatusCode);
-        AssertNothingPersonal(logs, events, userId, username, token);
+        AssertNothingPersonal(logs, events, userId, email, token);
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
             s.AddSingleton<ILoggerProvider>(logs);
             s.ConfigureDbContext<AppDbContext>(o => o.AddInterceptors(new FailAfterCommit()));
         });
-        var (userId, username, _) = await SeedAsync();
+        var (userId, email, _) = await SeedAsync();
         var rows = await DeletionTestSupport.RowIdsAsync(db, userId);
         using var client = host.ClientFor(userId);
         var token = client.DefaultRequestHeaders.Authorization!.Parameter!;
@@ -149,7 +149,7 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         var events = logs.DeletionEvents();
         Assert.Equal(["deletion.intent"], events.Select(EventName));
         Assert.Equal(0, await DeletionTestSupport.CountRemainingAsync(db, rows));
-        AssertNothingPersonal(logs, events, userId, username, token);
+        AssertNothingPersonal(logs, events, userId, email, token);
     }
 
     [Fact]
@@ -169,13 +169,13 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         Assert.Empty(logs.DeletionEvents());
     }
 
-    private async Task<(int UserId, string Username, Guid PrivacyAccountId)> SeedAsync()
+    private async Task<(int UserId, string Email, Guid PrivacyAccountId)> SeedAsync()
     {
         var userId = await db.SeedUserAsync();
         await db.SeedNotebookAsync(userId, workouts: 2, blocksPerWorkout: 2, setsPerBlock: 2);
         await using var context = db.NewContext();
         var user = await context.Users.AsNoTracking().SingleAsync(u => u.Id == userId);
-        return (userId, user.Username, user.PrivacyAccountId);
+        return (userId, user.Email, user.PrivacyAccountId);
     }
 
     // The PostgresException anywhere in the chain: EF may have wrapped it.
@@ -197,14 +197,14 @@ public class DeletionLogTests(TwoHostGymNotebookFixture db)
         entry.State.Single(p => p.Key == name).Value;
 
     // The evidence lines hold only the three allowed fields, and nothing the host logged at
-    // all — at any level that got through — mentions the username or the token, or carries
+    // all — at any level that got through — mentions the email address or the token, or carries
     // the integer user id as a value.
-    private static void AssertNothingPersonal(CapturingLoggerProvider logs, List<CapturingLoggerProvider.Entry> events, int userId, string username, string token)
+    private static void AssertNothingPersonal(CapturingLoggerProvider logs, List<CapturingLoggerProvider.Entry> events, int userId, string email, string token)
     {
         Assert.All(events, e => Assert.All(e.State, p => Assert.Contains(p.Key, _allowedProperties)));
         Assert.All(logs.Entries, e =>
         {
-            Assert.DoesNotContain(username, e.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(email, e.Message, StringComparison.Ordinal);
             Assert.DoesNotContain(token, e.Message, StringComparison.Ordinal);
             Assert.DoesNotContain(e.State, p => p.Value is int value && value == userId);
         });

@@ -289,7 +289,10 @@ internal static class OptionalDetailsTestData
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = new User
         {
-            Username = $"user-{Guid.NewGuid():N}",
+            DisplayName = $"user-{Guid.NewGuid():N}",
+            Email = $"{Guid.NewGuid():N}@example.test",
+            // Confirmed: a token for an unconfirmed account is rejected (specs/002 FR-004).
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
             PasswordHash = "not-a-real-hash",
             PrivacyAccountId = Guid.NewGuid(),
             OptionalDetailsConsentVersion = consentVersion,

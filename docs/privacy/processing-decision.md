@@ -56,21 +56,25 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 ## P1 — Account administration
 
 **Information:**
-- `Username`: chosen by the user. It may be a real name; nothing requires or forbids that.
+- `Email` (since milestone 12, [specs/002](../../specs/002-email-login/spec.md)): the address the user signs in with, stored trimmed and lowercased. It is the account's identifier, and it is where confirmation (and, from specs/002 PR 4, password-reset) links are sent.
+- `EmailVerifiedAt`: when the address was confirmed by its link; null until then. The API shows only whether it is confirmed; the export includes the time.
+- `DisplayName` (the former `Username`, renamed in specs/002): the name printed on the notebook's cover, chosen by the user. It may be a real name; nothing requires or forbids that. It no longer signs anyone in and is not unique.
 - `PasswordHash`: a BCrypt hash. The password itself is never stored or logged.
 - `TokenVersion`: revokes old sessions after a password change.
 - `CreatedAt`.
 - `PrivacyAccountId`: a random UUID used for restore suppression (research R5).
 - `AcknowledgedPrivacyNoticeVersion` and `PrivacyNoticeAcknowledgedAt`: which notice the user has seen. This is not consent (FR-026).
 - `SignInSuspendedAt`: set only when an account deletion's outcome is unknown after a restore (R6 Q2c).
-- The invite code is checked at registration and never stored per user.
+- The invite code is checked at registration and never stored per user (until specs/002 PR 5 removes it).
+- `email_sends`: one row per email sent or attempted, holding only an HMAC-SHA256 of the recipient address (keyed with the JWT signing secret) and the time, kept 24 hours, to enforce the per-address and daily sending caps. It holds no address and no link to an account, so account deletion has nothing to remove there (specs/002 FR-016, FR-024).
+- **Emails** (specs/002): the confirmation, "you already have an account" and "finish creating your account" messages carry the recipient's address, and the first and last a signed link token valid for 48 hours or 1 hour. They are handed to Resend for delivery (see [suppliers.md](suppliers.md)) and are never written to this service's logs; only the message kind is logged.
 
 **Where it lives:** the `users` table in Neon PostgreSQL (`aws-eu-central-1`). Only the operator has database access. The API issues a signed JWT holding the user id and `TokenVersion`, valid for 30 minutes (`Jwt__ExpiryMinutes`).
 
-**Necessity:** a username and password are the minimum needed for a private notebook that follows the user across devices. `TokenVersion`, `PrivacyAccountId`, acknowledgement and suspension each exist to meet another requirement: revocation, erasure surviving a restore, FR-026, and R6 fail-closed handling. No email, real name, phone number or date of birth is collected.
+**Necessity:** an identifier and a password are the minimum needed for a private notebook that follows the user across devices. Since specs/002 the identifier is an email address rather than a username: an address the person has shown they control is what lets signup open without an invite code (only someone who reads the inbox can activate the account), and it is the only way to give back access to someone who has forgotten their password. The display name is what the cover shows; it could be left as any short text. `TokenVersion`, `PrivacyAccountId`, acknowledgement and suspension each exist to meet another requirement: revocation, erasure surviving a restore, FR-026, and R6 fail-closed handling. No real name, phone number or date of birth is collected, and the address is used for nothing but sign-in, confirmation and password reset: no newsletters, no notifications, no tracking in the emails.
 
 **Lawful basis (owner decision, 2026-09-28):**
-- **Account and authentication** (`Username`, `PasswordHash`, `TokenVersion`, `CreatedAt`): Art. 6(1)(b), necessary to deliver the notebook the person requests. The basis depends on an actual service agreement and objective necessity, not merely calling the processing contractual ([EDPB Guidelines 2/2019](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)). The service is free and invite-only. The owner approved the [registration service description](t043-notice-review.md#registration-service-description) and its placement beside Create account on 2026-09-28. It was confirmed live the same day: the production bundle deployed from `main` at `2362352` contains the approved text between Sign in and Create account, and the form asks only for username, password and invite code, matching this purpose's field list.
+- **Account and authentication** (`Email`, `EmailVerifiedAt`, `DisplayName`, `PasswordHash`, `TokenVersion`, `CreatedAt`, and the `email_sends` cap records): Art. 6(1)(b), necessary to deliver the notebook the person requests. The basis depends on an actual service agreement and objective necessity, not merely calling the processing contractual ([EDPB Guidelines 2/2019](https://www.edpb.europa.eu/sites/default/files/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf)). The service is free and invite-only. The owner approved the [registration service description](t043-notice-review.md#registration-service-description) and its placement beside Create account on 2026-09-28. It was confirmed live the same day: the production bundle deployed from `main` at `2362352` contains the approved text between Sign in and Create account, and the form asks only for username, password and invite code, matching this purpose's field list.
 - **Notice acknowledgement** (`AcknowledgedPrivacyNoticeVersion`, `PrivacyNoticeAcknowledgedAt`): Art. 6(1)(c). The record documents that the user was given the current notice, which the controller must provide (Art. 13) and be able to demonstrate (Art. 5(2)). It holds only the latest version and time (FR-026) and is not consent.
 - **Restore safety** (`PrivacyAccountId`, `SignInSuspendedAt`): Art. 6(1)(c). These keep an erasure effective after a database restore (Art. 17), so that a deleted account neither reappears nor becomes usable again while a deletion's outcome is unknown (research R5, R6 Q2c).
 
@@ -83,6 +87,11 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 - Keep the registration description in step with the service: if registration starts asking for more, or the core service changes, revisit the Art. 6(1)(b) conclusion and the description together.
 
 **Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Art. 6(1)(b) for account and authentication, Art. 6(1)(c) for notice acknowledgement and restore safety; no health data; consent not required. Evidence: the approved and published registration description, and the live bundle check recorded above.
+
+**Amendment, 2026-10-07 (specs/002 PR 3, email sign-in): pending owner review.** The account purpose gains the email address, its confirmation time and the email cap records, and the username becomes the display name (field list and necessity above). The lawful basis is proposed unchanged, Art. 6(1)(b): the address is how the requested account is reached and recovered. Recorded decisions this rests on: the owner accepted collecting email before specs/001's notice is live in production (specs/002 O2, 2026-10-06), and chose Resend's EU region (O3). Open items, all owner/operator:
+- **Registration service description changed.** The approved 2026-09-28 text ended "A username and password let you return to that notebook." PR 3 replaces that sentence, in the app and the prototype, with "Your email address and password let you return to that notebook; the address is also where we send the link that confirms it." The rest is unchanged, and the description now shows only in the Create account mode. It needs the owner's approval before PR 3 merges, the same way the original did.
+- **Resend supplier review** (specs/002 T031), including onward transfers and its own log retention, before PR 3 deploys; see [suppliers.md](suppliers.md).
+- **Existing accounts** were deleted by the operator before the email schema deployed (specs/002 FR-022, quickstart); that wipe is recorded in the release notes with its row count.
 
 ---
 

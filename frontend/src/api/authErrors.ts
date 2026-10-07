@@ -1,28 +1,35 @@
 import { ApiError } from './client'
 
-// Turns whatever login()/register() threw into the sentence shown under the form.
-// Three outcomes, not two: a status we expect maps to what the user should do
-// differently; a status we don't (a 500, a 404 from a wrong VITE_API_URL) still
-// means the server answered, and says so with the number; anything that isn't an
-// ApiError — fetch's TypeError, in practice — means the request never got there.
-// Pure and DOM-free, so it's the first thing the Vitest job actually tests.
+// Turns whatever login()/register()/resendVerification() threw into the sentence
+// shown under the form. Three outcomes, not two: a status we expect maps to what
+// the user should do differently; a status we don't (a 500, a 404 from a wrong
+// VITE_API_URL) still means the server answered, and says so with the number;
+// anything that isn't an ApiError — fetch's TypeError, in practice — means the
+// request never got there. Pure and DOM-free, so Vitest tests it directly.
 export function describeAuthError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.status) {
       case 400:
-        return 'Username and password are required'
+        return 'Check the email address and password'
       case 401:
-        return 'Invalid username or password'
+        // One message for "no such account" and "wrong password": the API
+        // answers both the same on purpose (specs/002 FR-003).
+        return 'Email or password is wrong'
       case 403:
-        // Only login sends a code with its 403, and only after the password was
-        // right (specs/001 contracts/ui.md): neutral copy pointing to the privacy
-        // contact, since the operator resolves a suspension with the user. Without
+        // Login's 403s carry a code, and only after the password was right
+        // (specs/001 and specs/002 contracts). account_suspended gets neutral
+        // copy pointing to the privacy contact, since the operator resolves a
+        // suspension with the user. email_not_verified normally never reaches
+        // here — the screen shows "check your inbox" instead (see
+        // isEmailNotVerified) — but has copy in case a caller doesn't. Without
         // a code, the 403 is register's invite-code check.
-        return error.code === 'account_suspended'
-          ? 'Sign-in is paused for this account. Please contact the privacy contact to resolve it'
-          : 'Invite code is wrong or missing'
-      case 409:
-        return 'Username already taken'
+        if (error.code === 'account_suspended') {
+          return 'Sign-in is paused for this account. Please contact the privacy contact to resolve it'
+        }
+        if (error.code === EMAIL_NOT_VERIFIED) {
+          return 'Confirm your email address first - the link is in your inbox'
+        }
+        return 'Invite code is wrong or missing'
       case 429:
         return 'Too many attempts - wait a minute and try again'
       default:
@@ -30,6 +37,18 @@ export function describeAuthError(error: unknown): string {
     }
   }
   return 'Unable to reach the server, please check your connection and try again'
+}
+
+const EMAIL_NOT_VERIFIED = 'email_not_verified'
+
+// Right password, unconfirmed address (specs/002 FR-003): not an error to show,
+// but the cue to switch the sign-in screen to "check your inbox".
+export function isEmailNotVerified(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    error.code === EMAIL_NOT_VERIFIED
+  )
 }
 
 // Shown on the sign-in screen after the session ended on a write (research R4,

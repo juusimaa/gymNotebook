@@ -10,10 +10,31 @@
   margin-top: var(--space-2);
 }
 
-.login-register {
-  margin: 0;
+/* "New here? Create an account" / "Already have an account? Sign in" /
+   "Back to sign in": the line that switches between the screen's modes. */
+.login-switch {
+  margin: var(--space-4) 0 0;
   text-align: center;
   font-size: 13px;
+}
+
+/* The "Check your inbox" state (specs/002 contracts/ui.md). */
+.login-inbox {
+  margin-top: var(--space-6);
+}
+.login-inbox h2 {
+  margin: 0 0 var(--space-3);
+}
+/* Focused programmatically when the state appears (tabIndex -1); it isn't
+   interactive, so no focus ring — same as .privacy-heading. */
+.login-inbox h2:focus {
+  outline: none;
+}
+.login-inbox p {
+  margin: 0 0 var(--space-3);
+}
+.login-inbox .btn-block {
+  margin-top: var(--space-2);
 }
 
 .login-service {

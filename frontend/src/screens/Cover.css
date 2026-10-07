@@ -65,6 +65,19 @@
   margin: var(--space-2) 0 0;
 }
 
+/* The signed-in address, read-only (specs/002). Addresses can be long and
+   have no spaces to break at, so it may wrap anywhere rather than push the
+   page wider than a 320px screen. */
+.cover-account {
+  margin: var(--space-4) 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+.cover-account-email {
+  overflow-wrap: anywhere;
+}
+
 .cover-actions {
   display: flex;
   justify-content: center;

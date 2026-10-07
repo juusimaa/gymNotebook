@@ -16,8 +16,6 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
 {
     private readonly HttpClient _client = factory.CreateClient();
 
-    private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
-
     // Seeds a User directly and mints its token with JwtTokenFactory rather than calling
     // /auth/register: every test in this class shares one host and therefore one
     // in-process rate-limit bucket, and this class alone makes enough of these calls to
@@ -30,7 +28,10 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
 
         var user = new User
         {
-            Username = UniqueUsername(),
+            DisplayName = "Test user",
+            Email = $"{Guid.NewGuid():N}@example.test",
+            // Confirmed: a token for an unconfirmed account is rejected (specs/002 FR-004).
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-horse-battery-staple"),
             TokenVersion = 0,
             PrivacyAccountId = Guid.NewGuid(),
