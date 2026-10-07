@@ -138,3 +138,5 @@ testcontainers/
 .impeccable/config.local.json
 # Critique snapshots written per run on this machine
 .impeccable/critique/
+# Cache the installer's editor hook writes on each run
+.impeccable/hook.cache.json
