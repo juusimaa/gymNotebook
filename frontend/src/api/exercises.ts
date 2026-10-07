@@ -18,6 +18,9 @@ export interface ExerciseResponse {
   isBodyweight: boolean
   sessionCount: number
   lastSet: LastSetResponse | null
+  // The same latest session's first set, warm-up or not; null exactly when lastSet
+  // is. The editor starts a picked block from it when it's a warm-up.
+  firstSet: LastSetResponse | null
 }
 
 export interface ExerciseHistoryPointResponse {
@@ -43,10 +46,18 @@ export interface UpdateExerciseRequest {
   isBodyweight?: boolean
 }
 
-// Powers the new-workout autocomplete. URLSearchParams safely encodes spaces and
-// punctuation; an empty search returns all of the caller's exercises.
-export function searchExercises(search: string): Promise<ExerciseResponse[]> {
+// Powers the workout editor's autocomplete. URLSearchParams safely encodes spaces
+// and punctuation; an empty search returns all of the caller's exercises.
+// excludeWorkoutId is the page being edited: lastSet and firstSet then describe the
+// session before it, never a set this page has logged itself.
+export function searchExercises(
+  search: string,
+  excludeWorkoutId?: number,
+): Promise<ExerciseResponse[]> {
   const params = new URLSearchParams({ search })
+  if (excludeWorkoutId !== undefined) {
+    params.set('excludeWorkoutId', String(excludeWorkoutId))
+  }
   return request<ExerciseResponse[]>(`/exercises?${params}`)
 }
 

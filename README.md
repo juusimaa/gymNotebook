@@ -93,7 +93,7 @@ Current endpoints:
 | `POST` | `/auth/password-reset/confirm` | – | Reset link token + new password; returns a JWT and revokes every other session; 400 `expired`/`invalid`, 403 `account_suspended`; 10/hour per IP |
 | `GET` | `/auth/me` | Bearer | The caller's id, display name and email; proves a token is valid and not revoked |
 | `POST` | `/auth/change-password` | Bearer | Invalidates all previously issued tokens, returns a fresh one |
-| `GET` | `/exercises?search=` | Bearer | Index/autocomplete, scoped to the caller; results carry `sessionCount` and `lastSet` |
+| `GET` | `/exercises?search=&excludeWorkoutId=` | Bearer | Index/autocomplete, scoped to the caller; results carry `sessionCount`, `lastSet` and `firstSet` (`excludeWorkoutId` leaves the page being edited out of both) |
 | `GET` | `/exercises/{id}/history?from=&to=` | Bearer | Best loaded e1RM or bodyweight reps per session, oldest first |
 | `PATCH` | `/exercises/{id}` | Bearer | Rename (merges onto an existing name) and set/clear `isBodyweight` |
 | `GET` | `/workouts?limit=&before=` | Bearer | Pages newest first; rows carry exercise names, counts and end time |

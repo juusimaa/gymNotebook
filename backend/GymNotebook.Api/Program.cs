@@ -933,7 +933,11 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
 // so a route added later can't forget it; LifecycleCoverageTests enforces the same.
 var exercises = app.MapGroup("/exercises").RequireAuthorization().RequireAccountLifecycle();
 
-exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+// excludeWorkoutId is for the edit page of a session still in progress: "last time" must
+// mean the session before this one, not a set this very page has already logged. It only
+// narrows which sets the hints read, so an id that isn't the caller's simply excludes
+// nothing of theirs — there is no ownership check to make and nothing to 404.
+exercises.MapGet("/", async (string? search, int? excludeWorkoutId, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
     var userId = ParseUserId(caller);
     var query = db.Exercises.Where(e => e.UserId == userId);
@@ -944,13 +948,13 @@ exercises.MapGet("/", async (string? search, ClaimsPrincipal caller, AppDbContex
         query = query.Where(e => e.NormalizedName.Contains(normalizedSearch));
     }
 
-    var results = await ProjectExerciseResponses(db, query.OrderBy(e => e.Name)).ToListAsync(ct);
+    var results = await ProjectExerciseResponses(db, query.OrderBy(e => e.Name), excludeWorkoutId).ToListAsync(ct);
 
     return Results.Ok(results);
 })
    .WithName("SearchExercises")
    .WithSummary("Searches the caller's exercises")
-   .WithDescription("Exercise-index and autocomplete lookup scoped to the authenticated user. Returns every exercise when search is omitted. Each result carries its distinct session count and most recently logged set (null if none): the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else.")
+   .WithDescription("Exercise-index and autocomplete lookup scoped to the authenticated user. Returns every exercise when search is omitted. Each result carries its distinct session count, its last set (the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else) and its first set (that same session's first set, warm-up or not); both are null if the exercise has never been logged. excludeWorkoutId leaves one workout out of both sets, so a page being edited doesn't see its own sets as \"last time\".")
    .Produces<List<ExerciseResponse>>(StatusCodes.Status200OK);
 
 exercises.MapGet("/{id:int}/history", async (int id, DateOnly? from, DateOnly? to, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
@@ -1107,7 +1111,7 @@ exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, Cl
     // Re-read through the shared projection rather than building the response by hand, so
     // LastSet comes back the same way it does from GET — including the sets a merge has
     // just re-pointed onto this exercise.
-    var response = await ProjectExerciseResponses(db, db.Exercises.Where(e => e.Id == exercise.Id)).SingleAsync(ct);
+    var response = await ProjectExerciseResponses(db, db.Exercises.Where(e => e.Id == exercise.Id), excludeWorkoutId: null).SingleAsync(ct);
     return Results.Ok(response);
 })
    .WithName("UpdateExercise")
@@ -1650,10 +1654,19 @@ static int ParseUserId(ClaimsPrincipal user)
 // older session is deliberately not preferred over a warm-up from the latest one: the hint
 // answers "what did I do last time", not "what is my best".
 //
+// FirstSet is the other end of that same session: its first block by position, then the
+// lowest set number, warm-up or not. The editor starts a new block from it when it is a
+// warm-up, so a session that opened with a warm-up last time opens with one again. Both
+// subqueries break a tie between two workouts with the same date and start time by the
+// higher id, so they can never describe two different sessions.
+//
+// excludeWorkoutId (null for none) leaves one workout out of both, which is how the edit
+// page asks for the session before itself. SessionCount still counts every page.
+//
 // It walks SetEntry -> WorkoutExercise -> Workout by explicit joins because neither of
-// the lower two has a navigation property upward. EF Core folds the correlated subquery
+// the lower two has a navigation property upward. EF Core folds the correlated subqueries
 // into the outer SELECT, so a full autocomplete list is still one round trip.
-static IQueryable<ExerciseResponse> ProjectExerciseResponses(AppDbContext db, IQueryable<Exercise> exercises) =>
+static IQueryable<ExerciseResponse> ProjectExerciseResponses(AppDbContext db, IQueryable<Exercise> exercises, int? excludeWorkoutId) =>
     exercises.Select(e => new ExerciseResponse(
         e.Id,
         e.Name,
@@ -1666,8 +1679,15 @@ static IQueryable<ExerciseResponse> ProjectExerciseResponses(AppDbContext db, IQ
         (from se in db.SetEntries
          join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
          join w in db.Workouts on we.WorkoutId equals w.Id
-         where we.ExerciseId == e.Id
-         orderby w.Date descending, w.StartedAt descending, se.IsWarmup, we.Position descending, se.SetNumber descending
+         where we.ExerciseId == e.Id && (excludeWorkoutId == null || w.Id != excludeWorkoutId)
+         orderby w.Date descending, w.StartedAt descending, w.Id descending, se.IsWarmup, we.Position descending, se.SetNumber descending
+         select new LastSetResponse(se.Weight, se.Reps, se.IsWarmup))
+            .FirstOrDefault(),
+        (from se in db.SetEntries
+         join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
+         join w in db.Workouts on we.WorkoutId equals w.Id
+         where we.ExerciseId == e.Id && (excludeWorkoutId == null || w.Id != excludeWorkoutId)
+         orderby w.Date descending, w.StartedAt descending, w.Id descending, we.Position, se.SetNumber
          select new LastSetResponse(se.Weight, se.Reps, se.IsWarmup))
             .FirstOrDefault()));
 

@@ -432,6 +432,11 @@ function WorkoutEditor() {
     }
   }
 
+  // On the edit page the suggestions' "last time" must come from the session
+  // before this one, never from a set this page has already logged.
+  const excludeWorkoutId =
+    isEditing && hasValidWorkoutId ? parsedWorkoutId : undefined
+
   // The search waits for typing to pause (debounce): each keystroke's cleanup
   // cancels the pending timer, so only the last query of a burst is sent. The
   // same cleanup marks an in-flight request as stale so a slower response
@@ -444,7 +449,7 @@ function WorkoutEditor() {
       setExerciseSearchMessage(null)
 
       try {
-        const response = await searchExercises(query)
+        const response = await searchExercises(query, excludeWorkoutId)
 
         if (!cancelled) {
           setExerciseSuggestions(response)
@@ -479,7 +484,7 @@ function WorkoutEditor() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [exerciseQuery])
+  }, [exerciseQuery, excludeWorkoutId])
 
   // Typed text the shown answer doesn't cover yet: the debounce is waiting or
   // the request is in flight.
@@ -768,15 +773,19 @@ function WorkoutEditor() {
 
   // Repeated exercise selections remain separate blocks by design.
   function selectExercise(exercise: ExerciseResponse) {
-    // "last time" only on a new page: on the edit page the server's latest
-    // set may already be one of this page's own (newWorkoutDraft.ts).
+    // "last time" on a new page and on a session still being logged; the
+    // edit page's search leaves the page itself out (excludeWorkoutId), so
+    // it's never one of this page's own sets. A finished page being
+    // corrected gets none: its "last time" could be a later session.
+    const isLogging = !isEditing || serverDraft.current?.endTime === ''
     const draft = createWorkoutExerciseDraft(
       createClientId(),
       createClientId(),
       exercise.id,
       exercise.name,
       exercise.isBodyweight,
-      isEditing ? null : exercise.lastSet,
+      isLogging ? exercise.lastSet : null,
+      isLogging ? exercise.firstSet : null,
     )
 
     addExerciseBlock(draft)
