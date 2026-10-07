@@ -531,11 +531,19 @@
   border-radius: var(--radius-md);
 }
 
-.finish-confirmation p {
+/* The question reads the same whether it's a sentence or, on a page started
+   long ago, the label of the finish-time field below it. */
+.finish-confirmation p,
+.finish-confirmation > label {
+  display: block;
   margin: 0;
   color: var(--color-neutral-800);
   font-size: 14px;
   line-height: 1.55;
+}
+
+.finish-confirmation > .input {
+  margin-top: var(--space-2);
 }
 
 .finish-confirmation > div {

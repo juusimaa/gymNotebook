@@ -431,6 +431,28 @@ export function createLocalEndedAt(
   return endedAt.toISOString()
 }
 
+// How long after a page's start "Finish session" may still mean "now". A
+// session longer than this is far likelier a page that was never closed out
+// (PLAN.md: "you will regularly forget to close a session out") than one that
+// really ran this long.
+export const FINISH_NOW_WINDOW_HOURS = 6
+
+// Whether finishing must ask when the session ended instead of stamping the
+// current time. Stamping "now" on a page started on 30 Sep and finished on
+// 7 Oct would record a week-long session; one whose start is still ahead of
+// the clock would end before it began. A start that doesn't parse returns
+// false: the save rejects it on its own, with its own message.
+export function needsExplicitFinishTime(
+  heading: Pick<WorkoutHeadingDraft, 'date' | 'startTime'>,
+  now: Date,
+): boolean {
+  const startedAt = createLocalTimestamp(heading.date, heading.startTime)
+  if (startedAt === null) return false
+
+  const elapsedMs = now.getTime() - startedAt.getTime()
+  return elapsedMs < 0 || elapsedMs > FINISH_NOW_WINDOW_HOURS * 60 * 60 * 1000
+}
+
 // Validates the complete editor state and converts its string fields into the
 // API's numeric and timestamp types in one place. A failed conversion never
 // produces a partial request for the screen to accidentally submit.

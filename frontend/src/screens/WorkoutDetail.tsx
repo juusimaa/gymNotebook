@@ -11,6 +11,7 @@ import {
   formatSetLoad,
   formatWorkoutLongDate,
   formatWorkoutTime,
+  formatWorkoutTimeRange,
 } from './workoutFormat'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import './WorkoutDetail.css'
@@ -122,7 +123,7 @@ export default function WorkoutDetail() {
   const timeRange =
     workout.endedAt === null
       ? `${startedAt}–in progress`
-      : `${startedAt}–${formatWorkoutTime(workout.endedAt)}`
+      : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
   const bodyweight =
     workout.bodyweightKg === null
       ? 'bodyweight not logged'

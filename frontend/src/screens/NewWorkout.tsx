@@ -34,6 +34,7 @@ import {
   createWorkoutExerciseDraft,
   describeHeadingWhen,
   dropOptionalDetails,
+  needsExplicitFinishTime,
   prepareWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
@@ -90,6 +91,7 @@ type InvalidField =
       field: 'date' | 'startTime' | 'bodyweightKg' | 'endTime'
     }
   | { kind: 'set'; setClientId: string; field: 'weight' | 'reps' }
+  | { kind: 'finishTime' }
 
 // The ids that let focus move to a set's inputs right after a render.
 function setFieldId(setClientId: string, field: 'weight' | 'reps'): string {
@@ -109,6 +111,7 @@ const HEADING_FIELD_IDS: Record<
 const SAVE_MESSAGE_ID = 'new-workout-save-message'
 const UNDO_BUTTON_ID = 'new-workout-undo'
 const FINISH_BUTTON_ID = 'new-workout-finish'
+const FINISH_TIME_ID = 'new-workout-finish-time'
 // How long typing in the exercise search must pause before it asks the API.
 // Short enough to feel immediate, long enough to skip most mid-word queries.
 const EXERCISE_SEARCH_DELAY_MS = 250
@@ -229,6 +232,11 @@ function WorkoutEditor() {
   const [isLoading, setIsLoading] = useState(isEditing)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
   const [confirmingFinish, setConfirmingFinish] = useState(false)
+  // A page started long ago (or ahead of the clock) can't be finished "now"
+  // honestly, so its finish question asks for the time instead. Decided when
+  // the question opens, so it can't change shape under the lifter's thumb.
+  const [finishAsksTime, setFinishAsksTime] = useState(false)
+  const [finishTime, setFinishTime] = useState('')
   const [removal, setRemoval] = useState<Removal | null>(null)
   const [invalidField, setInvalidField] = useState<InvalidField | null>(null)
   // The page heading's fields start folded behind their one-line summary;
@@ -508,12 +516,15 @@ function WorkoutEditor() {
   // session" when the question closes without finishing.
   const wasConfirmingFinish = useRef(false)
   useEffect(() => {
-    if (confirmingFinish) keepFinishEditingRef.current?.focus()
-    else if (wasConfirmingFinish.current) {
+    // A question that asks for the time starts in its field instead.
+    if (confirmingFinish) {
+      if (finishAsksTime) focusInput(FINISH_TIME_ID)
+      else keepFinishEditingRef.current?.focus()
+    } else if (wasConfirmingFinish.current) {
       document.getElementById(FINISH_BUTTON_ID)?.focus()
     }
     wasConfirmingFinish.current = confirmingFinish
-  }, [confirmingFinish])
+  }, [confirmingFinish, finishAsksTime])
 
   // Focusing the search box opens the keyboard, which shrinks the visible
   // area (see useVisualViewportHeight). Once it has settled, scroll the
@@ -571,10 +582,17 @@ function WorkoutEditor() {
 
   function isInvalid(field: InvalidField): boolean {
     if (invalidField === null || invalidField.kind !== field.kind) return false
-    return invalidField.kind === 'set' && field.kind === 'set'
-      ? invalidField.setClientId === field.setClientId &&
-          invalidField.field === field.field
-      : invalidField.field === field.field
+    if (invalidField.kind === 'set' && field.kind === 'set') {
+      return (
+        invalidField.setClientId === field.setClientId &&
+        invalidField.field === field.field
+      )
+    }
+    if (invalidField.kind === 'heading' && field.kind === 'heading') {
+      return invalidField.field === field.field
+    }
+    // The finish-time field is the only one of its kind.
+    return true
   }
 
   // aria-invalid plus a pointer to the footer message, so a screen reader
@@ -749,6 +767,12 @@ function WorkoutEditor() {
       return
     }
 
+    if ('kind' in at && at.kind === 'finishTime') {
+      flushSync(() => setInvalidField(at))
+      focusInput(FINISH_TIME_ID)
+      return
+    }
+
     let field: InvalidField
     if ('kind' in at) {
       field = at
@@ -843,6 +867,21 @@ function WorkoutEditor() {
     }))
   }
 
+  function openFinishQuestion() {
+    setFinishAsksTime(needsExplicitFinishTime(heading, new Date()))
+    setFinishTime('')
+    setConfirmingFinish(true)
+  }
+
+  // A finish-time problem belongs to the question, so it goes with it.
+  function closeFinishQuestion() {
+    if (invalidField?.kind === 'finishTime') {
+      setInvalidField(null)
+      setSaveMessage(null)
+    }
+    setConfirmingFinish(false)
+  }
+
   async function saveWorkout(finishSession: boolean) {
     const isSaving = savingAction !== null
     if (isSaving) {
@@ -861,8 +900,22 @@ function WorkoutEditor() {
       return
     }
 
-    // Capture the confirmation instant, not the later instant after network I/O.
+    // Capture the confirmation instant, not the later instant after network
+    // I/O — unless the question asked when the session ended, in which case
+    // that answer on the page's own date is the end (needsExplicitFinishTime).
     let endedAt: string | null = finishSession ? new Date().toISOString() : null
+    if (finishSession && finishAsksTime) {
+      endedAt = createLocalEndedAt(
+        prepared.value.workout.date,
+        heading.startTime,
+        finishTime,
+      )
+      if (endedAt === null) {
+        setSaveMessage('Enter the time the session finished.')
+        pointAtProblem({ kind: 'finishTime' })
+        return
+      }
+    }
     if (isEditing && !finishSession && endTime !== '') {
       endedAt = createLocalEndedAt(
         prepared.value.workout.date,
@@ -1595,12 +1648,45 @@ function WorkoutEditor() {
                 one pair of buttons on screen. */}
             {confirmingFinish ? (
               <div className="finish-confirmation" role="alert">
-                <p>Finish this session now? The current time will be saved.</p>
+                {finishAsksTime ? (
+                  <>
+                    <label htmlFor={FINISH_TIME_ID}>
+                      This page started{' '}
+                      <span className="num">
+                        {/* "today 07.15" mid-sentence, "30 Sep 07.15" otherwise */}
+                        {describeHeadingWhen(heading, '', new Date()).replace(
+                          /^Today/,
+                          'today',
+                        )}
+                      </span>
+                      . When did the session finish?
+                    </label>
+                    <input
+                      className="input num"
+                      id={FINISH_TIME_ID}
+                      type="time"
+                      required
+                      {...invalidProps({ kind: 'finishTime' })}
+                      value={finishTime}
+                      onChange={(event) => {
+                        if (isInvalid({ kind: 'finishTime' })) {
+                          setInvalidField(null)
+                          setSaveMessage(null)
+                        }
+                        setFinishTime(event.target.value)
+                      }}
+                    />
+                  </>
+                ) : (
+                  <p>
+                    Finish this session now? The current time will be saved.
+                  </p>
+                )}
                 <div>
                   <button
                     className="btn btn-ghost"
                     type="button"
-                    onClick={() => setConfirmingFinish(false)}
+                    onClick={closeFinishQuestion}
                     ref={keepFinishEditingRef}
                   >
                     Keep editing
@@ -1637,7 +1723,7 @@ function WorkoutEditor() {
                     className="btn btn-primary"
                     type="button"
                     id={FINISH_BUTTON_ID}
-                    onClick={() => setConfirmingFinish(true)}
+                    onClick={openFinishQuestion}
                   >
                     {savingAction === 'finish'
                       ? 'Finishing…'

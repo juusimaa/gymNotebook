@@ -65,6 +65,46 @@ export function formatWorkoutTime(
   }).format(new Date(timestamp))
 }
 
+// The local calendar day of an instant, as numbers. Intl rather than
+// getDate() so tests can pin the time zone the way formatWorkoutTime's do.
+function localDayParts(
+  timestamp: string,
+  timeZone?: string,
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-FI', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    timeZone,
+  }).formatToParts(new Date(timestamp))
+  const part = (type: 'year' | 'month' | 'day') =>
+    Number(parts.find((p) => p.type === type)?.value)
+  return { year: part('year'), month: part('month'), day: part('day') }
+}
+
+// A finished session's "07.15–08.40". When the end falls on another day than
+// the start — after midnight, or a page finished days late — the end's date
+// follows it ("23.30–00.15 16 Sep"), so the range never passes off a long gap
+// as a short session. The year joins only when that differs too.
+export function formatWorkoutTimeRange(
+  startedAt: string,
+  endedAt: string,
+  timeZone?: string,
+): string {
+  const range = `${formatWorkoutTime(startedAt, timeZone)}–${formatWorkoutTime(endedAt, timeZone)}`
+  const start = localDayParts(startedAt, timeZone)
+  const end = localDayParts(endedAt, timeZone)
+  if (
+    start.year === end.year &&
+    start.month === end.month &&
+    start.day === end.day
+  ) {
+    return range
+  }
+  const year = start.year === end.year ? '' : ` ${end.year}`
+  return `${range} ${end.day} ${MONTHS[end.month - 1]}${year}`
+}
+
 // A day from a timestamp, written out in the interface's English: "4 October
 // 2026". Used for the privacy screens' effective and acknowledgement dates.
 // The locale is fixed rather than the browser's, so a Finnish browser doesn't

@@ -10,6 +10,7 @@ import {
   describeHeadingWhen,
   dropOptionalDetails,
   hasOptionalDetails,
+  needsExplicitFinishTime,
   prepareWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
@@ -123,6 +124,44 @@ describe('createLocalEndedAt', () => {
     expect(createLocalEndedAt('2026-09-15', '23:30', '00:15')).toBe(
       new Date(2026, 8, 16, 0, 15).toISOString(),
     )
+  })
+})
+
+describe('needsExplicitFinishTime', () => {
+  const heading = { date: '2026-09-30', startTime: '07:15' }
+
+  it.each([
+    ['at the start', new Date(2026, 8, 30, 7, 15)],
+    ['a normal session later', new Date(2026, 8, 30, 8, 40)],
+    ['exactly six hours later', new Date(2026, 8, 30, 13, 15)],
+  ])('lets a finish %s mean now', (_, now) => {
+    expect(needsExplicitFinishTime(heading, now)).toBe(false)
+  })
+
+  it.each([
+    ['more than six hours later', new Date(2026, 8, 30, 13, 16)],
+    ['on a later day', new Date(2026, 9, 7, 12, 6)],
+    ['before the page started', new Date(2026, 8, 30, 7, 14)],
+  ])('asks for the time when finishing %s', (_, now) => {
+    expect(needsExplicitFinishTime(heading, now)).toBe(true)
+  })
+
+  it('crosses midnight within the window without asking', () => {
+    expect(
+      needsExplicitFinishTime(
+        { date: '2026-09-15', startTime: '23:30' },
+        new Date(2026, 8, 16, 0, 15),
+      ),
+    ).toBe(false)
+  })
+
+  it('leaves an unparseable start to the save validation', () => {
+    expect(
+      needsExplicitFinishTime(
+        { date: '2026-09-30', startTime: '' },
+        new Date(2026, 9, 7),
+      ),
+    ).toBe(false)
   })
 })
 

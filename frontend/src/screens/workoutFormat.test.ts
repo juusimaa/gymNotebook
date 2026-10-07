@@ -7,6 +7,7 @@ import {
   formatWorkoutLongDate,
   formatSetLoad,
   formatWorkoutTime,
+  formatWorkoutTimeRange,
 } from './workoutFormat'
 
 describe('formatWorkoutDate', () => {
@@ -36,6 +37,49 @@ describe('formatWorkoutTime', () => {
     ['winter time', '2026-01-08T05:15:00Z', '07.15'],
   ])('formats %s in the Finnish convention', (_, timestamp, expected) => {
     expect(formatWorkoutTime(timestamp, 'Europe/Helsinki')).toBe(expected)
+  })
+})
+
+describe('formatWorkoutTimeRange', () => {
+  // Times are Helsinki summer time (UTC+3).
+  it('shows only the times when the session ends on its start day', () => {
+    expect(
+      formatWorkoutTimeRange(
+        '2026-09-30T04:15:00Z',
+        '2026-09-30T05:40:00Z',
+        'Europe/Helsinki',
+      ),
+    ).toBe('07.15–08.40')
+  })
+
+  it('adds the end date when the session ends after midnight', () => {
+    expect(
+      formatWorkoutTimeRange(
+        '2026-09-15T20:30:00Z',
+        '2026-09-15T21:15:00Z',
+        'Europe/Helsinki',
+      ),
+    ).toBe('23.30–00.15 16 Sep')
+  })
+
+  it('adds the end date when the page was finished days later', () => {
+    expect(
+      formatWorkoutTimeRange(
+        '2026-09-30T04:15:00Z',
+        '2026-10-07T09:06:00Z',
+        'Europe/Helsinki',
+      ),
+    ).toBe('07.15–12.06 7 Oct')
+  })
+
+  it('adds the year when the end falls in another year', () => {
+    expect(
+      formatWorkoutTimeRange(
+        '2026-12-31T20:30:00Z',
+        '2026-12-31T22:30:00Z',
+        'Europe/Helsinki',
+      ),
+    ).toBe('22.30–00.30 1 Jan 2027')
   })
 })
 
