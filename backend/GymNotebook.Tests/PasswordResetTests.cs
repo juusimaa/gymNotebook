@@ -248,6 +248,25 @@ public class PasswordResetTests(GymNotebookFactory factory) : IClassFixture<GymN
     }
 
     [Fact]
+    public async Task ConfirmPasswordReset_SameIdDifferentAddress_Returns400InvalidAndChangesNothing()
+    {
+        // Arrange: a link for this account's id and current version, but minted for
+        // another address — what a link sent before a restore reused the id would look
+        // like to the account that now has it.
+        var user = await EmailTestSupport.SeedUserAsync(factory.Services);
+        var token = JwtTokenFactory.CreateLinkToken(
+            new User { Id = user.Id, Email = "previous-owner@example.test", DisplayName = "", PasswordHash = "", TokenVersion = user.TokenVersion, PrivacyAccountId = Guid.Empty },
+            LinkPurpose.Reset, GymNotebookFactory.JwtSecret, DateTimeOffset.UtcNow);
+
+        // Act
+        var response = await ConfirmAsync(token, NewPassword);
+
+        // Assert
+        await AssertLinkErrorAsync(response, "invalid");
+        Assert.True(await PasswordIsAsync(user.Id, EmailTestSupport.Password));
+    }
+
+    [Fact]
     public async Task ConfirmPasswordReset_DeletedAccount_Returns400Invalid()
     {
         // Arrange: the link outlives its account.

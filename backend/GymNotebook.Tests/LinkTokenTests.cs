@@ -34,7 +34,7 @@ public class LinkTokenTests
     }
 
     [Fact]
-    public void ReadLinkToken_ResetTokenWithinOneHour_ValidWithTokenVersion()
+    public void ReadLinkToken_ResetTokenWithinOneHour_ValidWithEmailAndTokenVersion()
     {
         // Arrange
         var token = JwtTokenFactory.CreateLinkToken(_user, LinkPurpose.Reset, Secret, _now);
@@ -42,8 +42,8 @@ public class LinkTokenTests
         // Act
         var result = JwtTokenFactory.ReadLinkToken(token, LinkPurpose.Reset, Secret, _now.AddMinutes(59));
 
-        // Assert: the tv is what makes a reset link single-use (PR 4).
-        Assert.Equal(new LinkTokenResult(LinkTokenStatus.Valid, 42, null, 3), result);
+        // Assert: the tv makes a reset link single-use; the email ties it to the inbox.
+        Assert.Equal(new LinkTokenResult(LinkTokenStatus.Valid, 42, "ann@example.test", 3), result);
     }
 
     [Theory]

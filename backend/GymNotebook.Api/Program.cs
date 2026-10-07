@@ -765,7 +765,7 @@ auth.MapPost("/password-reset/confirm", async (ConfirmPasswordResetRequest reque
 {
     var now = clock.GetUtcNow();
     var link = JwtTokenFactory.ReadLinkToken(request.Token, LinkPurpose.Reset, jwtSecret, now);
-    if (link.Status != LinkTokenStatus.Valid)
+    if (link.Status != LinkTokenStatus.Valid || link.Email is null)
     {
         return LinkError(link.Status);
     }
@@ -777,10 +777,15 @@ auth.MapPost("/password-reset/confirm", async (ConfirmPasswordResetRequest reque
         return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
     }
 
-    // A first, unlocked look: is the link already used (or the account gone)? Checked
-    // again under the lock by PasswordReplacement, which is what makes it race-free; this
-    // one just saves hashing a password for a link that can't work.
-    var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == link.UserId, ct);
+    // A first, unlocked look: is the link already used, or is the account gone? The
+    // version is checked again under the lock by PasswordReplacement, which is what makes
+    // single use race-free; this look saves hashing a password for a link that can't work.
+    //
+    // Matching the address as well as the id, as /verify-email does, means the link only
+    // ever works for the account at the inbox it was sent to: if that account was
+    // deleted and its id reused (a restore rewinds the sequence), the new account's
+    // version could match, but its address won't.
+    var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == link.UserId && u.Email == link.Email, ct);
     if (user is null || user.TokenVersion != link.TokenVersion)
     {
         return LinkError(LinkTokenStatus.Invalid);

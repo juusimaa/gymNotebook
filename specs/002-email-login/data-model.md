@@ -29,7 +29,7 @@ No foreign key to `users`: signup emails to addresses with no account are counte
 | Purpose | Claims | Lifetime | Single use |
 | --- | --- | --- | --- |
 | `verify` | `sub`, `purpose`, `email`, `exp` | 48 h | Not needed: confirming is idempotent. |
-| `reset` | `sub`, `purpose`, `tv`, `exp` | 1 h | Yes: completion bumps `TokenVersion`, so `tv` no longer matches. |
+| `reset` | `sub`, `purpose`, `email`, `tv`, `exp` | 1 h | Yes: completion bumps `TokenVersion`, so `tv` no longer matches. |
 
 Signed with `Jwt:Secret` (HS256). The bearer handler rejects any token carrying `purpose`.
 
