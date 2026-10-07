@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-06
 
-**Status**: Draft for owner review. Requires the constitution 3.0.0 amendment in the same PR (Principle V, Q2). Nothing here is approved for implementation until the owner merges this plan (Principle VII).
+**Status**: Done (2026-10-07), implemented in PRs #107–#110. *Originally:* Draft for owner review. Requires the constitution 3.0.0 amendment in the same PR (Principle V, Q2). Nothing here is approved for implementation until the owner merges this plan (Principle VII).
 
 **Input**: User description: "Plan a new milestone for email login and disabling invite code. Take a look at the docker-subscription-tracker project how it is done and I think we could do it the same way. Only thing is that this is a mobile-only web app."
 
