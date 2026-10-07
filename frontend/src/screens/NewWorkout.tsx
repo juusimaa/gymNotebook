@@ -4,7 +4,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent,
 } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useNavigate, useParams, useRouteLoaderData } from 'react-router'
@@ -118,6 +120,38 @@ function focusInput(id: string, select = false) {
   if (!(element instanceof HTMLInputElement)) return
   element.focus()
   if (select) element.select()
+}
+
+// A tapped weight or reps field selects its figure too, the same as one the
+// editor focuses itself: the copied "10" is replaced by typing "15", with no
+// select-all or backspacing on a phone. A second tap places the caret as
+// usual, for editing one digit.
+//
+// Two browser quirks need handling. The tap's own mouseup, which arrives
+// after focus, clears the selection in Chrome and Safari, so the first
+// mouseup after focus is cancelled. And iOS ignores select() on inputs, and
+// can still move the caret after the focus event, so the range is set
+// through setSelectionRange both at once and again on the next frame.
+const selectedOnFocus = new WeakSet<HTMLInputElement>()
+
+const selectOnFocusProps = {
+  onFocus(event: FocusEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const selectAll = () => {
+      if (document.activeElement === input) {
+        input.setSelectionRange(0, input.value.length)
+      }
+    }
+    selectAll()
+    requestAnimationFrame(selectAll)
+    selectedOnFocus.add(input)
+  },
+  onMouseUp(event: MouseEvent<HTMLInputElement>) {
+    if (selectedOnFocus.delete(event.currentTarget)) event.preventDefault()
+  },
+  onBlur(event: FocusEvent<HTMLInputElement>) {
+    selectedOnFocus.delete(event.currentTarget)
+  },
 }
 
 // /workouts/new and /workouts/:id/edit render the same component. The key
@@ -1334,6 +1368,7 @@ function WorkoutEditor() {
                                   setClientId: set.clientId,
                                   field: 'weight',
                                 })}
+                                {...selectOnFocusProps}
                                 value={set.weight}
                                 onChange={(event) =>
                                   changeSet(exercise.clientId, set.clientId, {
@@ -1367,6 +1402,7 @@ function WorkoutEditor() {
                                 setClientId: set.clientId,
                                 field: 'reps',
                               })}
+                              {...selectOnFocusProps}
                               value={set.reps}
                               onChange={(event) =>
                                 changeSet(exercise.clientId, set.clientId, {
