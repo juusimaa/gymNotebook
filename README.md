@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/favicon.svg" alt="Gym Notebook app icon" width="160" height="160" />
+</p>
+
 # Gym Notebook
 
 [![build](https://github.com/juusimaa/gymNotebook/actions/workflows/build-and-push.yml/badge.svg?branch=main)](https://github.com/juusimaa/gymNotebook/actions/workflows/build-and-push.yml?query=branch%3Amain)
