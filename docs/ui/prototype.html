@@ -1104,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     );
     replaceEditorAnchor(
       `sets: [...b.sets, { weight: "", reps: "", warmup: false }]`,
-      `sets: [...b.sets, b.sets.length ? { ...b.sets[b.sets.length - 1] } : { weight: "", reps: "", warmup: false }]`
+      `sets: [...b.sets, b.sets.length ? { ...b.sets[b.sets.length - 1], warmup: false } : { weight: "", reps: "", warmup: false }]`
     );
     replaceEditorAnchor(
       `  toggleWarmup = (bi, si) => () => this.setState((s) => ({`,

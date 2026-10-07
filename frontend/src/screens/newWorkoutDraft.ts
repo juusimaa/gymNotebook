@@ -210,8 +210,8 @@ function createSetDraftFromLastSet(
 // A new exercise block always begins with one editable set copied from last
 // time, when there is one, otherwise empty. Which of last time's sets: the
 // warm-up it opened with (firstSet), if it opened with one, so this session
-// starts the same way — "+ Add set" then repeats it and the working weight is
-// typed over the copy; otherwise its final working set (lastSet). Both client
+// starts the same way — "+ Add set" then repeats its figures as a working
+// set; otherwise its final working set (lastSet). Both client
 // IDs are supplied by the caller so this factory stays deterministic and easy
 // to test.
 export function createWorkoutExerciseDraft(
@@ -246,10 +246,14 @@ export function createWorkoutExerciseDraft(
 }
 
 // "+ Add set" is the notebook's ditto mark (design-fix-plan step 3): the new
-// set repeats the one above it — weight, reps and the warm-up flag — so a
-// repeated set costs one tap instead of retyping both numbers. The first set
-// of a block has nothing above it and starts empty. Returns a new block and
-// set array so React can observe the change; the original stays untouched.
+// set repeats the figures above it, so a repeated set costs one tap instead
+// of retyping both numbers. It always starts as a working set, though: copying
+// the warm-up flag meant the first heavy set after the warm-ups was silently
+// logged as one more warm-up and dropped out of progress, with nothing on
+// screen to say so. Pressing Warm-up again is visible; a missing working set
+// is not. The first set of a block has nothing above it and starts empty.
+// Returns a new block and set array so React can observe the change; the
+// original stays untouched.
 export function addSetToExercise(
   exercise: WorkoutExerciseDraft,
   setClientId: string,
@@ -258,7 +262,7 @@ export function addSetToExercise(
   const set =
     previous === undefined
       ? createEmptySetDraft(setClientId)
-      : { ...previous, clientId: setClientId }
+      : { ...previous, clientId: setClientId, isWarmup: false }
   return { ...exercise, sets: [...exercise.sets, set] }
 }
 
