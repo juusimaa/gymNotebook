@@ -207,7 +207,7 @@ AI-tooling folders (`.agents/`, and everything in `.specify/` except `memory/`) 
 
 ## Status
 
-Milestones 1–10 are done. Workouts can be logged, edited and deleted end-to-end, exercises have both an e1RM/reps progress chart and rename/merge management, and every push to `main` publishes both images to GHCR and deploys them to Azure Container Apps at <https://gymnotebook.fit>.
+Milestones 1–10 and 12 are done. Workouts can be logged, edited and deleted end-to-end, exercises have both an e1RM/reps progress chart and rename/merge management, and every push to `main` publishes both images to GHCR and deploys them to Azure Container Apps at <https://gymnotebook.fit>. Signup is open: accounts sign in by email, confirm their address by an emailed link, can reset a forgotten password, and a Cloudflare Turnstile check guards the two forms that send email ([specs/002-email-login/](specs/002-email-login/)).
 
 Milestone 11, privacy and account lifecycle, is in progress through Spec Kit ([specs/001-privacy-account-lifecycle/](specs/001-privacy-account-lifecycle/)). The notice, export, deletion and optional-details consent are implemented and remain switched off in production behind `PRIVACY_LIFECYCLE_ENABLED`. Provider, restore, deployed performance and owner walkthrough evidence is still needed before the production switch; track it in the [release checklist](docs/privacy/release-checklist.md). The full milestone log is in [PLAN.md → Milestones](PLAN.md#milestones).
 
