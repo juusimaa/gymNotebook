@@ -107,6 +107,9 @@ const HEADING_FIELD_IDS: Record<
 const SAVE_MESSAGE_ID = 'new-workout-save-message'
 const UNDO_BUTTON_ID = 'new-workout-undo'
 const FINISH_BUTTON_ID = 'new-workout-finish'
+// How long typing in the exercise search must pause before it asks the API.
+// Short enough to feel immediate, long enough to skip most mid-word queries.
+const EXERCISE_SEARCH_DELAY_MS = 250
 
 // Moves focus to an input by id. `select` highlights its value, so typing
 // replaces a copied figure instead of appending to it.
@@ -178,7 +181,10 @@ function WorkoutEditor() {
   const [exerciseSuggestions, setExerciseSuggestions] = useState<
     ExerciseResponse[]
   >([])
-  const [isExerciseSearchLoading, setIsExerciseSearchLoading] = useState(false)
+  // The trimmed query the shown suggestions (or error) answer. While it lags
+  // behind what is typed, a search is waiting or in flight and the previous
+  // answer stays on screen, so the picker doesn't collapse on every keystroke.
+  const [answeredExerciseQuery, setAnsweredExerciseQuery] = useState('')
   const [exerciseSearchMessage, setExerciseSearchMessage] = useState<
     string | null
   >(null)
@@ -392,21 +398,15 @@ function WorkoutEditor() {
     }
   }
 
-  // Cleanup marks the previous request as stale so a slower response cannot
-  // replace results for a newer query.
+  // The search waits for typing to pause (debounce): each keystroke's cleanup
+  // cancels the pending timer, so only the last query of a burst is sent. The
+  // same cleanup marks an in-flight request as stale so a slower response
+  // cannot replace results for a newer query.
   useEffect(() => {
     const query = exerciseQuery.trim()
     let cancelled = false
 
     async function loadSuggestions() {
-      if (query === '') {
-        setExerciseSuggestions([])
-        setExerciseSearchMessage(null)
-        setIsExerciseSearchLoading(false)
-        return
-      }
-
-      setIsExerciseSearchLoading(true)
       setExerciseSearchMessage(null)
 
       try {
@@ -414,38 +414,55 @@ function WorkoutEditor() {
 
         if (!cancelled) {
           setExerciseSuggestions(response)
+          setAnsweredExerciseQuery(query)
         }
       } catch {
         if (!cancelled) {
           setExerciseSuggestions([])
+          setAnsweredExerciseQuery(query)
           setExerciseSearchMessage(
             'Exercises could not be loaded. Please try again.',
           )
         }
-      } finally {
-        if (!cancelled) {
-          setIsExerciseSearchLoading(false)
-        }
       }
     }
 
-    void loadSuggestions()
+    // An emptied box clears at once; there is nothing to wait for.
+    const timer = window.setTimeout(
+      () => {
+        if (query === '') {
+          setExerciseSuggestions([])
+          setAnsweredExerciseQuery('')
+          setExerciseSearchMessage(null)
+        } else {
+          void loadSuggestions()
+        }
+      },
+      query === '' ? 0 : EXERCISE_SEARCH_DELAY_MS,
+    )
 
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [exerciseQuery])
+
+  // Typed text the shown answer doesn't cover yet: the debounce is waiting or
+  // the request is in flight.
+  const isExerciseSearchPending = exerciseQuery.trim() !== answeredExerciseQuery
 
   // The picker sits last in the scrolling column, right above the sticky
   // footer, so its answers (suggestions or the add-as choice) can open below
   // the visible area. While the search box has focus, bring them into view;
   // 'nearest' scrolls no more than it has to, and not at all when they fit.
+  // Keyed on the answer rather than the typed text, so it runs once per
+  // search instead of on every keystroke.
   const pickerResultCount = exerciseSuggestions.length
   useEffect(() => {
-    if (exerciseQuery.trim() === '' || isExerciseSearchLoading) return
+    if (answeredExerciseQuery === '') return
     if (document.activeElement !== searchRef.current) return
     pickerRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [exerciseQuery, isExerciseSearchLoading, pickerResultCount])
+  }, [answeredExerciseQuery, pickerResultCount])
 
   // The finish question replaces the buttons that opened it, so focus would
   // be lost with them: move it to the safe answer, and back to "Finish
@@ -768,6 +785,7 @@ function WorkoutEditor() {
   function clearExercisePicker() {
     setExerciseQuery('')
     setExerciseSuggestions([])
+    setAnsweredExerciseQuery('')
     setExerciseSearchMessage(null)
   }
 
@@ -889,15 +907,25 @@ function WorkoutEditor() {
     }
   }
 
-  const canCreateExercise =
-    exerciseQuery.trim() !== '' &&
-    !isExerciseSearchLoading &&
-    exerciseSearchMessage === null &&
-    !exerciseSuggestions.some(
+  // The add-as choice appears once a search has answered and stays put while
+  // the next one runs, so it doesn't blink on every keystroke. Its buttons
+  // only work once the answer covers exactly what is typed: until then an
+  // existing exercise with that name may not be in the list yet, and adding
+  // would create a duplicate. It names the answered query, so it also stays
+  // hidden while that one is an exact match — "Add Back squat" must not show
+  // for a moment after typing past "Back squat".
+  const isExactExerciseMatch = (name: string) =>
+    exerciseSuggestions.some(
       (exercise) =>
-        normalizeExerciseName(exercise.name) ===
-        normalizeExerciseName(exerciseQuery),
+        normalizeExerciseName(exercise.name) === normalizeExerciseName(name),
     )
+  const showCreateExerciseChoice =
+    exerciseQuery.trim() !== '' &&
+    answeredExerciseQuery !== '' &&
+    exerciseSearchMessage === null &&
+    !isExactExerciseMatch(exerciseQuery) &&
+    !isExactExerciseMatch(answeredExerciseQuery)
+  const canCreateExercise = showCreateExerciseChoice && !isExerciseSearchPending
   const isSaving = savingAction !== null
   // Shown on the folded heading line only when the account allows it.
   const summaryTitle = detailsAllowed ? heading.title.trim() : ''
@@ -1420,7 +1448,9 @@ function WorkoutEditor() {
                   onFocus={revealPicker}
                 />
 
-                {isExerciseSearchLoading && (
+                {/* Only the first search after an empty box says so; later
+                    ones keep the previous answer on screen while they run. */}
+                {isExerciseSearchPending && answeredExerciseQuery === '' && (
                   <p className="muted exercise-search-status" role="status">
                     Searching exercises…
                   </p>
@@ -1436,7 +1466,6 @@ function WorkoutEditor() {
                 )}
 
                 {exerciseQuery.trim() !== '' &&
-                  !isExerciseSearchLoading &&
                   exerciseSearchMessage === null &&
                   exerciseSuggestions.length > 0 && (
                     <ul
@@ -1467,20 +1496,21 @@ function WorkoutEditor() {
 
                 {/* Existing names come first and the add-as choice last, so a
                     near-miss like "Taka" offers "Takakyykky" before inviting a
-                    typo'd duplicate. The wording says which case this is. */}
-                {canCreateExercise && (
+                    typo'd duplicate. The wording says which case this is,
+                    for the query the list answers. */}
+                {showCreateExerciseChoice && (
                   <div className="new-exercise-choice">
                     <p>
                       {exerciseSuggestions.length > 0 ? (
                         <>
                           Not in the list? Add{' '}
-                          <strong>{exerciseQuery.trim()}</strong> as a new
+                          <strong>{answeredExerciseQuery}</strong> as a new
                           exercise:
                         </>
                       ) : (
                         <>
                           No exercise called{' '}
-                          <strong>{exerciseQuery.trim()}</strong> yet. Add it
+                          <strong>{answeredExerciseQuery}</strong> yet. Add it
                           as:
                         </>
                       )}
@@ -1489,6 +1519,7 @@ function WorkoutEditor() {
                       <button
                         className="btn btn-secondary"
                         type="button"
+                        disabled={!canCreateExercise}
                         onClick={() => selectNewExercise(false)}
                       >
                         Loaded (kg)
@@ -1496,6 +1527,7 @@ function WorkoutEditor() {
                       <button
                         className="btn btn-secondary"
                         type="button"
+                        disabled={!canCreateExercise}
                         onClick={() => selectNewExercise(true)}
                       >
                         Bodyweight
