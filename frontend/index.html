@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the installed app draw edge to edge on phones
+         with a notch or home indicator; base.css pads the body by the
+         safe-area insets so nothing ends up underneath them. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <!-- Browser chrome colour, matching --color-bg in each scheme (tokens.css). -->
     <meta
       name="theme-color"
@@ -15,6 +21,13 @@
       media="(prefers-color-scheme: dark)"
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Home-screen install. The manifest is what Android/Chrome reads (name,
+         icons, standalone display); iOS reads it too for the display mode
+         but takes its icon only from apple-touch-icon, as a PNG, never SVG.
+         The PNGs are favicon.svg rendered at fixed sizes. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Gym Notebook" />
     <title>Gym Notebook</title>
   </head>
   <body>

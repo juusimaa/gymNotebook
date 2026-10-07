@@ -13,6 +13,13 @@
    autofill tint) follow the OS setting along with tokens.css's dark block. */
 html {
   color-scheme: light dark;
+  /* The screen height that is left once body has padded itself clear of the
+     notch and home indicator (see body). Full-height screens size to this
+     rather than 100dvh, or they would overflow by the insets. In a browser
+     tab the insets are 0 and this is plain 100dvh. */
+  --app-height: calc(
+    100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
 }
 
 /* Selected text, including the weight a set field pre-selects on focus, in
@@ -31,6 +38,11 @@ body {
   line-height: 1.55;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
+  /* Keep content clear of the notch, rounded corners and home indicator when
+     the app runs from the home screen (index.html sets viewport-fit=cover).
+     In an ordinary browser tab every inset is 0, so this changes nothing. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 h1,
@@ -124,7 +136,7 @@ a {
 .page {
   max-width: var(--page-max-width);
   margin: 0 auto;
-  min-height: 100dvh;
+  min-height: var(--app-height);
   padding: var(--space-8) var(--space-6);
   display: flex;
   flex-direction: column;
