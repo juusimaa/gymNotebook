@@ -22,17 +22,44 @@ export interface ProgressChartGeometry {
   xLast: string | null
 }
 
+// Fixed decimals without the trailing zeros: 72.5 rather than 72.50, and 100
+// rather than 100.00.
 function compactNumber(value: number, maximumFractionDigits = 1): string {
-  return value.toFixed(maximumFractionDigits).replace(/\.0+$/, '')
+  return value
+    .toFixed(maximumFractionDigits)
+    .replace(/(\.\d*?)0+$/, '$1')
+    .replace(/\.$/, '')
+}
+
+// The figure as the screen prints it: whole kg for an e1RM, following the
+// prototype, and reps as they are for a bodyweight exercise. The chart keeps
+// the precise server value for its geometry.
+export function progressDisplayValue(
+  value: number,
+  isBodyweight: boolean,
+): number {
+  return isBodyweight ? value : Math.round(value)
 }
 
 export function formatProgressFigure(
   value: number,
   isBodyweight: boolean,
 ): string {
-  // The chart retains the precise server value for geometry and deltas, while
-  // headline figures follow the prototype's whole kg / whole reps treatment.
-  return compactNumber(isBodyweight ? value : Math.round(value))
+  return compactNumber(progressDisplayValue(value, isBodyweight))
+}
+
+// A change is the difference between two printed figures, not between the
+// precise values behind them: 94 → 99 must read +5, never the +5.5 that the
+// unrounded estimates would give, or the screen looks like it can't subtract.
+export function progressDisplayChange(
+  from: number,
+  to: number,
+  isBodyweight: boolean,
+): number {
+  return (
+    progressDisplayValue(to, isBodyweight) -
+    progressDisplayValue(from, isBodyweight)
+  )
 }
 
 export function formatProgressChange(change: number | null): string {

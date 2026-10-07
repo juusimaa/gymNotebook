@@ -12,6 +12,7 @@ import {
   formatProgressDate,
   formatProgressFigure,
   formatProgressSet,
+  progressDisplayChange,
 } from './progressChart'
 import { formatWorkoutTime } from './workoutFormat'
 import './Progress.css'
@@ -264,9 +265,7 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
     return (
       <section className="progress-no-points">
         <h2>{history.exerciseName}</h2>
-        <p className="progress-metric">
-          {metricLabel} · {metricUnit}
-        </p>
+        <ProgressMetric isBodyweight={isBodyweight} unit={metricUnit} />
         <p className="muted">
           No qualifying working sets yet. Warm-ups, loaded sets without a
           weight, and added-weight bodyweight sets do not become chart points.
@@ -281,11 +280,23 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
   const best = points.reduce((current, point) =>
     point.value > current.value ? point : current,
   )
-  const totalChange = latest.value - first.value
+  // One session has nothing to change from, so its Change says so rather
+  // than printing "—" since its own date.
+  const totalChange =
+    points.length === 1
+      ? null
+      : progressDisplayChange(first.value, latest.value, isBodyweight)
   const newestFirst = points
     .map((point, index) => ({
       point,
-      change: index === 0 ? null : point.value - points[index - 1].value,
+      change:
+        index === 0
+          ? null
+          : progressDisplayChange(
+              points[index - 1].value,
+              point.value,
+              isBodyweight,
+            ),
     }))
     .reverse()
 
@@ -293,9 +304,7 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
     <>
       <section className="progress-title">
         <h2>{history.exerciseName}</h2>
-        <p className="progress-metric">
-          {metricLabel} · {metricUnit}
-        </p>
+        <ProgressMetric isBodyweight={isBodyweight} unit={metricUnit} />
       </section>
 
       <figure className="progress-chart">
@@ -306,7 +315,9 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
             aria-labelledby="progress-chart-title progress-chart-description"
           >
             <title id="progress-chart-title">
-              {history.exerciseName} {metricLabel.toLowerCase()}
+              {history.exerciseName},{' '}
+              {/* Lower-case only the first letter, so it stays "e1RM". */}
+              {metricLabel.charAt(0).toLowerCase() + metricLabel.slice(1)}
             </title>
             <desc id="progress-chart-description">
               {points.length} session points from{' '}
@@ -360,17 +371,26 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
         <ProgressStat
           label="Latest"
           figure={formatProgressFigure(latest.value, isBodyweight)}
+          unit={metricUnit}
           meta={`${formatProgressDate(latest.date)} · ${formatProgressSet(latest, isBodyweight)}`}
         />
         <ProgressStat
           label="Best"
           figure={formatProgressFigure(best.value, isBodyweight)}
+          unit={metricUnit}
           meta={`${formatProgressDate(best.date)}${best.reps === 1 && !isBodyweight ? ' · tested single' : ''}`}
         />
         <ProgressStat
           label="Change"
-          figure={formatProgressChange(totalChange)}
-          meta={`since ${formatProgressDate(first.date)}`}
+          figure={
+            totalChange === null ? '—' : formatProgressChange(totalChange)
+          }
+          unit={totalChange ? metricUnit : undefined}
+          meta={
+            totalChange === null
+              ? 'one session so far'
+              : `since ${formatProgressDate(first.date)}`
+          }
           accent
         />
       </section>
@@ -411,21 +431,51 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
   )
 }
 
+// The metric line is set in tracked capitals, which would print "E1RM". The
+// term is kept in its own case so it reads as the abbreviation it is.
+function ProgressMetric({
+  isBodyweight,
+  unit,
+}: {
+  isBodyweight: boolean
+  unit: string
+}) {
+  return (
+    <p className="progress-metric">
+      {isBodyweight ? (
+        'Best reps per session'
+      ) : (
+        <>
+          Best <span className="progress-metric-term">e1RM</span> per session
+        </>
+      )}{' '}
+      · {unit}
+    </p>
+  )
+}
+
+// A headline figure carries its unit beside it, so "99" can't be read as
+// anything but 99 kg (or reps). A change of nothing ("—") has no unit.
 function ProgressStat({
   label,
   figure,
+  unit,
   meta,
   accent = false,
 }: {
   label: string
   figure: string
+  unit?: string
   meta: string
   accent?: boolean
 }) {
   return (
     <div className={accent ? 'is-accent' : undefined}>
       <p>{label}</p>
-      <strong className="num">{figure}</strong>
+      <strong className="num">
+        {figure}
+        {unit !== undefined && <small> {unit}</small>}
+      </strong>
       <span>{meta}</span>
     </div>
   )

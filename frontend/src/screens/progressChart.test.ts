@@ -5,6 +5,7 @@ import {
   formatProgressChange,
   formatProgressDate,
   formatProgressSet,
+  progressDisplayChange,
 } from './progressChart'
 
 function point(
@@ -115,5 +116,25 @@ describe('progress formatting', () => {
     expect(formatProgressChange(-2)).toBe('−2')
     expect(formatProgressChange(0)).toBe('—')
     expect(formatProgressChange(null)).toBe('first')
+  })
+
+  it('drops trailing zeros from a set weight', () => {
+    expect(formatProgressSet(point(1, '2026-09-08', 87, 72.5, 6), false)).toBe(
+      '72.5 kg × 6',
+    )
+    expect(
+      formatProgressSet(point(1, '2026-09-08', 101.25, 101.25, 1), false),
+    ).toBe('101.25 kg × 1')
+  })
+
+  // 94.4 and 99.9 print as 94 and 100, so the change between them must
+  // print as +6, not the +5.5 between the precise estimates.
+  it('measures a loaded change between the printed whole-kg figures', () => {
+    expect(progressDisplayChange(94.4, 99.9, false)).toBe(6)
+    expect(progressDisplayChange(85.2, 87.6, false)).toBe(3)
+  })
+
+  it('measures a bodyweight change in reps as they are', () => {
+    expect(progressDisplayChange(8, 11, true)).toBe(3)
   })
 })
