@@ -15,6 +15,8 @@ import {
   removeSetFromExercise,
   restoreSetToExercise,
   updateSetInExercise,
+  withLastTime,
+  type WorkoutExerciseDraft,
 } from './newWorkoutDraft'
 
 function createTwoSetExercise() {
@@ -795,5 +797,54 @@ describe('optional details in a draft', () => {
     expect(
       hasOptionalDetails({ ...dropOptionalDetails(heading), title: '  ' }),
     ).toBe(false)
+  })
+})
+
+// A block as the edit page loads it from the server: no lastSet at all.
+function loadedBlock(
+  clientId: string,
+  exerciseId: number | null,
+): WorkoutExerciseDraft {
+  return {
+    clientId,
+    exerciseId,
+    exerciseName: 'Back Squat',
+    isBodyweight: false,
+    isAddedWeightEnabled: false,
+    sets: [
+      { clientId: `${clientId}-1`, weight: '100', reps: '5', isWarmup: false },
+    ],
+  }
+}
+
+describe('withLastTime', () => {
+  const lastSet = { weight: 100, reps: 5, isWarmup: false }
+
+  it('gives loaded blocks the set from the session before', () => {
+    const block = loadedBlock('b', 42)
+
+    const [result] = withLastTime([block], [{ id: 42, lastSet }])
+
+    expect(result.lastSet).toEqual(lastSet)
+    expect(result.sets).toBe(block.sets)
+  })
+
+  // A block picked in this visit already carries the answer it was picked with.
+  it('keeps a lastSet the block already has', () => {
+    const picked = { ...loadedBlock('b', 42), lastSet: null }
+
+    const [result] = withLastTime([picked], [{ id: 42, lastSet }])
+
+    expect(result).toBe(picked)
+  })
+
+  it('leaves a new exercise without one and marks a never-logged one null', () => {
+    const newExercise = loadedBlock('a', null)
+    const unlogged = loadedBlock('b', 7)
+
+    const [first, second] = withLastTime([newExercise, unlogged], [])
+
+    expect(first).toBe(newExercise)
+    expect(second.lastSet).toBeNull()
   })
 })
