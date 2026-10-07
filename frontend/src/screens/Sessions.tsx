@@ -5,6 +5,7 @@ import {
   formatCount,
   formatWorkoutDate,
   formatWorkoutTime,
+  formatWorkoutTimeRange,
 } from './workoutFormat'
 import './Sessions.css'
 
@@ -160,7 +161,7 @@ export default function Sessions() {
             const timeRange =
               workout.endedAt === null
                 ? `from ${startedAt}`
-                : `${startedAt}–${formatWorkoutTime(workout.endedAt)}`
+                : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
 
             const exerciseSummary =
               workout.exerciseNames.length === 0
