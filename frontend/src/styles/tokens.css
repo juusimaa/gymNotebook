@@ -43,6 +43,10 @@
   --color-accent: #b68235;
   --color-accent-2: #ac803e;
   --color-divider: color-mix(in srgb, #201f1d 16%, transparent);
+  /* Errors only: a field that needs fixing, a save that failed. A muted
+     brick, so a failure no longer shares the gold of links, focus and
+     gains. 6.2:1 on the ground, 5.6:1 on --color-surface. */
+  --color-error: #9b3a2a;
 
   /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
      same step of any role matches the others in visual value. */
@@ -135,6 +139,9 @@
     --color-accent: #ad7b2f;
     --color-accent-2: #9f7938;
     --color-divider: color-mix(in srgb, #e1ddd8 16%, transparent);
+    /* The same brick, lifted for the dark ground: 6.27:1 on it, 5.76:1 on
+       --color-surface. */
+    --color-error: #d9826d;
 
     --color-neutral-100: #1f1c1c;
     --color-neutral-200: #292525;

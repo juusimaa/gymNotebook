@@ -7,6 +7,7 @@ import {
   type ExerciseResponse,
 } from '../api/exercises'
 import { describeLastSet, normalizeExerciseName } from './exerciseFormat'
+import { routeNotice } from './routeNotice'
 import { formatCount } from './workoutFormat'
 import './ExerciseManagement.css'
 
@@ -92,7 +93,15 @@ export default function EditExercise() {
         name: name.trim(),
         isBodyweight,
       })
-      void navigate('/exercises')
+      // Say what happened, in the index it lands on: a rename onto an existing
+      // name is a merge, and that is the one worth confirming most.
+      const notice =
+        collision !== undefined
+          ? `Merged into ${collision.name}.`
+          : nameChanged
+            ? `Renamed to ${name.trim()}.`
+            : `${exercise.name} saved as ${isBodyweight ? 'bodyweight' : 'loaded (kg)'}.`
+      void navigate('/exercises', { state: routeNotice(notice) })
     } catch (error: unknown) {
       setMessage(
         error instanceof ApiError && error.status === 404

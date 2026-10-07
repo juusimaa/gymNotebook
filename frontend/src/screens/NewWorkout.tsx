@@ -46,6 +46,7 @@ import {
 } from './newWorkoutDraft'
 import { getToken } from '../auth/token'
 import { createClientId } from './clientId'
+import { routeNotice } from './routeNotice'
 import {
   countDraftSets,
   describeDiscard,
@@ -979,7 +980,17 @@ function WorkoutEditor() {
       // Saved: the stored copy has done its job.
       isDraftClosed.current = true
       if (draftRoute !== null) removeEditorDraft(draftRoute)
-      void navigate(isEditing ? `/workouts/${workoutId}` : '/workouts')
+      // The screen it lands on confirms the save, so leaving the editor never
+      // leaves the lifter guessing whether the sets made it.
+      const notice =
+        endedAt !== null && finishSession
+          ? 'Session finished and saved.'
+          : isEditing
+            ? 'Changes saved.'
+            : 'Page saved. It stays open for more sets.'
+      void navigate(isEditing ? `/workouts/${workoutId}` : '/workouts', {
+        state: routeNotice(notice),
+      })
     } catch (error: unknown) {
       // Consent was withdrawn elsewhere while this page was open, and the
       // server refused the details (contracts/ui.md → Rejected save). Not a

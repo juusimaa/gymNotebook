@@ -79,7 +79,20 @@ export default function Login() {
   // null means no message; the <p> isn't rendered at all rather than left empty.
   // Starts as the entry notice ("that reset link has expired"), if any; like
   // any message, it goes once the user moves on.
-  const [message, setMessage] = useState<string | null>(entry.notice)
+  // isStatus marks news that isn't a failure ("Sent again"), which is set in
+  // ink rather than the error colour.
+  const [message, setMessageState] = useState<{
+    text: string
+    isStatus: boolean
+  } | null>(
+    entry.notice === null ? null : { text: entry.notice, isStatus: false },
+  )
+  function setMessage(text: string | null) {
+    setMessageState(text === null ? null : { text, isStatus: false })
+  }
+  function showStatus(text: string) {
+    setMessageState({ text, isStatus: true })
+  }
   // Disables the buttons while a request is in flight, so a double-tap can't
   // spend two of the ten-per-minute auth rate-limit slots.
   const [submitting, setSubmitting] = useState(false)
@@ -111,6 +124,9 @@ export default function Login() {
   // its heading: a screen reader announces the new state, and nobody is left
   // focused on a button that no longer exists.
   const resultHeadingRef = useRef<HTMLHeadingElement>(null)
+  // A failed sign-in clears the password and puts the caret back in it, so
+  // the retry starts where it has to rather than on the page body.
+  const passwordRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (mode === 'inbox' || mode === 'resetSent') {
       resultHeadingRef.current?.focus()
@@ -157,6 +173,7 @@ export default function Login() {
       // which is why describeAuthError takes unknown and does the instanceof.
       setMessage(describeAuthError(err))
       setPassword('')
+      passwordRef.current?.focus()
     } finally {
       setSubmitting(false)
     }
@@ -207,7 +224,7 @@ export default function Login() {
       await resendVerification({ email, password })
       // The API answers the same whether or not it sent anything, so this
       // can't promise more than "if it applies, it's on its way".
-      setMessage('Sent again. It can take a minute to arrive.')
+      showStatus('Sent again. It can take a minute to arrive.')
     } catch (err) {
       setMessage(describeAuthError(err))
     } finally {
@@ -219,8 +236,11 @@ export default function Login() {
   // renders nothing. role="alert" makes a screen reader announce it when it
   // appears. Inline prose under the buttons, not a toast (spec).
   const messageLine = message !== null && (
-    <p className="form-message" role="alert">
-      {message}
+    <p
+      className={`form-message${message.isStatus ? ' is-status' : ''}`}
+      role={message.isStatus ? 'status' : 'alert'}
+    >
+      {message.text}
     </p>
   )
 
@@ -316,7 +336,7 @@ export default function Login() {
         <>
           <p className="muted login-intro">{INTROS[mode]}</p>
           {interruptedWrite && (
-            <p className="form-message" role="status">
+            <p className="form-message is-status" role="status">
               {INTERRUPTED_WRITE_NOTICE}
             </p>
           )}
@@ -344,6 +364,7 @@ export default function Login() {
               <label className="field">
                 <span className="label">Password</span>
                 <input
+                  ref={passwordRef}
                   className="input"
                   type="password"
                   value={password}
