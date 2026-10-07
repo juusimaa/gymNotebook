@@ -173,7 +173,7 @@ public class EmailVerificationTests(GymNotebookFactory factory) : IClassFixture<
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         // Act: shared is what a session takes; exclusive is what the password reset
-        // (specs/002 PR 4) will take, for accounts that may not be confirmed yet.
+        // takes, for accounts that may not be confirmed yet.
         GuardOutcome shared, exclusive;
         await using (var transaction = await db.Database.BeginTransactionAsync())
         {

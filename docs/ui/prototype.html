@@ -811,10 +811,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       isLogin: screen === "login",`
     );
 
-    // Email sign-in (milestone 12, specs/002 contracts/ui.md). /login gets three
-    // modes switched in place — Sign in, Create account, Check your inbox — and
-    // a public /verify-email screen, reached here from the inbox state's preview
-    // link. Same anchor discipline as the privacy patches: fail visibly if the
+    // Email sign-in (milestone 12, specs/002 contracts/ui.md). /login gets
+    // modes switched in place — Sign in, Create account, Forgot password, and
+    // the Check your inbox / Reset sent results — plus the public /verify-email
+    // and /reset-password screens, reached here from the results' preview
+    // links. Same anchor discipline as the privacy patches: fail visibly if the
     // bundled source moves. Runs after them, so it anchors on their output.
     const replaceEmailLoginAnchor = (anchor, replacement) => {
       if (!template.includes(anchor)) throw new Error('Email login prototype anchor missing: ' + anchor.slice(0, 90));
@@ -832,32 +833,54 @@ document.addEventListener('DOMContentLoaded', async function() {
   };
   submitLogin = (e) => {
     if (e) e.preventDefault();
-    // Sign in opens the cover; Create account always ends on "check your inbox",
-    // because the API answers every signup the same way.
-    this.setState((s) => s.loginMode === "create" ? { loginMode: "inbox" } : { screen: "cover" });
+    // Sign in opens the cover; Create account always ends on "check your inbox"
+    // and Forgot password on "reset sent", because the API answers every
+    // signup and every reset request the same way.
+    this.setState((s) => s.loginMode === "create" ? { loginMode: "inbox" } : s.loginMode === "forgot" ? { loginMode: "resetSent" } : { screen: "cover" });
   };
   openPublicNotice = (e) => {`
     );
     replaceEmailLoginAnchor(
       '      isLogin: screen === "login",',
       `      isLogin: screen === "login",
-      isLoginForm: this.state.loginMode !== "inbox",
+      isLoginForm: this.state.loginMode !== "inbox" && this.state.loginMode !== "resetSent",
       isLoginSignIn: this.state.loginMode === "signIn",
       isLoginCreate: this.state.loginMode === "create",
+      isLoginForgot: this.state.loginMode === "forgot",
+      isLoginWithPassword: this.state.loginMode !== "forgot",
       isLoginInbox: this.state.loginMode === "inbox",
-      loginIntro: this.state.loginMode === "create" ? "Create your notebook. An invite code is required for now." : "Sign in with your email to open your notebook.",
-      loginAction: this.state.loginMode === "create" ? "Create account" : "Sign in",
+      isLoginResetSent: this.state.loginMode === "resetSent",
+      loginIntro: { create: "Create your notebook. An invite code is required for now.", forgot: "Enter the address you signed up with and we'll send a link to choose a new password." }[this.state.loginMode] || "Sign in with your email to open your notebook.",
+      loginAction: { create: "Create account", forgot: "Send link" }[this.state.loginMode] || "Sign in",
       submitLogin: this.submitLogin,
       setLoginSignIn: this.setLoginMode("signIn"),
       setLoginCreate: this.setLoginMode("create"),
+      setLoginForgot: this.setLoginMode("forgot"),
       isVerifyEmail: screen === "verifyEmail",
-      openVerifyEmail: this.go("verifyEmail"),`
+      openVerifyEmail: this.go("verifyEmail"),
+      isResetPassword: screen === "resetPassword",
+      openResetPassword: this.go("resetPassword"),`
     );
     const loginFieldStyle = 'style="display:flex;flex-direction:column;gap:6px"';
     const loginLabelStyle = 'style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)"';
     replaceEmailLoginAnchor(
       '        <p style="margin:0 0 26px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">Sign in to open your notebook. New here? An invite code is required.</p>\n',
       '        <sc-if value="{{ isLoginForm }}" hint-placeholder-val="{{ true }}">\n        <p style="margin:0 0 26px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">{{ loginIntro }}</p>\n'
+    );
+    // Forgot password asks for the address only; Sign in offers it right under
+    // the password field.
+    replaceEmailLoginAnchor(
+      `          <label class="field" ${loginFieldStyle}>
+            <span ${loginLabelStyle}>Password</span>
+            <input class="input" type="password" placeholder="••••••••" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+          </label>`,
+      `          <sc-if value="{{ isLoginWithPassword }}" hint-placeholder-val="{{ true }}">
+          <label class="field" ${loginFieldStyle}>
+            <span ${loginLabelStyle}>Password</span>
+            <input class="input" type="password" placeholder="••••••••" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+          </label>
+          </sc-if>
+          <sc-if value="{{ isLoginSignIn }}" hint-placeholder-val="{{ true }}"><div style="margin-top:-6px;font-size:13px"><a href="#" sc-camel-on-click="{{ setLoginForgot }}">Forgot your password?</a></div></sc-if>`
     );
     replaceEmailLoginAnchor(
       `          <label class="field" ${loginFieldStyle}>
@@ -889,6 +912,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         </div>`,
       `        <sc-if value="{{ isLoginSignIn }}" hint-placeholder-val="{{ true }}"><div ${loginSwitch}>New here? <a href="#" sc-camel-on-click="{{ setLoginCreate }}">Create an account</a></div></sc-if>
         <sc-if value="{{ isLoginCreate }}" hint-placeholder-val="{{ false }}"><div ${loginSwitch}>Already have an account? <a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Sign in</a></div></sc-if>
+        <sc-if value="{{ isLoginForgot }}" hint-placeholder-val="{{ false }}"><div ${loginSwitch}>Remembered it? <a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Sign in</a></div></sc-if>
         </sc-if>
         <sc-if value="{{ isLoginInbox }}" hint-placeholder-val="{{ false }}">
           <h2 style="font-family:var(--font-heading);font-weight:400;font-size:28px;margin:0 0 12px">Check your inbox</h2>
@@ -896,6 +920,13 @@ document.addEventListener('DOMContentLoaded', async function() {
           <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Nothing there? Check the spam folder, or send it again.</p>
           <button class="btn btn-secondary" style="min-height:48px;width:100%;font-size:15px">Send the link again</button>
           <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ openVerifyEmail }}">Open the link from the email (preview)</a></div>
+          <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Back to sign in</a></div>
+        </sc-if>
+        <sc-if value="{{ isLoginResetSent }}" hint-placeholder-val="{{ false }}">
+          <h2 style="font-family:var(--font-heading);font-weight:400;font-size:28px;margin:0 0 12px">Check your inbox</h2>
+          <p style="margin:0 0 12px;font-size:15px;line-height:1.6">If there's an account for <strong>ann@example.com</strong>, we've sent a link to choose a new password. It works for one hour.</p>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Nothing there? Check the spam folder, or ask for a new link.</p>
+          <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ openResetPassword }}">Open the link from the email (preview)</a></div>
           <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Back to sign in</a></div>
         </sc-if>`
     );
@@ -910,6 +941,28 @@ document.addEventListener('DOMContentLoaded', async function() {
         <p style="margin:0 0 20px;font-size:15px;line-height:1.6"><strong>ann@example.com</strong> is confirmed.</p>
         <button class="btn btn-primary" sc-camel-on-click="{{ setLoginSignIn }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">Sign in</button>
         <p style="margin:18px 0 0;font-size:12px;line-height:1.55;color:var(--color-neutral-600)">The other outcomes are text-only: "This link has expired" and "This link doesn't work", each with Go to sign in, and "Couldn't confirm yet" with Try again.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isResetPassword }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 34px">
+        <div style="font-family:var(--font-body);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Private log</div>
+        <h1 style="font-family:var(--font-heading);font-weight:400;font-size:44px;line-height:1.02;margin:10px 0 6px;color:var(--color-text)">Gym<br>Notebook</h1>
+        <div style="height:1px;background:var(--color-accent);opacity:.6;width:52px;margin:14px 0 22px"></div>
+        <p style="margin:0 0 26px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">Choose a new password for your notebook.</p>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <label class="field" ${loginFieldStyle}>
+            <span ${loginLabelStyle}>New password</span>
+            <input class="input" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+          </label>
+          <label class="field" ${loginFieldStyle}>
+            <span ${loginLabelStyle}>Repeat new password</span>
+            <input class="input" type="password" autocomplete="new-password" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+          </label>
+        </div>
+        <button class="btn btn-primary" sc-camel-on-click="{{ goCover }}" style="margin-top:26px;min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Set password</button>
+        <p style="margin:18px 0 0;text-align:center;font-size:13px;line-height:1.6;color:var(--color-neutral-700)">This signs you in here and out everywhere else, including the app on your home screen.</p>
+        <p style="margin:18px 0 0;font-size:12px;line-height:1.55;color:var(--color-neutral-600)">The other outcome is text-only: "This link no longer works" (expired or already used) with Send a new link, which opens Forgot password.</p>
       </div>
     </sc-if>
 

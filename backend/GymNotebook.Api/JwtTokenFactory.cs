@@ -56,10 +56,15 @@ public static class JwtTokenFactory
 
     // A link token for `purpose`, valid for that purpose's lifetime from `now`.
     //
-    //   verify: sub + email. The address is checked again when the link is used, so a
-    //           token minted for one address can never confirm another.
-    //   reset:  sub + tv. Completing a reset bumps TokenVersion (PR 4), which makes this
-    //           tv stale — that is what makes a reset link single-use, with no token table.
+    //   verify: sub + email.
+    //   reset:  sub + email + tv. Completing a reset bumps TokenVersion, which makes
+    //           this tv stale — that is what makes a reset link single-use, with no
+    //           token table.
+    //
+    // Both carry the address, and it is checked again when the link is used: the id
+    // alone could, after a database restore rewound the id sequence, name a different
+    // account than the one the email went to. With the address too, a link only ever
+    // works for the inbox it was sent to.
     public static string CreateLinkToken(User user, LinkPurpose purpose, string secret, DateTimeOffset now)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
@@ -69,10 +74,12 @@ public static class JwtTokenFactory
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(PurposeClaim, PurposeName(purpose)),
+            new("email", user.Email),
         };
-        claims.Add(purpose == LinkPurpose.Verify
-            ? new Claim("email", user.Email)
-            : new Claim("tv", user.TokenVersion.ToString()));
+        if (purpose == LinkPurpose.Reset)
+        {
+            claims.Add(new Claim("tv", user.TokenVersion.ToString()));
+        }
 
         var lifetime = purpose == LinkPurpose.Verify ? VerifyLifetime : ResetLifetime;
         var token = new JwtSecurityToken(
@@ -168,8 +175,8 @@ public enum LinkTokenStatus
     Invalid,
 }
 
-// ReadLinkToken's answer. UserId and the purpose's own claim (Email for verify,
-// TokenVersion for reset) are meaningful only when Status is Valid.
+// ReadLinkToken's answer. UserId, Email and (for reset) TokenVersion are meaningful
+// only when Status is Valid.
 public sealed record LinkTokenResult(LinkTokenStatus Status, int UserId, string? Email, int TokenVersion)
 {
     public static readonly LinkTokenResult Invalid = new(LinkTokenStatus.Invalid, 0, null, 0);

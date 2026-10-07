@@ -56,7 +56,7 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 ## P1 — Account administration
 
 **Information:**
-- `Email` (since milestone 12, [specs/002](../../specs/002-email-login/spec.md)): the address the user signs in with, stored trimmed and lowercased. It is the account's identifier, and it is where confirmation (and, from specs/002 PR 4, password-reset) links are sent.
+- `Email` (since milestone 12, [specs/002](../../specs/002-email-login/spec.md)): the address the user signs in with, stored trimmed and lowercased. It is the account's identifier, and it is where confirmation and password-reset links are sent.
 - `EmailVerifiedAt`: when the address was confirmed by its link; null until then. The API shows only whether it is confirmed; the export includes the time.
 - `DisplayName` (the former `Username`, renamed in specs/002): the name printed on the notebook's cover, chosen by the user. It may be a real name; nothing requires or forbids that. It no longer signs anyone in and is not unique.
 - `PasswordHash`: a BCrypt hash. The password itself is never stored or logged.
