@@ -381,8 +381,8 @@ describe('set draft operations', () => {
     ])
   })
 
-  // The ditto mark: the new set repeats the one above, warm-up flag included.
-  it('repeats the previous set with a new client id', () => {
+  // The ditto mark: the new set repeats the figures above, as a working set.
+  it('repeats the previous set as a working set with a new client id', () => {
     const block = createTwoSetExercise()
     const filled = updateSetInExercise(block, 'set-2', {
       weight: '60',
@@ -396,7 +396,7 @@ describe('set draft operations', () => {
       clientId: 'set-3',
       weight: '60',
       reps: '5',
-      isWarmup: true,
+      isWarmup: false,
     })
     expect(result.sets[1]).toBe(filled.sets[1])
     expect(filled.sets).toHaveLength(2)

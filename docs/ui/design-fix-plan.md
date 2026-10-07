@@ -117,6 +117,12 @@ set went from about 8 actions (tap Add set, tap weight, type 3 digits, tap
 reps, type 1) to 1, and the × is 44 × 44 with 10px to the toggle (was 30px
 wide, 6px away).
 
+Reversed (owner, 2026-10-07, after the live critique): the ditto no longer
+copies the warm-up flag; a new set always starts as a working set. Copying
+it meant the first heavy set after the warm-ups was silently saved as a
+warm-up and left out of progress. A run of warm-ups now costs one Warm-up tap
+per extra set, which is visible; a missing working set was not.
+
 ### 4. Search order and main actions — `/impeccable clarify` *(issues 4 and 5, P2)*
 
 Problems: typing "Taka" lists "Add Taka as Loaded / Bodyweight" above the
