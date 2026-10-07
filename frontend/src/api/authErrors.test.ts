@@ -52,7 +52,7 @@ describe('describeAuthError', () => {
   // What fetch itself rejects with when the API is down or the URL is wrong.
   it('blames the connection when the error is not from the API', () => {
     expect(describeAuthError(new TypeError('Failed to fetch'))).toBe(
-      'Unable to reach the server, please check your connection and try again',
+      "Can't reach the notebook. Check your connection and try again.",
     )
   })
 })

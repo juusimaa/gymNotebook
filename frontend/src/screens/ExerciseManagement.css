@@ -197,8 +197,23 @@
   flex: 1;
 }
 
+/* Cancel takes only its own width, so the primary gets the rest: "Merge into
+   Bench Press" names the exercise it merges into and wrapped to two lines
+   when it had to share the row evenly. A very long name may still wrap. */
+.edit-exercise-actions .btn-ghost {
+  flex: 0 0 auto;
+}
+
 .edit-exercise-actions .btn-primary {
   flex-grow: 1.4;
+}
+
+.exercise-index-empty p {
+  margin: 0;
+}
+
+.exercise-index-empty-action {
+  margin-top: var(--space-3);
 }
 
 .exercise-management-state {

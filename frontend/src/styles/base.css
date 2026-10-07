@@ -241,6 +241,23 @@ a {
 .input::placeholder {
   color: var(--color-neutral-700);
 }
+/* WebKit's own clear button on a search field is a blue circle from no part of
+   this palette. Redrawn as a plain cross in the muted ink, so the screen has
+   one kind of ×. */
+.input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-inline-start: var(--space-2);
+  cursor: pointer;
+  background-color: var(--color-neutral-700);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2 2l10 10M12 2L2 12' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2 2l10 10M12 2L2 12' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
 .input:hover {
   border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
 }
