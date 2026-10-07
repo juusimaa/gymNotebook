@@ -1399,7 +1399,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // with that set written in — the ditto mark across sessions — so the
     // same set as last time costs no typing. The app also focuses that set's
     // weight with the figure selected and makes Enter move weight → reps →
-    // the next set; the static preview shows only the prefill.
+    // the next set; the static preview shows only the prefill. Nor does it
+    // model the app's opening warm-up (a block starts with the warm-up last
+    // time opened with, from firstSet): its sample data has no opening sets.
     replacePolishAnchor(
       'draft: [...s.draft, { name, sets: [{ weight: "", reps: "", warmup: false }] }]',
       'draft: [...s.draft, { name, sets: [(() => {\n' +

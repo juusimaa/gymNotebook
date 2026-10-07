@@ -181,9 +181,9 @@ export interface WorkoutExerciseDraft {
   // UI-only switch controlling the added-weight field for bodyweight exercises.
   isAddedWeightEnabled: boolean
   // The exercise's most recent set before this page, shown as "last time" in
-  // the block. Only a block picked from autocomplete on a new page has one:
-  // that answer was fetched before this page logged anything. The edit page
-  // leaves it out, because there the latest set may be this page's own.
+  // the block. Only a block picked from autocomplete has one, on a new page or
+  // on the edit page of a session still in progress — which asks the server to
+  // leave the page itself out, so the hint is never one of its own sets.
   // Optional so drafts stored before it existed still restore. Never sent.
   lastSet?: ExerciseResponse['lastSet']
   sets: WorkoutSetDraft[]
@@ -207,9 +207,13 @@ function createSetDraftFromLastSet(
   }
 }
 
-// A new exercise block always begins with one editable set: last time's, when
-// there is one, otherwise empty. Both client IDs are supplied by the caller so
-// this factory stays deterministic and easy to test.
+// A new exercise block always begins with one editable set copied from last
+// time, when there is one, otherwise empty. Which of last time's sets: the
+// warm-up it opened with (firstSet), if it opened with one, so this session
+// starts the same way — "+ Add set" then repeats it and the working weight is
+// typed over the copy; otherwise its final working set (lastSet). Both client
+// IDs are supplied by the caller so this factory stays deterministic and easy
+// to test.
 export function createWorkoutExerciseDraft(
   clientId: string,
   initialSetClientId: string,
@@ -217,21 +221,26 @@ export function createWorkoutExerciseDraft(
   exerciseName: string,
   isBodyweight: boolean,
   lastSet: ExerciseResponse['lastSet'] = null,
+  firstSet: ExerciseResponse['firstSet'] = null,
 ): WorkoutExerciseDraft {
+  const copiedSet = firstSet?.isWarmup === true ? firstSet : lastSet
+
   return {
     clientId,
     exerciseId,
     exerciseName,
     isBodyweight,
     // A bodyweight exercise last done with added weight opens with the weight
-    // field showing, so the copied added weight is visible and editable.
+    // field showing, so the copied added weight is visible and editable — and
+    // never sits in a hidden field that the save would quietly drop.
     isAddedWeightEnabled:
-      isBodyweight && lastSet !== null && lastSet.weight !== null,
+      isBodyweight &&
+      [lastSet, copiedSet].some((set) => set !== null && set.weight !== null),
     lastSet,
     sets: [
-      lastSet === null
+      copiedSet === null
         ? createEmptySetDraft(initialSetClientId)
-        : createSetDraftFromLastSet(initialSetClientId, lastSet),
+        : createSetDraftFromLastSet(initialSetClientId, copiedSet),
     ],
   }
 }

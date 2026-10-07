@@ -277,6 +277,57 @@ describe('createWorkoutExerciseDraft', () => {
     expect(draft.sets[0]).toMatchObject({ weight: '10', reps: '6' })
     expect(draft.isAddedWeightEnabled).toBe(true)
   })
+
+  // Last time opened with a warm-up, so this time does too: the warm-up's own
+  // figures, not the working weight flagged as one.
+  it('starts from the warm-up last time opened with', () => {
+    const draft = createWorkoutExerciseDraft(
+      'b',
+      's',
+      42,
+      'Back Squat',
+      false,
+      { weight: 100, reps: 5, isWarmup: false },
+      { weight: 60, reps: 10, isWarmup: true },
+    )
+
+    expect(draft.sets).toEqual([
+      { clientId: 's', weight: '60', reps: '10', isWarmup: true },
+    ])
+    // The "last time" line still names the working set.
+    expect(draft.lastSet).toEqual({ weight: 100, reps: 5, isWarmup: false })
+  })
+
+  it('starts from the last working set when last time opened with one', () => {
+    const draft = createWorkoutExerciseDraft(
+      'b',
+      's',
+      42,
+      'Back Squat',
+      false,
+      { weight: 100, reps: 5, isWarmup: false },
+      { weight: 95, reps: 5, isWarmup: false },
+    )
+
+    expect(draft.sets).toEqual([
+      { clientId: 's', weight: '100', reps: '5', isWarmup: false },
+    ])
+  })
+
+  it('shows the weight field for an opening warm-up with added weight', () => {
+    const draft = createWorkoutExerciseDraft(
+      'b',
+      's',
+      7,
+      'Dip',
+      true,
+      { weight: null, reps: 12, isWarmup: false },
+      { weight: 5, reps: 8, isWarmup: true },
+    )
+
+    expect(draft.sets[0]).toMatchObject({ weight: '5', reps: '8' })
+    expect(draft.isAddedWeightEnabled).toBe(true)
+  })
 })
 
 describe('set draft operations', () => {

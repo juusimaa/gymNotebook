@@ -236,6 +236,73 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     }
 
     [Fact]
+    public async Task Search_returns_the_opening_warm_up_of_the_latest_session_as_its_first_set()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+
+        // The older session opened with a working set; only the latest one counts.
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 90m, IsWarmup: false));
+        // Seeded out of order so the answer must come from SetNumber, not insertion order.
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 10), new DateTimeOffset(2026, 1, 10, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 2, Reps: 5, Weight: 100m, IsWarmup: false),
+            (SetNumber: 1, Reps: 10, Weight: 60m, IsWarmup: true),
+            (SetNumber: 3, Reps: 5, Weight: 100m, IsWarmup: false));
+
+        var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        var squat = Assert.Single(body!);
+        Assert.Equal(new LastSetResponse(60m, 10, IsWarmup: true), squat.FirstSet);
+        Assert.Equal(new LastSetResponse(100m, 5, IsWarmup: false), squat.LastSet);
+    }
+
+    [Fact]
+    public async Task Search_returns_a_working_first_set_when_the_latest_session_opened_without_a_warm_up_and_null_when_never_logged()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+        await SeedExerciseAsync(userId, "Bench Press");
+
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 10), new DateTimeOffset(2026, 1, 10, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 95m, IsWarmup: false),
+            (SetNumber: 2, Reps: 8, Weight: 50m, IsWarmup: true));
+
+        var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        var squat = Assert.Single(body!, e => e.Name == "Back Squat");
+        Assert.Equal(new LastSetResponse(95m, 5, IsWarmup: false), squat.FirstSet);
+
+        var bench = Assert.Single(body!, e => e.Name == "Bench Press");
+        Assert.Null(bench.FirstSet);
+    }
+
+    [Fact]
+    public async Task Search_with_excludeWorkoutId_reads_both_sets_from_the_session_before_it()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 10, Weight: 60m, IsWarmup: true),
+            (SetNumber: 2, Reps: 5, Weight: 100m, IsWarmup: false));
+        // The page being edited: its own set is newer and would otherwise be "last time".
+        var openBlock = await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 10), new DateTimeOffset(2026, 1, 10, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 3, Weight: 110m, IsWarmup: false));
+
+        var response = await _client.SendAsync(AuthenticatedGet($"/exercises?excludeWorkoutId={openBlock.WorkoutId}", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        var squat = Assert.Single(body!);
+        Assert.Equal(new LastSetResponse(100m, 5, IsWarmup: false), squat.LastSet);
+        Assert.Equal(new LastSetResponse(60m, 10, IsWarmup: true), squat.FirstSet);
+        // Excluding a page only changes the hints; the index still counts it.
+        Assert.Equal(2, squat.SessionCount);
+    }
+
+    [Fact]
     public async Task Update_without_a_token_returns_unauthorized()
     {
         var response = await _client.PatchAsync("/exercises/1", JsonContent.Create(new UpdateExerciseRequest("Whatever", null)));
