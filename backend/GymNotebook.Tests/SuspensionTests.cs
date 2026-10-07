@@ -21,10 +21,10 @@ public class SuspensionTests(GymNotebookFactory factory) : IClassFixture<GymNote
     public async Task Login_SuspendedAccountWrongPassword_Returns401()
     {
         // Arrange
-        var (username, _) = await SeedSuspendedUserAsync();
+        var (email, _) = await SeedSuspendedUserAsync();
 
         // Act
-        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(username, "not-the-password"));
+        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(email, "not-the-password"));
 
         // Assert: the same bare 401 as any wrong password — nothing about suspension.
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -35,10 +35,10 @@ public class SuspensionTests(GymNotebookFactory factory) : IClassFixture<GymNote
     public async Task Login_SuspendedAccountCorrectPassword_Returns403AccountSuspended()
     {
         // Arrange
-        var (username, _) = await SeedSuspendedUserAsync();
+        var (email, _) = await SeedSuspendedUserAsync();
 
         // Act
-        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(username, Password));
+        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(email, Password));
 
         // Assert: a code the UI maps to the privacy contact path, and no token.
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -62,15 +62,33 @@ public class SuspensionTests(GymNotebookFactory factory) : IClassFixture<GymNote
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // Seeded directly (the class makes two logins; registration would add to the same
+    [Fact]
+    public async Task Login_SuspendedUnconfirmedAccountCorrectPassword_Returns403AccountSuspended()
+    {
+        // Arrange: suspended *and* never confirmed.
+        var (email, _) = await SeedSuspendedUserAsync(confirmed: false);
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/auth/login", new LoginRequest(email, Password));
+
+        // Assert: suspension wins over email_not_verified (specs/002 Story 2, scenario 3),
+        // so the user is pointed at the privacy contact, not at an inbox.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        Assert.Equal("account_suspended", body?.Code);
+    }
+
+    // Seeded directly (the class makes several logins; registration would add to the same
     // per-host rate-limit bucket for no reason) and suspended the way the operator would.
-    private async Task<(string Username, int UserId)> SeedSuspendedUserAsync()
+    private async Task<(string Email, int UserId)> SeedSuspendedUserAsync(bool confirmed = true)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = new User
         {
-            Username = $"user-{Guid.NewGuid():N}",
+            DisplayName = $"user-{Guid.NewGuid():N}",
+            Email = $"{Guid.NewGuid():N}@example.test",
+            EmailVerifiedAt = confirmed ? DateTimeOffset.UtcNow : null,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(Password),
             PrivacyAccountId = Guid.NewGuid(),
         };
@@ -78,6 +96,6 @@ public class SuspensionTests(GymNotebookFactory factory) : IClassFixture<GymNote
         await db.SaveChangesAsync();
         await db.Users.Where(u => u.Id == user.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.SignInSuspendedAt, DateTimeOffset.UtcNow));
-        return (user.Username, user.Id);
+        return (user.Email, user.Id);
     }
 }

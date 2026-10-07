@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         about: "Sample export from the design prototype. The real file explains every field; see specs/001 contracts/api.md.",
         conventions: ["Instants are ISO-8601 in UTC.", "date is the stored local calendar day (YYYY-MM-DD).", "weight and bodyweightKg are kilograms; null means not recorded.", "Ids link records within this file."]
       },
-      account: { id: 1, privacyAccountId: "00000000-0000-4000-8000-000000000001", username: "sample-user", createdAt: "2026-09-01T10:00:00+00:00" },
+      account: { id: 1, privacyAccountId: "00000000-0000-4000-8000-000000000001", email: "ann@example.com", emailVerifiedAt: "2026-09-01T10:05:00+00:00", displayName: "Ann", createdAt: "2026-09-01T10:00:00+00:00" },
       exercises: sampleExercises,
       workouts: DATA.map((w) => ({
         id: w.id, userId: 1, date: sampleDate(w),
@@ -518,12 +518,14 @@ document.addEventListener('DOMContentLoaded', async function() {
   };
   restartPrivacyPreview = (e) => {
     if (e) e.preventDefault();
-    this.setState({ screen: "login", noticeSeen: false, noticeVersion: 1, exportPassword: "", deletePassword: "", detailsConsent: false, detailsStep: "ask", detailsTransition: false });
+    this.setState({ screen: "login", loginMode: "signIn", noticeSeen: false, noticeVersion: 1, exportPassword: "", deletePassword: "", detailsConsent: false, detailsStep: "ask", detailsTransition: false });
   };`
     );
     // Provisional P1/P2 Article 6(1)(b): describe the core service before the
     // demo's Create account action, independently of notice acknowledgement.
-    const registrationService = `<p style="margin:20px 0 10px;text-align:center;font-size:13px;color:var(--color-neutral-700)">Gym Notebook is a free, invite-only training log provided by Jouni Uusimaa. Creating an account asks us to keep your private record of workout dates, exercises and sets, and show your progress chart. A username and password let you return to that notebook.</p>`;
+    // Milestone 12 (specs/002): shown in the Create account mode only, and it
+    // names the email address instead of a username.
+    const registrationService = `<sc-if value="{{ isLoginCreate }}" hint-placeholder-val="{{ false }}"><p style="margin:20px 0 10px;text-align:center;font-size:13px;color:var(--color-neutral-700)">Gym Notebook is a free, invite-only training log provided by Jouni Uusimaa. Creating an account asks us to keep your private record of workout dates, exercises and sets, and show your progress chart. Your email address and password let you return to that notebook; the address is also where we send the link that confirms it.</p></sc-if>`;
     replacePrivacyAnchor(
       '        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">',
       '        ' + registrationService + '\n        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">'
@@ -577,7 +579,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           <p style="font-size:13px;line-height:1.65;color:var(--color-neutral-700);margin:0 0 22px">This is a design preview. Controller details, lawful bases, processors and transfer information need review before a notice can be published.</p>
           <div style="border-top:1px solid var(--color-accent);padding-top:16px">
             <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">What you put in</h3>
-            <p style="font-size:13px;line-height:1.6;margin:0 0 18px">Your username, exercises, workouts, bodyweight if you enter it, and your notes. Notes may contain sensitive details, so choose what you write.</p>
+            <p style="font-size:13px;line-height:1.6;margin:0 0 18px">Your email address, the name on your cover, exercises, workouts, bodyweight if you enter it, and your notes. Notes may contain sensitive details, so choose what you write.</p>
             <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">What the service does</h3>
             <p style="font-size:13px;line-height:1.6;margin:0 0 18px">It keeps your log and draws progress from the sets you record. The reviewed notice will explain the basis for each purpose and which service providers handle information.</p>
             <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 5px">Keeping and removing it</h3>
@@ -807,6 +809,116 @@ document.addEventListener('DOMContentLoaded', async function() {
       confirmAccountDelete: this.confirmAccountDelete,
       restartPrivacyPreview: this.restartPrivacyPreview,
       isLogin: screen === "login",`
+    );
+
+    // Email sign-in (milestone 12, specs/002 contracts/ui.md). /login gets three
+    // modes switched in place — Sign in, Create account, Check your inbox — and
+    // a public /verify-email screen, reached here from the inbox state's preview
+    // link. Same anchor discipline as the privacy patches: fail visibly if the
+    // bundled source moves. Runs after them, so it anchors on their output.
+    const replaceEmailLoginAnchor = (anchor, replacement) => {
+      if (!template.includes(anchor)) throw new Error('Email login prototype anchor missing: ' + anchor.slice(0, 90));
+      template = template.replace(anchor, replacement);
+    };
+    replaceEmailLoginAnchor(
+      '    noticeSeen: false,\n    noticeVersion: 1,',
+      '    loginMode: "signIn",\n    noticeSeen: false,\n    noticeVersion: 1,'
+    );
+    replaceEmailLoginAnchor(
+      '  openPublicNotice = (e) => {',
+      `  setLoginMode = (loginMode) => (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "login", loginMode });
+  };
+  submitLogin = (e) => {
+    if (e) e.preventDefault();
+    // Sign in opens the cover; Create account always ends on "check your inbox",
+    // because the API answers every signup the same way.
+    this.setState((s) => s.loginMode === "create" ? { loginMode: "inbox" } : { screen: "cover" });
+  };
+  openPublicNotice = (e) => {`
+    );
+    replaceEmailLoginAnchor(
+      '      isLogin: screen === "login",',
+      `      isLogin: screen === "login",
+      isLoginForm: this.state.loginMode !== "inbox",
+      isLoginSignIn: this.state.loginMode === "signIn",
+      isLoginCreate: this.state.loginMode === "create",
+      isLoginInbox: this.state.loginMode === "inbox",
+      loginIntro: this.state.loginMode === "create" ? "Create your notebook. An invite code is required for now." : "Sign in with your email to open your notebook.",
+      loginAction: this.state.loginMode === "create" ? "Create account" : "Sign in",
+      submitLogin: this.submitLogin,
+      setLoginSignIn: this.setLoginMode("signIn"),
+      setLoginCreate: this.setLoginMode("create"),
+      isVerifyEmail: screen === "verifyEmail",
+      openVerifyEmail: this.go("verifyEmail"),`
+    );
+    const loginFieldStyle = 'style="display:flex;flex-direction:column;gap:6px"';
+    const loginLabelStyle = 'style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)"';
+    replaceEmailLoginAnchor(
+      '        <p style="margin:0 0 26px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">Sign in to open your notebook. New here? An invite code is required.</p>\n',
+      '        <sc-if value="{{ isLoginForm }}" hint-placeholder-val="{{ true }}">\n        <p style="margin:0 0 26px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">{{ loginIntro }}</p>\n'
+    );
+    replaceEmailLoginAnchor(
+      `          <label class="field" ${loginFieldStyle}>
+            <span ${loginLabelStyle}>Invite code</span>`,
+      `          <sc-if value="{{ isLoginCreate }}" hint-placeholder-val="{{ false }}">
+          <label class="field" ${loginFieldStyle}>
+            <span ${loginLabelStyle}>Name on the cover</span>
+            <input class="input" type="text" placeholder="Ann" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+          </label>
+          <label class="field" ${loginFieldStyle}>
+            <span ${loginLabelStyle}>Invite code</span>`
+    );
+    replaceEmailLoginAnchor(
+      `<input class="input" type="text" placeholder="Optional for existing accounts" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body);font-variant-numeric:tabular-nums">
+          </label>`,
+      `<input class="input" type="text" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body);font-variant-numeric:tabular-nums">
+          </label>
+          </sc-if>`
+    );
+    replaceEmailLoginAnchor(
+      'sc-camel-on-click="{{ goCover }}" style="margin-top:26px;min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Sign in</button>',
+      'sc-camel-on-click="{{ submitLogin }}" style="margin-top:26px;min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">{{ loginAction }}</button>'
+    );
+    const loginSwitch = 'style="margin-top:18px;text-align:center;font-size:13px;color:var(--color-neutral-700)"';
+    replaceEmailLoginAnchor(
+      `        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">
+          <a href="#" sc-camel-on-click="{{ goCover }}">Create account</a>
+          <a href="#" sc-camel-on-click="{{ goCover }}">Change password</a>
+        </div>`,
+      `        <sc-if value="{{ isLoginSignIn }}" hint-placeholder-val="{{ true }}"><div ${loginSwitch}>New here? <a href="#" sc-camel-on-click="{{ setLoginCreate }}">Create an account</a></div></sc-if>
+        <sc-if value="{{ isLoginCreate }}" hint-placeholder-val="{{ false }}"><div ${loginSwitch}>Already have an account? <a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Sign in</a></div></sc-if>
+        </sc-if>
+        <sc-if value="{{ isLoginInbox }}" hint-placeholder-val="{{ false }}">
+          <h2 style="font-family:var(--font-heading);font-weight:400;font-size:28px;margin:0 0 12px">Check your inbox</h2>
+          <p style="margin:0 0 12px;font-size:15px;line-height:1.6">We've sent a link to <strong>ann@example.com</strong>. Open it to confirm your address, then sign in. The link works for 48 hours.</p>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Nothing there? Check the spam folder, or send it again.</p>
+          <button class="btn btn-secondary" style="min-height:48px;width:100%;font-size:15px">Send the link again</button>
+          <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ openVerifyEmail }}">Open the link from the email (preview)</a></div>
+          <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Back to sign in</a></div>
+        </sc-if>`
+    );
+    replaceEmailLoginAnchor(
+      '    <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">',
+      `    <sc-if value="{{ isVerifyEmail }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 34px">
+        <div style="font-family:var(--font-body);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Private log</div>
+        <h1 style="font-family:var(--font-heading);font-weight:400;font-size:44px;line-height:1.02;margin:10px 0 6px;color:var(--color-text)">Gym<br>Notebook</h1>
+        <div style="height:1px;background:var(--color-accent);opacity:.6;width:52px;margin:14px 0 22px"></div>
+        <h2 style="font-family:var(--font-heading);font-weight:400;font-size:28px;margin:0 0 12px">Address confirmed</h2>
+        <p style="margin:0 0 20px;font-size:15px;line-height:1.6"><strong>ann@example.com</strong> is confirmed.</p>
+        <button class="btn btn-primary" sc-camel-on-click="{{ setLoginSignIn }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">Sign in</button>
+        <p style="margin:18px 0 0;font-size:12px;line-height:1.55;color:var(--color-neutral-600)">The other outcomes are text-only: "This link has expired" and "This link doesn't work", each with Go to sign in, and "Couldn't confirm yet" with Try again.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">`
+    );
+    // The cover names the account this browser is in, small and read-only.
+    replaceEmailLoginAnchor(
+      `<div style="text-align:center;margin-top:14px;font-size:13px"><a href="#" sc-camel-on-click="{{ goPrivacy }}">Privacy &amp; account</a></div>\n        ` + coverSignOut,
+      `<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--color-neutral-700);overflow-wrap:anywhere">Signed in as ann@example.com</div>\n        <div style="text-align:center;margin-top:14px;font-size:13px"><a href="#" sc-camel-on-click="{{ goPrivacy }}">Privacy &amp; account</a></div>\n        ` + coverSignOut
     );
 
     // Design fix plan step 1 (draft safety): Cancel on a changed draft asks

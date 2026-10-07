@@ -7,14 +7,17 @@ import { clearEditorDrafts } from './editorDraftStorage'
 import './Cover.css'
 
 // docs/ui/README.md, screen 2: the closed cover of the book. Deliberately carries
-// no data beyond the owner's name — its job is to make opening the log a decision.
+// no data beyond the owner's name — its job is to make opening the log a decision —
+// and, small beside the account links, the address this browser is signed in
+// with (specs/002 contracts/ui.md → Cover), so a shared phone can't leave anyone
+// unsure whose notebook this is.
 // The two nested hairlines (.cover-frame) are what make it read as a cover.
 export default function Cover() {
   const navigate = useNavigate()
   // The router can't know which loader 'auth' names, so this comes back as
   // unknown. The cast is the same trade as `as T` in client.ts: we know the id
   // maps to requireAuth, which returns a MeResponse. A wrong id would give
-  // undefined here and a crash on .username — so this line is where the coupling
+  // undefined here and a crash on .displayName — so this line is where the coupling
   // to routes.tsx lives.
   const user = useRouteLoaderData('auth') as MeResponse
 
@@ -62,7 +65,7 @@ export default function Cover() {
           <span className="cover-ornament-diamond" />
           <span className="cover-ornament-rule" />
         </div>
-        <p className="cover-owner">{user.username}</p>
+        <p className="cover-owner">{user.displayName}</p>
         <p className="cover-volume num">
           Volume I · {new Date().getFullYear()}
         </p>
@@ -71,6 +74,9 @@ export default function Cover() {
       <Link to="/workouts" className="btn btn-primary btn-block">
         Open the notebook
       </Link>
+      <p className="cover-account">
+        Signed in as <span className="cover-account-email">{user.email}</span>
+      </p>
       <div className="cover-actions">
         <Link to="/change-password" className="btn btn-ghost">
           Change password

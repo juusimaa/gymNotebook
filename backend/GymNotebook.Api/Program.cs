@@ -42,6 +42,12 @@ ConnectionStringValidation.EnsureValid(connectionString);
 var jwtSecret = builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
 var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
+// A BCrypt hash of a random string nobody knows, computed once at boot. The auth routes
+// verify a password against it when the address has no account, so "no such account"
+// takes as long as "wrong password" — the slow BCrypt check is otherwise the one
+// measurable difference between the two (specs/002 FR-014). It can never match anything.
+var dummyPasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString());
+
 // Unset or empty means registration is open (see PLAN.md, Configuration), so absence is
 // a valid state and there's no `?? throw` — the deploy checklist, not the code, is what
 // makes sure it's set in Azure.
@@ -80,6 +86,16 @@ if (corsOrigins is not { Length: > 0 })
 // to hit the limit in three requests.
 var rateLimitPermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit", 10);
 var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSeconds", 60);
+
+// The two email policies (specs/002 plan D12, FR-020), per client IP like "auth" but per
+// hour: "email-request" on the routes that send an email (resend now, reset request in
+// PR 4), "email-link" on the routes that consume a link. Configurable for the same reason
+// as above — the test host raises them so a class of tests isn't throttled by its own
+// earlier tests, and EmailRateLimitedGymNotebookFactory shrinks them to hit them.
+var emailRequestPermitLimit = builder.Configuration.GetValue("EmailRequestRateLimit:PermitLimit", 5);
+var emailRequestWindowSeconds = builder.Configuration.GetValue("EmailRequestRateLimit:WindowSeconds", 3600);
+var emailLinkPermitLimit = builder.Configuration.GetValue("EmailLinkRateLimit:PermitLimit", 10);
+var emailLinkWindowSeconds = builder.Configuration.GetValue("EmailLinkRateLimit:WindowSeconds", 3600);
 
 // The per-account bucket for password-verified account operations (specs/001 P12): 10
 // attempts per 60 s per account. Same override pattern, so tests can shrink or widen it.
@@ -200,6 +216,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             // database lookup and standard JWT validation has no way to do that on its own.
             OnTokenValidated = async context =>
             {
+                // A link token (confirmation or reset, see JwtTokenFactory) is signed with
+                // the same secret, so it passes the signature check above. Its "purpose"
+                // claim is what marks it as not-a-session (specs/002 FR-006): a reset
+                // token even carries a valid "tv", so without this a link from an email
+                // would work as a bearer token for its whole lifetime.
+                if (context.Principal?.FindFirst(JwtTokenFactory.PurposeClaim) is not null)
+                {
+                    context.Fail("Link tokens are not sessions.");
+                    return;
+                }
+
                 var subClaim = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
                 var tvClaim = context.Principal?.FindFirst("tv")?.Value;
 
@@ -235,6 +262,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (user.SignInSuspendedAt is not null)
                 {
                     context.Fail("Account sign-in is suspended.");
+                    return;
+                }
+
+                // An unconfirmed account can't sign in (login answers 403
+                // email_not_verified), so no code path mints it a session. This check
+                // makes sure no token would work for one anyway (specs/002 plan D5,
+                // FR-004); the lifecycle guard repeats it under the lock.
+                if (user.EmailVerifiedAt is null)
+                {
+                    context.Fail("Email address is not confirmed.");
                 }
             },
         };
@@ -244,8 +281,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // user" is the only rule this API has.
 builder.Services.AddAuthorization();
 
-// One named "auth" policy, applied only to the endpoints that opt in with
-// .RequireRateLimiting("auth") — login and register (see PLAN.md, Rate limiting).
+// Named per-IP policies, applied only to the endpoints that opt in with
+// .RequireRateLimiting(name): "auth" on login and register (see PLAN.md, Rate limiting),
+// and the two email policies on the email routes.
 builder.Services.AddRateLimiter(options =>
 {
     // The default rejection status is 503, which reads as "server broken"; 429 tells the
@@ -258,15 +296,13 @@ builder.Services.AddRateLimiter(options =>
     // immediately instead of parking them until a permit frees up. Counters live in
     // process — correct with one replica, and the thing that needs shared state if this
     // ever scales out.
-    options.AddPolicy("auth", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = rateLimitPermitLimit,
-                Window = TimeSpan.FromSeconds(rateLimitWindowSeconds),
-                QueueLimit = 0,
-            }));
+    options.AddPolicy("auth", httpContext => PerClientIp(httpContext, rateLimitPermitLimit, rateLimitWindowSeconds));
+
+    // The email policies (specs/002 plan D12): same per-IP shape, hourly windows. Each
+    // named policy keeps its own counters, so a burst of sign-ins doesn't spend the
+    // resend budget or the other way round.
+    options.AddPolicy("email-request", httpContext => PerClientIp(httpContext, emailRequestPermitLimit, emailRequestWindowSeconds));
+    options.AddPolicy("email-link", httpContext => PerClientIp(httpContext, emailLinkPermitLimit, emailLinkWindowSeconds));
 
     // The per-account limit on password-verified account operations (specs/001 P12,
     // research R10), for endpoints marked with SensitiveOperationMetadata. It has to be the
@@ -466,80 +502,119 @@ app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
    .Produces<HealthResponse>()
    .Produces<HealthResponse>(StatusCodes.Status503ServiceUnavailable);
 
-// Every route mapped on `auth` gets the /auth prefix. A group is also the one place to
-// hang metadata every auth endpoint shares, should any ever be needed.
-var auth = app.MapGroup("/auth");
+// Every route mapped on `auth` gets the /auth prefix. The group is also where metadata
+// every auth endpoint shares goes: none of their answers — tokens, the address on /me,
+// and the errors — may be kept by the browser or a cache in between (specs/002
+// contracts/api.md → Common behavior).
+var auth = app.MapGroup("/auth").AddEndpointFilter(PrivacyEndpoints.NoStore);
 
-auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, CancellationToken ct) =>
+// Signup (specs/002 Story 1, contracts/api.md → Register). The answer is 202 with no body
+// for *every* valid request, whether the address is new, already has a confirmed account,
+// or has an unconfirmed one: a different answer would let anyone find out which addresses
+// have accounts by trying them (FR-011). What differs goes only to that address's inbox:
+//
+//   no account   create it, unconfirmed       → confirmation link
+//   confirmed    change nothing               → "you already have an account", no link
+//   unconfirmed  change nothing, discard the  → "finish creating your account" with a
+//                submitted password              *reset* link, so the inbox's owner — not
+//                                                whoever signed up first — picks the password
+//
+// No token comes back: the account can't sign in until the address is confirmed.
+auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, EmailOutbox outbox, EmailTemplates templates, TimeProvider clock, CancellationToken ct) =>
 {
-    // Empty/whitespace credentials would otherwise sail through to a BCrypt hash of "" or
-    // a username no one could ever type again to log back in.
-    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+    var email = AccountInput.NormalizeEmail(request.Email);
+    var displayName = AccountInput.NormalizeDisplayName(request.DisplayName);
+
+    // A malformed field says nothing about accounts, so 400 here is safe.
+    if (!AccountInput.IsValidEmail(email) || displayName is null || !AccountInput.IsValidPassword(request.Password))
     {
-        return Results.BadRequest();
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
     }
 
     // inviteCode is the server's configured value (empty/unset = registration open); the
     // request carries what the caller supplied. A mismatch when a code IS required is a
     // 403, not a 401 — this isn't "who are you", it's "you're not allowed to sign up".
+    // Checked before the address is looked up, so it reveals nothing about accounts.
     if (!string.IsNullOrEmpty(inviteCode) && request.InviteCode != inviteCode)
     {
         return Results.StatusCode(StatusCodes.Status403Forbidden);
     }
 
-    // Checked up front rather than relying solely on the DB's unique index, so a
-    // duplicate username comes back as a clean 409 instead of an unhandled
-    // DbUpdateException surfacing as a 500. (Two near-simultaneous registrations with the
-    // same username could still both pass this check and race to the index — acceptable
-    // here; the index is still what guarantees the row-level correctness.)
-    if (await db.Users.AnyAsync(u => u.Username == request.Username, ct))
+    // Hashed on every branch, before the lookup, even though only "no account" stores it.
+    // BCrypt is slow on purpose (~100 ms); skipping it on the other two branches would make
+    // "this address has an account" measurably faster to answer (FR-014). The email itself
+    // is sent by the outbox worker after this response, so its latency can't leak either.
+    var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+    var now = clock.GetUtcNow();
+
+    var existing = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == email, ct);
+    if (existing is null)
     {
-        return Results.Conflict();
+        var user = new User
+        {
+            Email = email,
+            DisplayName = displayName,
+            PasswordHash = passwordHash,
+            TokenVersion = 0,
+            // Generated here, never accepted from the client (specs/001 data-model.md). A
+            // random (v4) UUID rather than a time-ordered v7 on purpose: this id appears in
+            // deletion log lines, and it shouldn't reveal when the account was created.
+            PrivacyAccountId = Guid.NewGuid(),
+        };
+
+        // CreatedAt is deliberately left unset: EF Core recognizes the CLR default value on
+        // a DateTimeOffset property and omits the column from the INSERT, letting the
+        // "now()" column default configured in AppDbContext fill it in. EmailVerifiedAt
+        // stays null: unconfirmed until the link is used.
+        db.Users.Add(user);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            outbox.Enqueue(templates.Confirmation(email, JwtTokenFactory.CreateLinkToken(user, LinkPurpose.Verify, jwtSecret, now)));
+            return Results.Accepted();
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex, "ix_users_email"))
+        {
+            // Two signups for this address at the same instant: both looked, both found
+            // nothing, and the other one's INSERT won the unique index. From here on this
+            // is simply the "existing account" case (specs/002 plan D4, Edge Cases).
+            db.ChangeTracker.Clear();
+            existing = await db.Users.AsNoTracking().SingleAsync(u => u.Email == email, ct);
+        }
     }
 
-    var user = new User
-    {
-        Username = request.Username,
-        PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-        TokenVersion = 0,
-        // Generated here, never accepted from the client (specs/001 data-model.md). A
-        // random (v4) UUID rather than a time-ordered v7 on purpose: this id appears in
-        // deletion log lines, and it shouldn't reveal when the account was created.
-        PrivacyAccountId = Guid.NewGuid(),
-    };
-
-    // CreatedAt is deliberately left unset: EF Core recognizes the CLR default value on a
-    // DateTimeOffset property and omits the column from the INSERT, letting the "now()"
-    // column default configured in AppDbContext fill it in.
-    db.Users.Add(user);
-    await db.SaveChangesAsync(ct);
-
-    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
-    return Results.Ok(new AuthResponse(token));
+    outbox.Enqueue(existing.EmailVerifiedAt is null
+        ? templates.FinishSignup(email, JwtTokenFactory.CreateLinkToken(existing, LinkPurpose.Reset, jwtSecret, now))
+        : templates.AlreadyRegistered(email));
+    return Results.Accepted();
 }).WithName("RegisterUser")
    .WithSummary("Registers a new user")
-   .WithDescription("Creates a new user account with the given username and password. Returns a JWT token for authentication.")
-   .Produces<AuthResponse>(StatusCodes.Status200OK)
-   .Produces(StatusCodes.Status400BadRequest)
+   .WithDescription("Starts creating an account for the given email address. Always answers 202 with no body for valid input, whether or not the address already has an account; what differs is only in the email sent to that address. The account can sign in once the address is confirmed.")
+   .Produces(StatusCodes.Status202Accepted)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status403Forbidden)
-   .Produces(StatusCodes.Status409Conflict)
    .RequireRateLimiting("auth");
 
 auth.MapPost("/login", async (LoginRequest request, AppDbContext db, CancellationToken ct) =>
 {
-    // Same guard as register. A blank password can never match a hash, so rejecting it
-    // early just saves the DB lookup and the BCrypt round trip.
-    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+    // A blank field can never sign anyone in, and says nothing about accounts.
+    var email = AccountInput.NormalizeEmail(request.Email);
+    if (email.Length == 0 || string.IsNullOrWhiteSpace(request.Password))
     {
-        return Results.BadRequest();
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
     }
 
-    var user = await db.Users.SingleOrDefaultAsync(u => u.Username == request.Username, ct);
+    var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == email, ct);
 
-    // Same 401 whether the username doesn't exist or the password is wrong — a different
-    // response for each would let a caller enumerate valid usernames by trying them
-    // one at a time and watching which error comes back.
-    if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+    // Same 401 whether the address has no account or the password is wrong — a different
+    // response for each would let a caller enumerate accounts by trying addresses one at a
+    // time and watching which error comes back. The BCrypt check runs either way (against
+    // the dummy hash when there's no account), so the timing doesn't tell them apart
+    // either. A password over BCrypt's 72 bytes can't belong to any account (FR-005), but
+    // is still checked for the same reason.
+    var passwordMatches = BCrypt.Net.BCrypt.Verify(request.Password, user?.PasswordHash ?? dummyPasswordHash)
+        && AccountInput.IsValidPassword(request.Password);
+    if (user is null || !passwordMatches)
     {
         return Results.Unauthorized();
     }
@@ -549,30 +624,110 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
     // password still gets the generic 401 above. The code lets the UI show the privacy
     // contact path. Login takes no lifecycle lock (Q6): suspension is only ever set while
     // ingress is disabled, and a token issued in a race is rejected on first use anyway.
+    // Before the confirmation check, so a suspended account says so whether or not its
+    // address was confirmed (specs/002 Story 2, scenario 3).
     if (user.SignInSuspendedAt is not null)
     {
         return Results.Json(new ErrorResponse("account_suspended"), statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    // Right password, unconfirmed address (specs/002 FR-003). Also only after the
+    // password, for the same reason as suspension. The UI turns this into "check your
+    // inbox" with a button that calls POST /auth/verification.
+    if (user.EmailVerifiedAt is null)
+    {
+        return Results.Json(new ErrorResponse("email_not_verified"), statusCode: StatusCodes.Status403Forbidden);
     }
 
     var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
     return Results.Ok(new AuthResponse(token));
 }).WithName("LoginUser")
    .WithSummary("Logs in a user")
-   .WithDescription("Authenticates a user with the given username and password. Returns a JWT token for authentication. A suspended account gets 403 with code account_suspended, but only after a correct password.")
+   .WithDescription("Authenticates a user with the given email address and password. Returns a JWT token for authentication. After a correct password only: 403 account_suspended for a suspended account, otherwise 403 email_not_verified for an unconfirmed address.")
    .Produces<AuthResponse>(StatusCodes.Status200OK)
-   .Produces(StatusCodes.Status400BadRequest)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status401Unauthorized)
    .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
    .RequireRateLimiting("auth");
+
+// Send the confirmation link again (specs/002 FR-012), from the "check your inbox" screen.
+// Always 204: whether an email went out depends on the account, and the answer must not.
+// It sends only when the password is right and the address unconfirmed — requiring the
+// password means this can't be used to make the app email arbitrary addresses, and the
+// email caps (EmailCaps) bound how often even the owner can.
+auth.MapPost("/verification", async (ResendVerificationRequest request, AppDbContext db, EmailOutbox outbox, EmailTemplates templates, TimeProvider clock, CancellationToken ct) =>
+{
+    var email = AccountInput.NormalizeEmail(request.Email);
+    if (email.Length == 0 || string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == email, ct);
+
+    // The dummy hash again, so "no account" isn't the fast branch.
+    var passwordMatches = BCrypt.Net.BCrypt.Verify(request.Password, user?.PasswordHash ?? dummyPasswordHash)
+        && AccountInput.IsValidPassword(request.Password);
+    if (user is not null && passwordMatches && user.EmailVerifiedAt is null)
+    {
+        outbox.Enqueue(templates.Confirmation(email, JwtTokenFactory.CreateLinkToken(user, LinkPurpose.Verify, jwtSecret, clock.GetUtcNow())));
+    }
+
+    return Results.NoContent();
+}).WithName("ResendVerification")
+   .WithSummary("Sends the email confirmation link again")
+   .WithDescription("Always answers 204. Sends a new confirmation link only if the password is correct and the address is not confirmed yet.")
+   .Produces(StatusCodes.Status204NoContent)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .RequireRateLimiting("email-request");
+
+// The confirmation link's target (specs/002 Story 1, scenario 3). The page at
+// /verify-email reads the token from the URL fragment and posts it here — a POST from
+// script rather than a GET on the link itself, so a mail scanner that fetches links
+// without running script confirms nothing (spec Edge Cases).
+//
+// Idempotent: opening the link twice says "confirmed" both times. No session is needed or
+// created; the answer carries the address so the sign-in screen can pre-fill it. Link
+// failures are 400 expired/invalid, never 401, because the frontend treats every 401 as
+// "your session ended" (FR-009).
+auth.MapPost("/verify-email", async (VerifyEmailRequest request, AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+{
+    var now = clock.GetUtcNow();
+    var link = JwtTokenFactory.ReadLinkToken(request.Token, LinkPurpose.Verify, jwtSecret, now);
+    if (link.Status != LinkTokenStatus.Valid || link.Email is null)
+    {
+        return LinkError(link.Status);
+    }
+
+    // Stamps the time only the first time (the `EmailVerifiedAt == null` filter), as one
+    // UPDATE, so two clicks at once can't race. Matching the address as well as the id
+    // means the token confirms exactly the address it was minted for: if that account was
+    // deleted and its id ever reused (a restore rewinds the sequence), nothing happens.
+    await db.Users
+        .Where(u => u.Id == link.UserId && u.Email == link.Email && u.EmailVerifiedAt == null)
+        .ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailVerifiedAt, now), ct);
+
+    // Zero rows updated means either "already confirmed" (fine, idempotent) or "no such
+    // account any more" (the link is dead). One indexed lookup tells them apart.
+    var exists = await db.Users.AnyAsync(u => u.Id == link.UserId && u.Email == link.Email, ct);
+    return exists
+        ? Results.Ok(new VerifyEmailResponse(link.Email))
+        : LinkError(LinkTokenStatus.Invalid);
+}).WithName("VerifyEmail")
+   .WithSummary("Confirms an email address from its link")
+   .WithDescription("Takes the token from a confirmation link. Returns the confirmed address, also when it was already confirmed. 400 with code expired or invalid when the link doesn't work.")
+   .Produces<VerifyEmailResponse>(StatusCodes.Status200OK)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .RequireRateLimiting("email-link");
 
 // The smallest possible protected route. ClaimsPrincipal is another parameter Minimal
 // APIs knows how to supply: it's HttpContext.User, already populated by the bearer
 // handler — and already past the token_version check in OnTokenValidated — by the time
 // the handler runs.
 //
-// The username comes from the row, not the token: the JWT carries only "sub" (the id)
-// and "tv", and adding a name claim would mean a token outliving a rename. One indexed
-// lookup by primary key is cheap, and the cover page needs the name to greet its owner.
+// The name and address come from the row, not the token: the JWT carries only "sub" (the
+// id) and "tv", and adding more claims would mean a token outliving a change to them. One
+// indexed lookup by primary key is cheap, and the cover page needs both.
 auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>
 {
     var userId = ParseUserId(user);
@@ -580,18 +735,18 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
     // SingleAsync, not SingleOrDefaultAsync: the lifecycle filter has just confirmed, under
     // its lock, that this row exists — and a deletion can't commit while the lock is held —
     // so a miss here is a bug, not a 404. Same reasoning as ParseUserId.
-    var username = await db.Users
+    var me = await db.Users
         .Where(u => u.Id == userId)
-        .Select(u => u.Username)
+        .Select(u => new MeResponse(u.Id, u.DisplayName, u.Email))
         .SingleAsync(ct);
 
-    return Results.Ok(new MeResponse(userId, username));
+    return Results.Ok(me);
 })
    .RequireAuthorization()
    .RequireAccountLifecycle()
    .WithName("GetCurrentUser")
-   .WithSummary("Returns the authenticated user's id and username")
-   .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked. The username is what the frontend shows on the cover page.")
+   .WithSummary("Returns the authenticated user's id, display name and email address")
+   .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked. The display name and email address are what the frontend shows on the cover page.")
    .Produces<MeResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status401Unauthorized);
 
@@ -604,7 +759,9 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
 // would be a lock upgrade, which deadlocks two concurrent callers (analysis I1).
 auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, LifecycleOptions lifecycle, HttpContext http, CancellationToken ct) =>
 {
-    if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
+    // The new password follows the same rules as at signup (AccountInput, specs/002
+    // FR-005), including BCrypt's 72-byte bound.
+    if (string.IsNullOrWhiteSpace(request.CurrentPassword) || !AccountInput.IsValidPassword(request.NewPassword))
     {
         return Results.BadRequest();
     }
@@ -1361,6 +1518,32 @@ app.Run();
 // returning 401 is deliberate: by the time a handler runs, OnTokenValidated has already
 // confirmed "sub" parses, so a failure here is a bug in the pipeline, not a bad request —
 // and a 500 is the right way for a bug to surface rather than being masked as "who are you".
+// 400 {"code":"expired"|"invalid"} for a link token that didn't read as Valid (specs/002
+// contracts/api.md: never 401, see FR-009).
+static IResult LinkError(LinkTokenStatus status) => Results.Json(
+    new ErrorResponse(status == LinkTokenStatus.Expired ? "expired" : "invalid"),
+    statusCode: StatusCodes.Status400BadRequest);
+
+// True when a save failed on the named unique index — Postgres's error 23505, which EF
+// wraps in a DbUpdateException. Matching the constraint name, not just the code, so an
+// unrelated unique violation is never mistaken for "this address is taken".
+static bool IsUniqueViolation(DbUpdateException ex, string constraintName) =>
+    ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation } pg
+    && pg.ConstraintName == constraintName;
+
+// The fixed-window, per-client-IP limiter behind every named rate-limit policy ("auth",
+// "email-request", "email-link"); see the comment on the "auth" policy for why each part
+// is the way it is.
+static RateLimitPartition<string> PerClientIp(HttpContext httpContext, int permitLimit, int windowSeconds) =>
+    RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permitLimit,
+            Window = TimeSpan.FromSeconds(windowSeconds),
+            QueueLimit = 0,
+        });
+
 static int ParseUserId(ClaimsPrincipal user)
 {
     var subClaim = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;

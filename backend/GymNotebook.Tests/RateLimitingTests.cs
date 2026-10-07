@@ -39,17 +39,55 @@ public class RegisterRateLimitingTests(RateLimitedGymNotebookFactory factory) : 
     [Fact]
     public async Task Exceeding_the_register_rate_limit_returns_too_many_requests()
     {
-        // A local function rather than a shared request object because each attempt needs
-        // a fresh username — a repeat would 409, which the limiter would still count, but
-        // the test should exceed the limit with requests that would otherwise succeed.
-        Task<HttpResponseMessage> Register() => _client.PostAsJsonAsync(
-            "/auth/register",
-            new RegisterRequest($"user-{Guid.NewGuid():N}", "correct-horse-battery-staple", null));
+        // A local function rather than a shared request object because each attempt uses
+        // a fresh address, so the limit is exceeded with requests that each create an
+        // account — not repeats the handler would treat differently.
+        Task<HttpResponseMessage> Register() => EmailTestSupport.RegisterAsync(_client, EmailTestSupport.UniqueEmail());
 
         await Register();
         await Register();
         var response = await Register();
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+    }
+}
+
+// The two email policies (specs/002 plan D12, FR-020), shrunk to two requests by
+// EmailRateLimitedGymNotebookFactory. Each has its own counters, so one class covers both.
+public class EmailRateLimitingTests(EmailRateLimitedGymNotebookFactory factory) : IClassFixture<EmailRateLimitedGymNotebookFactory>
+{
+    private readonly HttpClient _client = factory.CreateClient();
+
+    [Fact]
+    public async Task Verification_ExceedingEmailRequestLimit_Returns429WithRetryAfter()
+    {
+        // Arrange
+        var request = new ResendVerificationRequest("nobody@example.test", "whatever");
+        await _client.PostAsJsonAsync("/auth/verification", request);
+        await _client.PostAsJsonAsync("/auth/verification", request);
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/auth/verification", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.NotNull(response.Headers.RetryAfter);
+    }
+
+    [Fact]
+    public async Task VerifyEmail_ExceedingEmailLinkLimit_Returns429WithRetryAfter()
+    {
+        // Arrange: invalid tokens still count — a limit only on valid links would let a
+        // script guess at tokens without bound.
+        var request = new VerifyEmailRequest("not-a-token");
+        await _client.PostAsJsonAsync("/auth/verify-email", request);
+        await _client.PostAsJsonAsync("/auth/verify-email", request);
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/auth/verify-email", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.NotNull(response.Headers.RetryAfter);
     }
 }

@@ -185,3 +185,18 @@ describe('abortPendingRequests', () => {
     expect(await pending).toMatchObject({ name: 'AbortError' })
   })
 })
+
+// POST /auth/register answers 202 and the resend route 204, both with no body;
+// reading JSON from either would reject even though the call succeeded.
+describe('bodiless success', () => {
+  it.each([202, 204])(
+    'resolves a %i with no body to undefined',
+    async (status) => {
+      respondWith(status)
+
+      await expect(
+        request('/auth/register', { method: 'POST', body: {} }),
+      ).resolves.toBeUndefined()
+    },
+  )
+})

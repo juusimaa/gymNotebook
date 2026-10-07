@@ -111,25 +111,31 @@ public static class AccountLifecycle
         return builder;
     }
 
-    // Shared access for an ordinary request, or for a delivery guard.
+    // Shared access for an ordinary request, or for a delivery guard. Shared access is
+    // what a signed-in session uses, so it also requires a confirmed address (specs/002
+    // plan D5): an unconfirmed account reads as Revoked, the same bare 401 as a revoked
+    // token. The bearer handler already refuses such tokens; this re-check, under the
+    // lock, is the belt to that pair of braces.
     public static Task<GuardOutcome> AcquireSharedAsync(AppDbContext db, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
-        AcquireAsync(db, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, ct);
+        AcquireAsync(db, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, requireConfirmedEmail: true, ct);
 
     // Exclusive access for the operations that end or revoke an account's access: password
     // change and account deletion (AccountDeletion.cs). Those endpoints own their transaction and never
     // run under LifecycleFilter: asking for exclusive access while already holding shared
     // access would be a lock upgrade, and two concurrent upgraders deadlock (analysis I1).
+    // No confirmed-address check here: password reset (specs/002 PR 4) takes exclusive
+    // access for an account that may not be confirmed yet — completing it confirms it.
     public static Task<GuardOutcome> AcquireExclusiveAsync(AppDbContext db, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
-        AcquireAsync(db, "pg_advisory_xact_lock", userId, tokenVersion, lockTimeoutMs, ct);
+        AcquireAsync(db, "pg_advisory_xact_lock", userId, tokenVersion, lockTimeoutMs, requireConfirmedEmail: false, ct);
 
     // Shared access on a connection the caller opened itself, outside any AppDbContext.
     // The export needs this (research R3/R4): its snapshot transaction occupies the
     // request's context for the whole download, so its initialization and per-chunk
     // delivery guards run on separate, short READ COMMITTED transactions.
     public static Task<GuardOutcome> AcquireSharedAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
-        AcquireAsync(connection, transaction, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, ct);
+        AcquireAsync(connection, transaction, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, requireConfirmedEmail: true, ct);
 
-    private static Task<GuardOutcome> AcquireAsync(AppDbContext db, string lockFunction, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct)
+    private static Task<GuardOutcome> AcquireAsync(AppDbContext db, string lockFunction, int userId, int tokenVersion, int lockTimeoutMs, bool requireConfirmedEmail, CancellationToken ct)
     {
         var transaction = db.Database.CurrentTransaction
             ?? throw new InvalidOperationException("The lifecycle guard must run inside a transaction: its lock is released when that transaction ends.");
@@ -138,7 +144,7 @@ public static class AccountLifecycle
         // connection and in the same transaction as the handler's own queries.
         return AcquireAsync(
             (NpgsqlConnection)db.Database.GetDbConnection(), (NpgsqlTransaction)transaction.GetDbTransaction(),
-            lockFunction, userId, tokenVersion, lockTimeoutMs, ct);
+            lockFunction, userId, tokenVersion, lockTimeoutMs, requireConfirmedEmail, ct);
     }
 
     // Takes the lock inside the given transaction, then freshly reads the account's token
@@ -147,7 +153,7 @@ public static class AccountLifecycle
     // starts, so a single "lock and check" statement that waited on the lock while a
     // deletion committed would still see the deleted user and pass (spike A6). The
     // separate check statement starts after the lock is granted and sees the deletion.
-    private static async Task<GuardOutcome> AcquireAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string lockFunction, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct)
+    private static async Task<GuardOutcome> AcquireAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string lockFunction, int userId, int tokenVersion, int lockTimeoutMs, bool requireConfirmedEmail, CancellationToken ct)
     {
         await using var batch = new NpgsqlBatch(connection, transaction);
 
@@ -161,7 +167,10 @@ public static class AccountLifecycle
         lockCommand.Parameters.AddWithValue("id", userId);
         batch.BatchCommands.Add(lockCommand);
 
-        var checkCommand = new NpgsqlBatchCommand("SELECT token_version FROM users WHERE id = @id");
+        // An unconfirmed account simply finds no row, which reads as Revoked below.
+        var checkCommand = new NpgsqlBatchCommand(requireConfirmedEmail
+            ? "SELECT token_version FROM users WHERE id = @id AND email_verified_at IS NOT NULL"
+            : "SELECT token_version FROM users WHERE id = @id");
         checkCommand.Parameters.AddWithValue("id", userId);
         batch.BatchCommands.Add(checkCommand);
 

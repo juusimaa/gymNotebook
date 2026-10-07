@@ -85,7 +85,7 @@ public class ExportAuthTests(TwoHostGymNotebookFixture db)
         var userId = await db.SeedUserAsync();
         using var client = host.CreateClient();
         var expired = JwtTokenFactory.CreateToken(
-            new User { Id = userId, Username = "", PasswordHash = "", PrivacyAccountId = Guid.Empty },
+            new User { Id = userId, Email = "", DisplayName = "", PasswordHash = "", PrivacyAccountId = Guid.Empty },
             GymNotebookFactory.JwtSecret, -10);
         client.DefaultRequestHeaders.Authorization = new("Bearer", expired);
 

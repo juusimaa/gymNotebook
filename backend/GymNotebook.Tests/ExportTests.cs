@@ -44,7 +44,10 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         var account = root.GetProperty("account");
         Assert.Equal(user.Id, account.GetProperty("id").GetInt32());
         Assert.Equal(user.PrivacyAccountId, account.GetProperty("privacyAccountId").GetGuid());
-        Assert.Equal(user.Username, account.GetProperty("username").GetString());
+        Assert.Equal(user.Email, account.GetProperty("email").GetString());
+        Assert.Equal(JsonValueKind.String, account.GetProperty("emailVerifiedAt").ValueKind);
+        Assert.Equal(user.DisplayName, account.GetProperty("displayName").GetString());
+        Assert.False(account.TryGetProperty("username", out _));
         Assert.Equal(user.CreatedAt, Instant(account.GetProperty("createdAt")));
 
         var exercises = await context.Exercises.AsNoTracking().Where(e => e.UserId == userA).OrderBy(e => e.Id).ToListAsync();

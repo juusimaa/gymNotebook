@@ -58,7 +58,10 @@ public class TransitionClearingSqlTests(TwoHostGymNotebookFixture db)
         await using var context = db.NewContext(connectionString);
         var user = new User
         {
-            Username = $"transition-{Guid.NewGuid():N}",
+            DisplayName = $"transition-{Guid.NewGuid():N}",
+            Email = $"{Guid.NewGuid():N}@example.test",
+            // Confirmed: a token for an unconfirmed account is rejected (specs/002 FR-004).
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
             PasswordHash = "not-a-real-hash",
             PrivacyAccountId = Guid.NewGuid(),
             OptionalDetailsConsentVersion = consent ? "test-consent" : null,

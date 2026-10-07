@@ -14,15 +14,13 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
 
     private readonly HttpClient _client = factory.CreateClient();
 
-    private static string UniqueUsername() => $"user-{Guid.NewGuid():N}";
-
-    // Every test wants a fresh user with a known password and a token for them; this is
-    // the registration step each would otherwise repeat.
-    private async Task<string> RegisterAndGetTokenAsync(string username, string password)
+    // Every test wants a fresh, confirmed user with a known password and a token for them.
+    // Seeded rather than registered: signing up is tested in RegisterTests, and five
+    // sign-ups plus confirmations would crowd this class's shared "auth" rate-limit bucket.
+    private async Task<string> RegisterAndGetTokenAsync(string password)
     {
-        var response = await _client.PostAsJsonAsync("/auth/register", new RegisterRequest(username, password, null));
-        var body = await response.Content.ReadFromJsonAsync<AuthResponse>();
-        return body!.Token;
+        var user = await EmailTestSupport.SeedUserAsync(factory.Services, password: password);
+        return EmailTestSupport.SessionToken(user);
     }
 
     // PostAsJsonAsync has no overload that takes headers, so the bearer token has to go on
@@ -50,7 +48,7 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
     [Fact]
     public async Task Change_password_with_correct_current_password_returns_new_token()
     {
-        var token = await RegisterAndGetTokenAsync(UniqueUsername(), OriginalPassword);
+        var token = await RegisterAndGetTokenAsync(OriginalPassword);
 
         var response = await ChangePasswordAsync(token, new ChangePasswordRequest(OriginalPassword, NewPassword));
 
@@ -62,7 +60,7 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
     [Fact]
     public async Task Old_token_is_rejected_after_a_password_change()
     {
-        var oldToken = await RegisterAndGetTokenAsync(UniqueUsername(), OriginalPassword);
+        var oldToken = await RegisterAndGetTokenAsync(OriginalPassword);
 
         await ChangePasswordAsync(oldToken, new ChangePasswordRequest(OriginalPassword, NewPassword));
 
@@ -74,7 +72,7 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
     [Fact]
     public async Task New_token_from_the_response_still_works()
     {
-        var oldToken = await RegisterAndGetTokenAsync(UniqueUsername(), OriginalPassword);
+        var oldToken = await RegisterAndGetTokenAsync(OriginalPassword);
 
         var changeResponse = await ChangePasswordAsync(oldToken, new ChangePasswordRequest(OriginalPassword, NewPassword));
         var newToken = (await changeResponse.Content.ReadFromJsonAsync<AuthResponse>())!.Token;
@@ -87,7 +85,7 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
     [Fact]
     public async Task Change_password_with_wrong_current_password_returns_unauthorized()
     {
-        var token = await RegisterAndGetTokenAsync(UniqueUsername(), OriginalPassword);
+        var token = await RegisterAndGetTokenAsync(OriginalPassword);
 
         var response = await ChangePasswordAsync(token, new ChangePasswordRequest("totally-wrong-password", NewPassword));
 
@@ -97,7 +95,7 @@ public class ChangePasswordTests(GymNotebookFactory factory) : IClassFixture<Gym
     [Fact]
     public async Task Change_password_with_blank_new_password_returns_bad_request()
     {
-        var token = await RegisterAndGetTokenAsync(UniqueUsername(), OriginalPassword);
+        var token = await RegisterAndGetTokenAsync(OriginalPassword);
 
         var response = await ChangePasswordAsync(token, new ChangePasswordRequest(OriginalPassword, "   "));
 

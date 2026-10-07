@@ -2,32 +2,48 @@ import { request } from './client'
 
 // Wire types for /auth/*, one per record in backend/GymNotebook.Api. Property
 // names are camelCase because System.Text.Json writes `AuthResponse(string Token)`
-// as `{ "token": ... }` and reads `{ "inviteCode": ... }` into `InviteCode`.
+// as `{ "token": ... }` and reads `{ "displayName": ... }` into `DisplayName`.
 // Keeping them next to the calls that use them, rather than in one big types file,
 // means a change to a backend record has exactly one frontend file to update.
 
+// The address is sent as typed; the backend trims and lowercases it (specs/002
+// FR-001), so the screen doesn't have to and can't disagree with it.
 interface LoginRequest {
-  username: string
+  email: string
   password: string
 }
 
 // `string | null` mirrors the backend's `string? InviteCode`. The screen sends
 // whatever is in the field, empty string included — with INVITE_CODE unset the
 // backend accepts anything, and with it set a blank is rejected the same 403 as a
-// wrong one, so there's nothing for the client to special-case.
+// wrong one, so there's nothing for the client to special-case. The invite code
+// goes away in specs/002 PR 5.
 interface RegisterRequest {
-  username: string
+  email: string
   password: string
+  displayName: string
   inviteCode: string | null
+}
+
+// "Send the link again" (POST /auth/verification). The password is required so
+// that the route can't be used to make the app email any address on demand.
+interface ResendVerificationRequest {
+  email: string
+  password: string
 }
 
 export interface AuthResponse {
   token: string
 }
 
+export interface VerifyEmailResponse {
+  email: string
+}
+
 export interface MeResponse {
   userId: number
-  username: string
+  displayName: string
+  email: string
 }
 
 interface ChangePasswordRequest {
@@ -35,17 +51,42 @@ interface ChangePasswordRequest {
   newPassword: string
 }
 
-// Both resolve to the token or throw: ApiError for 400/401/403/409/429 (mapped to
-// prose by describeAuthError), fetch's own TypeError when the API is unreachable.
-// Storing the token is the caller's job — these are transport only, so a test or
-// a later "re-authenticate" flow can call them without side effects.
+// Login resolves to the token or throws: ApiError for 400/401/403/429 (mapped to
+// prose by describeAuthError, except 403 email_not_verified, which the screen
+// turns into "check your inbox"), fetch's own TypeError when the API is
+// unreachable. Storing the token is the caller's job — these are transport only,
+// so a test or a later "re-authenticate" flow can call them without side effects.
 
 export function login(body: LoginRequest): Promise<AuthResponse> {
   return request<AuthResponse>('/auth/login', { method: 'POST', body })
 }
 
-export function register(body: RegisterRequest): Promise<AuthResponse> {
-  return request<AuthResponse>('/auth/register', { method: 'POST', body })
+// 202 with no body for every valid request, whether or not the address already
+// has an account (specs/002 FR-011): no token comes back, because the account
+// can't sign in until the address is confirmed. The difference only reaches the
+// inbox, so the screen shows "check your inbox" either way.
+export function register(body: RegisterRequest): Promise<void> {
+  return request<void>('/auth/register', { method: 'POST', body })
+}
+
+// Always 204: whether a link went out depends on the account, and the answer
+// must not.
+export function resendVerification(
+  body: ResendVerificationRequest,
+): Promise<void> {
+  return request<void>('/auth/verification', { method: 'POST', body })
+}
+
+// The confirmation link's token, read from the URL fragment. Its failures are
+// 400 with code "expired" or "invalid" — never 401, so they can't be mistaken
+// for a session ending (FR-009). `local` all the same: a stale session in this
+// browser has nothing to do with whether the link works.
+export function verifyEmail(token: string): Promise<VerifyEmailResponse> {
+  return request<VerifyEmailResponse>('/auth/verify-email', {
+    method: 'POST',
+    body: { token },
+    unauthorized: 'local',
+  })
 }
 
 // No options: GET, no body, so no Content-Type — the cheapest authenticated

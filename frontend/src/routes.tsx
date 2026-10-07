@@ -12,6 +12,7 @@ import NoticeGate from './screens/NoticeGate.tsx'
 import OptionalDetailsConsent from './screens/OptionalDetailsConsent.tsx'
 import PrivacyNotice from './screens/PrivacyNotice.tsx'
 import Sessions from './screens/Sessions.tsx'
+import VerifyEmail from './screens/VerifyEmail.tsx'
 import NewWorkout from './screens/NewWorkout.tsx'
 import WorkoutDetail from './screens/WorkoutDetail.tsx'
 import Progress from './screens/Progress.tsx'
@@ -21,9 +22,10 @@ import EditExercise from './screens/EditExercise.tsx'
 // The route table, one entry per screen in docs/ui/README.md. Data-mode router
 // (createBrowserRouter) rather than <BrowserRouter><Routes>, for the loader below.
 //
-// /login, /privacy (the public notice) and /account/deleted (the completion
+// /login, /privacy (the public notice), /account/deleted (the completion
 // screen after a deletion, when there's no account left to be signed in to)
-// are the only screens outside the guard. Everything else sits under one
+// and /verify-email (an email's confirmation link) are the only screens
+// outside the guard. Everything else sits under one
 // pathless layout route: no path of its own, a loader (requireAuth) that runs
 // before render and on every navigation beneath it, and a bare <Outlet /> that
 // renders whichever child matched. Screens read the signed-in user with
@@ -42,6 +44,9 @@ export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/privacy', element: <PrivacyNotice /> },
   { path: '/account/deleted', element: <AccountDeleted /> },
+  // The confirmation link's target (specs/002). Public: it's often opened in a
+  // browser that has no session, and confirming never needs one.
+  { path: '/verify-email', element: <VerifyEmail /> },
   {
     id: 'auth',
     loader: requireAuth,

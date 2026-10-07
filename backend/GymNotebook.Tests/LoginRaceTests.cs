@@ -19,12 +19,12 @@ public class LoginRaceTests(TwoHostGymNotebookFixture db)
     {
         // Arrange
         await using var host = db.CreateHost();
-        var (userId, username) = await SeedAsync();
+        var (userId, email) = await SeedAsync();
         using var client = host.CreateClient();
 
         // Act: login completes while exclusive access is held (it takes no guard)...
         await using var deletion = await db.HoldExclusiveAsync(userId);
-        var token = await LoginAsync(client, username);
+        var token = await LoginAsync(client, email);
         // ...then the deletion commits, and the fresh token is used.
         await deletion.DeleteUserAndCommitAsync();
         var me = await MeAsync(client, token);
@@ -38,12 +38,12 @@ public class LoginRaceTests(TwoHostGymNotebookFixture db)
     {
         // Arrange
         await using var host = db.CreateHost();
-        var (userId, username) = await SeedAsync();
+        var (userId, email) = await SeedAsync();
         using var client = host.CreateClient();
 
         // Act: the token carries the pre-change version; the change then commits.
         await using var change = await db.HoldExclusiveAsync(userId);
-        var token = await LoginAsync(client, username);
+        var token = await LoginAsync(client, email);
         await change.BumpTokenVersionAndCommitAsync();
         var me = await MeAsync(client, token);
 
@@ -51,17 +51,17 @@ public class LoginRaceTests(TwoHostGymNotebookFixture db)
         Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
     }
 
-    private async Task<(int UserId, string Username)> SeedAsync()
+    private async Task<(int UserId, string Email)> SeedAsync()
     {
         var userId = await db.SeedUserAsync();
         await using var context = db.NewContext();
-        var username = await context.Users.Where(u => u.Id == userId).Select(u => u.Username).SingleAsync();
-        return (userId, username);
+        var email = await context.Users.Where(u => u.Id == userId).Select(u => u.Email).SingleAsync();
+        return (userId, email);
     }
 
-    private static async Task<string> LoginAsync(HttpClient client, string username)
+    private static async Task<string> LoginAsync(HttpClient client, string email)
     {
-        var response = await client.PostAsJsonAsync("/auth/login", new LoginRequest(username, TwoHostGymNotebookFixture.Password))
+        var response = await client.PostAsJsonAsync("/auth/login", new LoginRequest(email, TwoHostGymNotebookFixture.Password))
             .WaitAsync(TimeSpan.FromSeconds(10)); // a login that waited on the lock would hang here
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<AuthResponse>())!.Token;

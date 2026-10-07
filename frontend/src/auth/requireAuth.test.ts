@@ -64,7 +64,11 @@ describe('requireAuth', () => {
 
   it('returns the user when the token is good', async () => {
     setToken('good')
-    const user = { userId: 1, username: 'jouni' }
+    const user = {
+      userId: 1,
+      displayName: 'Jouni',
+      email: 'jouni@example.test',
+    }
     vi.mocked(me).mockResolvedValue(user)
 
     await expect(requireAuth()).resolves.toEqual(user)

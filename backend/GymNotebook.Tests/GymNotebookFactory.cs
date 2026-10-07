@@ -72,6 +72,20 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // APP_URL pinned so tests can assert the exact links emails carry.
         builder.UseSetting("Email:Backend", "memory");
         builder.UseSetting("APP_URL", AppUrl);
+
+        // Every test in a class shares this host, its database and its in-process rate
+        // limiters, so the production values (5 and 10 per hour per IP, 90 emails a day)
+        // would let one test's sign-ups throttle another's. Raised here; the limits
+        // themselves are tested with EmailRateLimitedGymNotebookFactory, and the caps by
+        // EmailCapsTests against EmailCaps directly.
+        ApplyGenerousEmailLimits(builder);
+    }
+
+    public static void ApplyGenerousEmailLimits(IWebHostBuilder builder)
+    {
+        builder.UseSetting("EmailRequestRateLimit:PermitLimit", "1000");
+        builder.UseSetting("EmailLinkRateLimit:PermitLimit", "1000");
+        builder.UseSetting("EMAIL_DAILY_CAP", "10000");
     }
 
 
