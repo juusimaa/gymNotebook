@@ -39,7 +39,7 @@ description: "Task list for the Email Login and Open Signup feature"
 
 ## PR 3 — Email accounts (invite code still on)
 
-- [x] T020 (operator) Production wipe from quickstart.md, immediately before this PR deploys. Record the row count. *Done 2026-10-07 (owner-confirmed); row count not yet recorded.*
+- [x] T020 (operator) Production wipe from quickstart.md, immediately before this PR deploys. Record the row count. *Done 2026-10-07 (owner-confirmed); 3 user rows deleted.*
 - [x] T021 `User.Email`, `EmailVerifiedAt`, rename `Username` → `DisplayName` and drop its unique index; migration `AddUserEmail`; test that it fails on a non-empty `users` table.
 - [x] T022 `JwtTokenFactory.CreateLinkToken` / `ReadLinkToken`; bearer `OnTokenValidated` rejects `purpose` tokens and unconfirmed accounts; `LifecycleFilter` check includes `EmailVerifiedAt`.
 - [x] T023 Register by email → 202, three inbox branches, dummy hash, unique-violation race handled as existing account.
@@ -50,7 +50,7 @@ description: "Task list for the Email Login and Open Signup feature"
 - [x] T028 Tests: every acceptance scenario of Stories 1–2, enumeration (identical status/body across branches), link tokens rejected as bearer and across purposes, expired/tampered tokens.
 - [x] T029 Frontend: `api/auth.ts` (register, login, resend, verifyEmail), `authErrors.ts`, Login modes Sign in / Create account / Check your inbox, `/verify-email` route, cover email line. Vitest for the fragment reader and error mapping.
 - [x] T030 Docs: PLAN.md Auth/REST/Data model, README, `docs/ui/` spec + prototype, `docs/privacy/` processing decision (email added to the account purpose, field list, necessity text), rights-requests (the address now identifies the account), retention (`email_sends` 24 h; Resend's log retention), suppliers (Resend row), notice candidate.
-- [ ] T031 (operator) Resend domain in EU (Ireland) region + DNS + tracking off + GitHub secret, before merge. (owner) Resend supplier review, including onward transfers. *Domain setup done 2026-10-07 (owner-confirmed); supplier review open.*
+- [x] T031 (operator) Resend domain in EU (Ireland) region + DNS + tracking off + GitHub secret, before merge. (owner) Resend supplier review, including onward transfers. *Domain setup and supplier review done 2026-10-07 (owner-confirmed).*
 
 ## PR 4 — Password reset
 

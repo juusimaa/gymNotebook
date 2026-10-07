@@ -90,8 +90,8 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 
 **Amendment, 2026-10-07 (specs/002 PR 3, email sign-in): pending owner review.** The account purpose gains the email address, its confirmation time and the email cap records, and the username becomes the display name (field list and necessity above). The lawful basis is proposed unchanged, Art. 6(1)(b): the address is how the requested account is reached and recovered. Recorded decisions this rests on: the owner accepted collecting email before specs/001's notice is live in production (specs/002 O2, 2026-10-06), and chose Resend's EU region (O3). Open items, all owner/operator:
 - **Registration service description changed.** The approved 2026-09-28 text ended "A username and password let you return to that notebook." PR 3 replaces that sentence, in the app and the prototype, with "Your email address and password let you return to that notebook; the address is also where we send the link that confirms it." The rest is unchanged, and the description now shows only in the Create account mode. **Approved by the owner, Jouni Uusimaa, 2026-10-07** (PR #108).
-- **Resend** (specs/002 T031): sending domain set up in the EU region, owner-confirmed 2026-10-07. The supplier review (DPA, onward transfers, its own log retention) is still open; see [suppliers.md](suppliers.md).
-- **Existing accounts** were deleted by the operator before the email schema deployed (specs/002 FR-022, quickstart): production wipe done 2026-10-07, owner-confirmed. Row count: to be recorded.
+- **Resend** (specs/002 T031): sending domain set up in the EU region, owner-confirmed 2026-10-07. Supplier review completed by the owner 2026-10-07; see [suppliers.md](suppliers.md).
+- **Existing accounts** were deleted by the operator before the email schema deployed (specs/002 FR-022, quickstart): production wipe done 2026-10-07, owner-confirmed; **3** user rows deleted.
 
 ---
 
