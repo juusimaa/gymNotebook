@@ -10,6 +10,11 @@ export function describeAuthError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.status) {
       case 400:
+        // A refused Turnstile token (specs/002 contracts/ui.md): the widget
+        // has already been reset for another go by the time this shows.
+        if (error.code === CAPTCHA) {
+          return "The check didn't pass. Try again."
+        }
         return 'Check the email address and password'
       case 401:
         // One message for "no such account" and "wrong password": the API
@@ -21,15 +26,16 @@ export function describeAuthError(error: unknown): string {
         // copy pointing to the privacy contact, since the operator resolves a
         // suspension with the user. email_not_verified normally never reaches
         // here — the screen shows "check your inbox" instead (see
-        // isEmailNotVerified) — but has copy in case a caller doesn't. Without
-        // a code, the 403 is register's invite-code check.
+        // isEmailNotVerified) — but has copy in case a caller doesn't. A 403
+        // without either code isn't one these routes send, so it falls
+        // through to "the server answered 403".
         if (error.code === 'account_suspended') {
           return 'Sign-in is paused for this account. Please contact the privacy contact to resolve it'
         }
         if (error.code === EMAIL_NOT_VERIFIED) {
           return 'Confirm your email address first - the link is in your inbox'
         }
-        return 'Invite code is wrong or missing'
+        return `The server answered ${error.status}`
       case 429:
         return 'Too many attempts - wait a minute and try again'
       default:
@@ -40,6 +46,15 @@ export function describeAuthError(error: unknown): string {
 }
 
 const EMAIL_NOT_VERIFIED = 'email_not_verified'
+const CAPTCHA = 'captcha'
+
+// The bot check refused the token (or there was none): register and reset
+// request only.
+export function isCaptchaFailure(error: unknown): boolean {
+  return (
+    error instanceof ApiError && error.status === 400 && error.code === CAPTCHA
+  )
+}
 
 // Right password, unconfirmed address (specs/002 FR-003): not an error to show,
 // but the cue to switch the sign-in screen to "check your inbox".

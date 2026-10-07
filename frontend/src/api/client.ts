@@ -22,8 +22,8 @@ const baseUrl = configured.replace(/\/$/, '')
 // (Results.BadRequest(), Results.Conflict(), ...), so the status is usually the
 // whole error. A few carry a JSON `{ "code": "..." }` (ErrorResponse in the API)
 // where the same status can mean different things — a 403 at login is
-// "account_suspended", a 403 at register is a wrong invite code — and `code`
-// holds it when present. Extending Error is what lets a screen tell "the server
+// "account_suspended" or "email_not_verified", a 400 at register is a malformed
+// field or a failed bot check ("captcha") — and `code` holds it when present. Extending Error is what lets a screen tell "the server
 // said no" apart from "the request never got there": `err instanceof ApiError` on
 // the one hand, fetch's own TypeError on the other.
 export class ApiError extends Error {

@@ -81,7 +81,8 @@ jobs:
                 corsOrigins='https://localhost.invalid' \
                 neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
                 jwtSecret='${{ secrets.JWT_SECRET }}' \
-                inviteCode='${{ secrets.INVITE_CODE }}' \
+                turnstileSecretKey='${{ secrets.TURNSTILE_SECRET_KEY }}' \
+                turnstileSiteKey='${{ vars.TURNSTILE_SITE_KEY }}' \
                 resendApiKey='${{ secrets.RESEND_API_KEY }}' \
               --query properties.outputs.frontendFqdn.value \
               --output tsv)
@@ -105,7 +106,8 @@ jobs:
                 corsOrigins="https://${{ steps.first-deploy.outputs.frontend_fqdn }},https://gymnotebook.fit" \
                 neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
                 jwtSecret='${{ secrets.JWT_SECRET }}' \
-                inviteCode='${{ secrets.INVITE_CODE }}' \
+                turnstileSecretKey='${{ secrets.TURNSTILE_SECRET_KEY }}' \
+                turnstileSiteKey='${{ vars.TURNSTILE_SITE_KEY }}' \
                 resendApiKey='${{ secrets.RESEND_API_KEY }}'
 
       - name: Verify the API health endpoint

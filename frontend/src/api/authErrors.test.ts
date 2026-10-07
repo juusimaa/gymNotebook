@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { describeAuthError, isEmailNotVerified } from './authErrors'
+import {
+  describeAuthError,
+  isCaptchaFailure,
+  isEmailNotVerified,
+} from './authErrors'
 import { ApiError } from './client'
 
 // One case per status the backend can answer /auth/login, /auth/register and
@@ -10,14 +14,12 @@ describe('describeAuthError', () => {
   it.each([
     [400, 'Check the email address and password'],
     [401, 'Email or password is wrong'],
-    [403, 'Invite code is wrong or missing'],
     [429, 'Too many attempts - wait a minute and try again'],
   ])('maps a %i to what the user should do', (status, message) => {
     expect(describeAuthError(new ApiError(status))).toBe(message)
   })
 
-  // Login's 403s carry a code; register's invite-code 403 doesn't. The same
-  // status must produce different copy.
+  // The same status must produce different copy depending on the code.
   it('maps a 403 account_suspended to the privacy contact path', () => {
     expect(describeAuthError(new ApiError(403, 'account_suspended'))).toBe(
       'Sign-in is paused for this account. Please contact the privacy contact to resolve it',
@@ -28,6 +30,17 @@ describe('describeAuthError', () => {
     expect(describeAuthError(new ApiError(403, 'email_not_verified'))).toBe(
       'Confirm your email address first - the link is in your inbox',
     )
+  })
+
+  it('maps a 400 captcha to the bot check, not the fields', () => {
+    expect(describeAuthError(new ApiError(400, 'captcha'))).toBe(
+      "The check didn't pass. Try again.",
+    )
+  })
+
+  // No route sends a 403 without a code any more (the invite code is gone).
+  it('names the status for a 403 without a known code', () => {
+    expect(describeAuthError(new ApiError(403))).toBe('The server answered 403')
   })
 
   // A status we don't map still means the server answered — the message must say
@@ -55,5 +68,14 @@ describe('isEmailNotVerified', () => {
     )
     expect(isEmailNotVerified(new ApiError(403))).toBe(false)
     expect(isEmailNotVerified(new TypeError('Failed to fetch'))).toBe(false)
+  })
+})
+
+describe('isCaptchaFailure', () => {
+  it('is true only for a 400 with the captcha code', () => {
+    expect(isCaptchaFailure(new ApiError(400, 'captcha'))).toBe(true)
+    expect(isCaptchaFailure(new ApiError(400, 'invalid_request'))).toBe(false)
+    expect(isCaptchaFailure(new ApiError(400))).toBe(false)
+    expect(isCaptchaFailure(new TypeError('Failed to fetch'))).toBe(false)
   })
 })

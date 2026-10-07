@@ -52,9 +52,10 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Jwt:ExpiryMinutes", JwtExpiryMinutes.ToString());
 
         // Explicit rather than left to whatever's in the test runner's environment, so
-        // "registration is open" is a guarantee for every test using this factory, not
-        // an accident of what's unset on a given machine.
-        builder.UseSetting("INVITE_CODE", "");
+        // "no bot check on signup and reset" is a guarantee for every test using this
+        // factory, not an accident of what's unset on a given machine. Tests that need it
+        // on use TurnstileGymNotebookFactory.
+        builder.UseSetting("TURNSTILE_SECRET_KEY", "");
 
         // Same reasoning: the privacy lifecycle feature is off for every test using this
         // factory, whatever the runner's environment says. Tests that need it on use

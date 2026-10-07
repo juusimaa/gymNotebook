@@ -8,9 +8,10 @@ web
 
 ## Users
 
-Lifters in a growing, invite-only group (registration is gated by an invite
-code). The author is the first user, but the product is meant to serve the
-wider invited group over time, so their needs carry real weight in decisions.
+Lifters in a small but growing group. Signup has been open since milestone 12
+(email confirmation, sending caps and a bot check replaced the invite code).
+The author is the first user, but the product is meant to serve the wider
+group over time, so their needs carry real weight in decisions.
 
 They use it in two situations:
 

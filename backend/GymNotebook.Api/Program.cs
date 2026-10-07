@@ -48,17 +48,12 @@ var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
 // measurable difference between the two (specs/002 FR-014). It can never match anything.
 var dummyPasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString());
 
-// Unset or empty means registration is open (see PLAN.md, Configuration), so absence is
-// a valid state and there's no `?? throw` — the deploy checklist, not the code, is what
-// makes sure it's set in Azure.
-var inviteCode = builder.Configuration["INVITE_CODE"];
-
 // Production switch for the privacy and account lifecycle feature (specs/001, plan.md
 // P25). Main deploys automatically, so unfinished privacy routes must be able to merge
-// without going live. Deliberately the opposite of INVITE_CODE: a missing, empty or
-// misspelled value fails closed (feature off), and only the exact string "true" turns it
-// on — "True", "1" or "yes" do not, so a typo can never enable it by accident. The
-// privacy routes (PrivacyEndpoints.cs) are mapped only when it's true.
+// without going live. A missing, empty or misspelled value fails closed (feature off),
+// and only the exact string "true" turns it on — "True", "1" or "yes" do not, so a typo
+// can never enable it by accident. The privacy routes (PrivacyEndpoints.cs) are mapped
+// only when it's true.
 var privacyLifecycleEnabled = builder.Configuration["PRIVACY_LIFECYCLE_ENABLED"] == "true";
 
 // Whether to take the client address from X-Forwarded-For (see UseForwardedHeaders below).
@@ -72,7 +67,7 @@ var forwardedHeadersEnabled = builder.Configuration["FORWARDED_HEADERS_ENABLED"]
 // deployed frontend URL later. An origin is scheme + host + port with no trailing slash
 // (http://localhost:5173/ silently matches nothing), and it's localhost even inside Compose:
 // the value is compared against what the browser sends, so Host=db-style service names
-// don't apply. Empty is never a valid state — unlike INVITE_CODE — and Compose turns a missing
+// don't apply. Empty is never a valid state, and Compose turns a missing
 // .env entry into "" rather than absent, so the guard check the split result, not just null.
 var corsOrigins = builder.Configuration["CORS_ORIGINS"]?
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -148,6 +143,18 @@ builder.Services.AddScoped(services => new EmailCaps(
     jwtSecret,
     emailOptions.DailyCap,
     services.GetRequiredService<TimeProvider>()));
+
+// The Turnstile bot check on signup and reset requests (specs/002 plan D9). Loaded here so
+// a secret without hostnames stops the boot (TurnstileOptions.Load). Always registered,
+// on or off: the handlers ask it either way, and it answers "pass" when it's off. Same
+// typed-HttpClient pattern as the Resend sender below; the 10-second timeout bounds how
+// long a signup waits on Cloudflare before failing closed.
+builder.Services.AddSingleton(TurnstileOptions.Load(builder.Configuration));
+builder.Services.AddHttpClient<Turnstile>(client =>
+{
+    client.BaseAddress = new Uri("https://challenges.cloudflare.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 
 // Exactly one sender, chosen by Email:Backend.
 switch (emailOptions.Backend)
@@ -520,7 +527,7 @@ var auth = app.MapGroup("/auth").AddEndpointFilter(PrivacyEndpoints.NoStore);
 //                                                whoever signed up first — picks the password
 //
 // No token comes back: the account can't sign in until the address is confirmed.
-auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, EmailOutbox outbox, EmailTemplates templates, TimeProvider clock, CancellationToken ct) =>
+auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, EmailOutbox outbox, EmailTemplates templates, Turnstile turnstile, TimeProvider clock, HttpContext http, CancellationToken ct) =>
 {
     var email = AccountInput.NormalizeEmail(request.Email);
     var displayName = AccountInput.NormalizeDisplayName(request.DisplayName);
@@ -531,13 +538,13 @@ auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, Email
         return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
     }
 
-    // inviteCode is the server's configured value (empty/unset = registration open); the
-    // request carries what the caller supplied. A mismatch when a code IS required is a
-    // 403, not a 401 — this isn't "who are you", it's "you're not allowed to sign up".
-    // Checked before the address is looked up, so it reveals nothing about accounts.
-    if (!string.IsNullOrEmpty(inviteCode) && request.InviteCode != inviteCode)
+    // The bot check (FR-019), when it's configured. After the field checks, so a malformed
+    // form doesn't spend a call to Cloudflare; before the address is looked up and before
+    // the password is hashed, so a refused request reveals nothing about accounts and costs
+    // the server almost nothing.
+    if (!await turnstile.VerifyAsync(request.TurnstileToken, http.Connection.RemoteIpAddress?.ToString(), Turnstile.SignupAction, ct))
     {
-        return Results.StatusCode(StatusCodes.Status403Forbidden);
+        return Results.Json(new ErrorResponse("captcha"), statusCode: StatusCodes.Status400BadRequest);
     }
 
     // Hashed on every branch, before the lookup, even though only "no account" stores it.
@@ -589,10 +596,9 @@ auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, Email
     return Results.Accepted();
 }).WithName("RegisterUser")
    .WithSummary("Registers a new user")
-   .WithDescription("Starts creating an account for the given email address. Always answers 202 with no body for valid input, whether or not the address already has an account; what differs is only in the email sent to that address. The account can sign in once the address is confirmed.")
+   .WithDescription("Starts creating an account for the given email address. Always answers 202 with no body for valid input, whether or not the address already has an account; what differs is only in the email sent to that address. The account can sign in once the address is confirmed. When the Turnstile bot check is configured, a missing or failing turnstileToken is 400 with code \"captcha\".")
    .Produces(StatusCodes.Status202Accepted)
    .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
-   .Produces(StatusCodes.Status403Forbidden)
    .RequireRateLimiting("auth");
 
 auth.MapPost("/login", async (LoginRequest request, AppDbContext db, CancellationToken ct) =>
@@ -729,13 +735,20 @@ auth.MapPost("/verify-email", async (VerifyEmailRequest request, AppDbContext db
 // the other one (one indexed lookup) and needs no dummy hash; the email itself is sent by
 // the outbox worker after this response. The email caps (EmailCaps) bound how often one
 // inbox can be sent a link, whoever asks.
-auth.MapPost("/password-reset", async (PasswordResetRequest request, AppDbContext db, EmailOutbox outbox, EmailTemplates templates, TimeProvider clock, CancellationToken ct) =>
+auth.MapPost("/password-reset", async (PasswordResetRequest request, AppDbContext db, EmailOutbox outbox, EmailTemplates templates, Turnstile turnstile, TimeProvider clock, HttpContext http, CancellationToken ct) =>
 {
     // A malformed address says nothing about accounts, so 400 here is safe.
     var email = AccountInput.NormalizeEmail(request.Email);
     if (!AccountInput.IsValidEmail(email))
     {
         return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    // The bot check, as on /register and placed the same way: before the lookup, so a
+    // refusal is the same whether or not the address has an account.
+    if (!await turnstile.VerifyAsync(request.TurnstileToken, http.Connection.RemoteIpAddress?.ToString(), Turnstile.PasswordResetAction, ct))
+    {
+        return Results.Json(new ErrorResponse("captcha"), statusCode: StatusCodes.Status400BadRequest);
     }
 
     var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == email, ct);
@@ -747,7 +760,7 @@ auth.MapPost("/password-reset", async (PasswordResetRequest request, AppDbContex
     return Results.Accepted();
 }).WithName("RequestPasswordReset")
    .WithSummary("Emails a password reset link")
-   .WithDescription("Always answers 202 for a well-formed address. Sends a reset link, valid for one hour, only if the address has an account.")
+   .WithDescription("Always answers 202 for a well-formed address. Sends a reset link, valid for one hour, only if the address has an account. When the Turnstile bot check is configured, a missing or failing turnstileToken is 400 with code \"captcha\".")
    .Produces(StatusCodes.Status202Accepted)
    .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .RequireRateLimiting("email-request");

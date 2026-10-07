@@ -13,16 +13,15 @@ interface LoginRequest {
   password: string
 }
 
-// `string | null` mirrors the backend's `string? InviteCode`. The screen sends
-// whatever is in the field, empty string included — with INVITE_CODE unset the
-// backend accepts anything, and with it set a blank is rejected the same 403 as a
-// wrong one, so there's nothing for the client to special-case. The invite code
-// goes away in specs/002 PR 5.
+// turnstileToken is what the Cloudflare widget handed the screen (screens/
+// Turnstile.tsx). Optional: left out when the check is off (no site key), and
+// the API only requires it when its own secret is set. A missing or refused
+// token is 400 { code: "captcha" }.
 interface RegisterRequest {
   email: string
   password: string
   displayName: string
-  inviteCode: string | null
+  turnstileToken?: string
 }
 
 // "Send the link again" (POST /auth/verification). The password is required so
@@ -32,9 +31,11 @@ interface ResendVerificationRequest {
   password: string
 }
 
-// "Forgot your password?" (POST /auth/password-reset). Only the address.
+// "Forgot your password?" (POST /auth/password-reset). The address, and the
+// Turnstile token as on register.
 interface PasswordResetRequest {
   email: string
+  turnstileToken?: string
 }
 
 // The reset link's token, read from the URL fragment, and the password to set.

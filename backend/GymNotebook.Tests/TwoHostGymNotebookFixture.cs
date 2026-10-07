@@ -456,7 +456,7 @@ public sealed class LifecycleTestHost : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Default", _connectionString);
         builder.UseSetting("Jwt:Secret", GymNotebookFactory.JwtSecret);
         builder.UseSetting("Jwt:ExpiryMinutes", GymNotebookFactory.JwtExpiryMinutes.ToString());
-        builder.UseSetting("INVITE_CODE", "");
+        builder.UseSetting("TURNSTILE_SECRET_KEY", "");
         builder.UseSetting("PRIVACY_LIFECYCLE_ENABLED", "false");
         builder.UseSetting("CORS_ORIGINS", GymNotebookFactory.AllowedOrigin);
         builder.UseSetting("Email:Backend", "memory");

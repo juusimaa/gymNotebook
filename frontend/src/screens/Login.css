@@ -58,3 +58,11 @@
   text-align: center;
   font-size: 13px;
 }
+
+/* The Turnstile widget (Turnstile.tsx) on Create account and Forgot. Cloudflare
+   draws it into this box once its script has loaded; the min-height holds the
+   flexible widget's 65px so the button below doesn't jump when it appears.
+   The compact widget used on narrow screens is taller and simply grows it. */
+.login-turnstile {
+  min-height: 65px;
+}

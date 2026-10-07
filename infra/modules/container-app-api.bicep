@@ -7,8 +7,10 @@ param corsOrigins string
 param neonConnectionString string
 @secure()
 param jwtSecret string
+// Cloudflare Turnstile's secret (specs/002 plan D9). The site key is public and goes to
+// the frontend app instead; the two are created together on the Turnstile widget.
 @secure()
-param inviteCode string
+param turnstileSecretKey string
 @secure()
 param resendApiKey string
 param tags object
@@ -50,8 +52,8 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
           value: jwtSecret
         }
         {
-          name: 'invite-code'
-          value: inviteCode
+          name: 'turnstile-secret-key'
+          value: turnstileSecretKey
         }
         {
           name: 'resend-api-key'
@@ -130,6 +132,12 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
                 name: 'APP_URL'
                 value: 'https://gymnotebook.fit'
               }
+              {
+                // Where a Turnstile token may have been solved: the frontend's own
+                // domain only. The API refuses to start with the secret but no hostnames.
+                name: 'TURNSTILE_HOSTNAMES'
+                value: 'gymnotebook.fit'
+              }
             ],
             [
               {
@@ -141,8 +149,8 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
                 secretRef: 'jwt-secret'
               }
               {
-                name: 'INVITE_CODE'
-                secretRef: 'invite-code'
+                name: 'TURNSTILE_SECRET_KEY'
+                secretRef: 'turnstile-secret-key'
               }
               {
                 name: 'RESEND_API_KEY'
