@@ -42,7 +42,7 @@ export function describeAuthError(error: unknown): string {
         return `The server answered ${error.status}`
     }
   }
-  return 'Unable to reach the server, please check your connection and try again'
+  return "Can't reach the notebook. Check your connection and try again."
 }
 
 const EMAIL_NOT_VERIFIED = 'email_not_verified'

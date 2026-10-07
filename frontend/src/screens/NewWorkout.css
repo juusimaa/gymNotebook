@@ -190,7 +190,9 @@
 
 .new-workout-empty {
   margin: 0 0 var(--space-2);
-  font-size: 13px;
+  /* On a first page this is the only instruction on screen, so it is set at
+     reading size, not as a footnote. */
+  font-size: 15px;
 }
 
 /* Blocks are separated by hairline rules, not cards (spec, Visual

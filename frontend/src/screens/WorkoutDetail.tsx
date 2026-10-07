@@ -135,7 +135,7 @@ export default function WorkoutDetail() {
   const startedAt = formatWorkoutTime(workout.startedAt)
   const timeRange =
     workout.endedAt === null
-      ? `${startedAt}–in progress`
+      ? `from ${startedAt}, in progress`
       : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
   const bodyweight =
     workout.bodyweightKg === null

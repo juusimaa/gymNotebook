@@ -81,11 +81,23 @@ export default function Exercises() {
         )}
         {exercises === null && <p className="muted">Opening the index…</p>}
         {exercises !== null && exercises.length === 0 && message === null && (
-          <p className="muted exercise-index-empty">
-            {query.trim() === ''
-              ? 'No exercises have been logged yet.'
-              : 'No exercises match that search.'}
-          </p>
+          <div className="exercise-index-empty">
+            <p className="muted">
+              {query.trim() === ''
+                ? 'No exercises yet. They are added by being typed into a page.'
+                : 'No exercises match that search.'}
+            </p>
+            {/* An empty index is a first visit: point to where exercises
+                come from, as the empty Progress screen does. */}
+            {query.trim() === '' && (
+              <Link
+                className="btn btn-secondary exercise-index-empty-action"
+                to="/workouts/new"
+              >
+                Start a new page
+              </Link>
+            )}
+          </div>
         )}
         {exercises !== null && exercises.length > 0 && (
           <ul className="exercise-index-list">
