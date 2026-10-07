@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listWorkouts, type WorkoutSummaryResponse } from '../api/workouts'
 import { Link } from 'react-router'
+import { useRouteNotice } from './routeNotice'
 import {
   formatCount,
   formatWorkoutDate,
@@ -12,6 +13,8 @@ import './Sessions.css'
 const PAGE_SIZE = 20
 
 export default function Sessions() {
+  // "Page saved" or "Page torn out" from the screen that sent us here.
+  const notice = useRouteNotice()
   // `null` is the loading sentinel. Once the request succeeds this becomes an
   // array, including an empty array when the user has not logged a session yet.
   const [workouts, setWorkouts] = useState<WorkoutSummaryResponse[] | null>(
@@ -140,6 +143,11 @@ export default function Sessions() {
           </Link>
         </nav>
       </header>
+      {notice !== null && (
+        <p className="form-message is-status route-notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <div className="sessions-list">
         {workouts.length === 0 ? (

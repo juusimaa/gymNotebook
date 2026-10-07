@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../api/client'
 import {
@@ -13,6 +13,7 @@ import {
   formatWorkoutTime,
   formatWorkoutTimeRange,
 } from './workoutFormat'
+import { routeNotice, useRouteNotice } from './routeNotice'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import './WorkoutDetail.css'
 
@@ -28,6 +29,18 @@ export default function WorkoutDetail() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null)
+  // "Changes saved" from the editor that sent us here.
+  const notice = useRouteNotice()
+  // Opening the confirm puts focus on its safe answer, Keep; Keep hands it
+  // back to Delete. Without this, focus stayed on a button that had moved
+  // out of the reading order, and a screen reader heard nothing new.
+  const deleteButtonRef = useRef<HTMLButtonElement>(null)
+  const keepButtonRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (confirmingDelete) {
+      keepButtonRef.current?.focus()
+    }
+  }, [confirmingDelete])
   // Without optional-details consent (specs/001 user story 6) the title,
   // bodyweight, gym and notes are hidden here as in the editor. Such an
   // account has none stored anyway, apart from one still facing the
@@ -83,7 +96,7 @@ export default function WorkoutDetail() {
     setDeleteMessage(null)
     try {
       await deleteWorkout(parsedWorkoutId)
-      void navigate('/workouts')
+      void navigate('/workouts', { state: routeNotice('Page torn out.') })
     } catch {
       setDeleteMessage(
         'This session page could not be deleted. Please try again.',
@@ -148,6 +161,7 @@ export default function WorkoutDetail() {
             </Link>
           )}
           <button
+            ref={deleteButtonRef}
             className="header-link"
             type="button"
             onClick={() => setConfirmingDelete(true)}
@@ -159,16 +173,20 @@ export default function WorkoutDetail() {
 
       {confirmingDelete && (
         <section className="workout-delete-confirmation" role="alert">
-          <p>Tear out this page? Its exercises and sets go with it.</p>
+          <p>Tear out this page? {describeTearOut(workout.exercises)}</p>
           {deleteMessage !== null && (
             <p className="form-message">{deleteMessage}</p>
           )}
           <div>
             <button
+              ref={keepButtonRef}
               className="btn btn-ghost"
               type="button"
               disabled={isDeleting}
-              onClick={() => setConfirmingDelete(false)}
+              onClick={() => {
+                setConfirmingDelete(false)
+                deleteButtonRef.current?.focus()
+              }}
             >
               Keep
             </button>
@@ -182,6 +200,12 @@ export default function WorkoutDetail() {
             </button>
           </div>
         </section>
+      )}
+
+      {notice !== null && (
+        <p className="form-message is-status route-notice" role="status">
+          {notice}
+        </p>
       )}
 
       <div className="workout-detail-content">
@@ -273,4 +297,19 @@ export default function WorkoutDetail() {
       )}
     </main>
   )
+}
+
+// What tearing out the page destroys, counted, since a destructive action
+// names its consequence (PRODUCT.md, "Nothing is lost by accident").
+function describeTearOut(exercises: { sets: unknown[] }[]): string {
+  const setCount = exercises.reduce(
+    (sum, exercise) => sum + exercise.sets.length,
+    0,
+  )
+  if (exercises.length === 0) {
+    return 'It has no exercises logged.'
+  }
+  const exerciseWord = exercises.length === 1 ? 'exercise' : 'exercises'
+  const setWord = setCount === 1 ? 'set' : 'sets'
+  return `Its ${exercises.length} ${exerciseWord} and ${setCount} ${setWord} go with it.`
 }

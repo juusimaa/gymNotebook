@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { searchExercises, type ExerciseResponse } from '../api/exercises'
 import { describeLastSet } from './exerciseFormat'
+import { useRouteNotice } from './routeNotice'
 import { formatCount } from './workoutFormat'
 import './ExerciseManagement.css'
 
 export default function Exercises() {
+  // "Renamed to …" or "Merged into …" from the edit screen.
+  const notice = useRouteNotice()
   const [query, setQuery] = useState('')
   const [exercises, setExercises] = useState<ExerciseResponse[] | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -50,6 +53,11 @@ export default function Exercises() {
           </Link>
         </nav>
       </header>
+      {notice !== null && (
+        <p className="form-message is-status route-notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <div className="exercise-index-content">
         <input

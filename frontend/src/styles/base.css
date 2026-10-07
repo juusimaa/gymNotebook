@@ -248,8 +248,19 @@ a {
   border-color: var(--color-accent-700);
   outline: none;
 }
+/* A field that needs fixing: the error colour, and twice the border weight
+   (the inset shadow adds the second pixel without shifting the layout), so
+   it reads as different from a focused field even without colour vision.
+   Focused while invalid, it keeps the error border and gains the focus ring
+   outside it. */
 .input[aria-invalid='true'] {
-  border-color: var(--color-accent-600);
+  border-color: var(--color-error);
+  box-shadow: inset 0 0 0 1px var(--color-error);
+}
+.input[aria-invalid='true']:focus-visible {
+  border-color: var(--color-error);
+  outline: 2px solid var(--color-accent-700);
+  outline-offset: 2px;
 }
 textarea.input {
   min-height: 90px;
@@ -266,12 +277,27 @@ textarea.input {
 
 /* Inline message under a form — errors, rate-limit notices. Prose, not a
    toast (spec, Login: "Rate-limit rejections show an inline message under the
-   button, not a toast"). */
+   button, not a toast"). Set in the error colour, which nothing else uses, so
+   a failure can't be mistaken for a link or a gain. */
 .form-message {
   margin: var(--space-3) 0 0;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--color-accent-700);
+  color: var(--color-error);
+}
+/* The same line for news that isn't a failure ("Sent again", "Saved"): full
+   ink, so only real errors carry the error colour. */
+.form-message.is-status {
+  color: var(--color-text);
+}
+
+/* The arrival line under a screen's header ("Page saved", "Merged into Bench
+   Press"): a ruled strip like the header's own, so it reads as a line written
+   on the page rather than a toast laid over it. */
+.route-notice {
+  margin: 0;
+  padding: var(--space-3) 22px;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 /* Secondary prose — hints, footers, "New here?" lines. */
