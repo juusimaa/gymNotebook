@@ -181,12 +181,34 @@ export interface WorkoutExerciseDraft {
   // UI-only switch controlling the added-weight field for bodyweight exercises.
   isAddedWeightEnabled: boolean
   // The exercise's most recent set before this page, shown as "last time" in
-  // the block. Only a block picked from autocomplete has one, on a new page or
-  // on the edit page of a session still in progress — which asks the server to
-  // leave the page itself out, so the hint is never one of its own sets.
+  // the block: on a new page, from the suggestion it was picked from; on the
+  // edit page of a session still in progress, from that or, for blocks already
+  // on the page, from withLastTime. The edit page asks the server to leave the
+  // page itself out, so the hint is never one of its own sets.
   // Optional so drafts stored before it existed still restore. Never sent.
   lastSet?: ExerciseResponse['lastSet']
   sets: WorkoutSetDraft[]
+}
+
+// Continuing a session in progress loads its blocks from the server, which
+// knows nothing of "last time": only a block picked in this visit had one.
+// So after a Save page and Continue logging (the phone locked between sets,
+// say), the reference vanished exactly when it was needed. This fills it in
+// from one GET /exercises answer asked with excludeWorkoutId, so it is the
+// session before this page. A block that already has a lastSet keeps it, and
+// a new exercise (no id yet) has no history to show.
+export function withLastTime(
+  exercises: WorkoutExerciseDraft[],
+  found: Pick<ExerciseResponse, 'id' | 'lastSet'>[],
+): WorkoutExerciseDraft[] {
+  const lastSetById = new Map(
+    found.map((exercise) => [exercise.id, exercise.lastSet]),
+  )
+  return exercises.map((exercise) =>
+    exercise.lastSet !== undefined || exercise.exerciseId === null
+      ? exercise
+      : { ...exercise, lastSet: lastSetById.get(exercise.exerciseId) ?? null },
+  )
 }
 
 // The ditto mark across sessions: a block picked with a "last time" set

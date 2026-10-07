@@ -39,6 +39,7 @@ import {
   removeSetFromExercise,
   restoreSetToExercise,
   updateSetInExercise,
+  withLastTime,
   type WorkoutExerciseDraft,
   type WorkoutHeadingDraft,
   type WorkoutSetDraft,
@@ -312,6 +313,22 @@ function WorkoutEditor() {
           setExercises(shown.exercises)
           setRestoredAt(restoredDraft?.savedAt ?? null)
           setSavedWorkoutId(workout.id)
+
+          // A session still in progress shows "last time" on the blocks it
+          // already has, as it does on blocks picked now; a finished page
+          // being corrected shows none, since its "last time" could be a
+          // later session. One request covers every block. It is only a
+          // hint, so a failure leaves the blocks without it and says nothing.
+          if (draft.endTime === '') {
+            try {
+              const found = await searchExercises('', workout.id)
+              if (!cancelled) {
+                setExercises((current) => withLastTime(current, found))
+              }
+            } catch {
+              // No hint is the same as before this request existed.
+            }
+          }
         }
       } catch (error: unknown) {
         if (!cancelled) {
