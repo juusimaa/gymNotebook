@@ -119,6 +119,12 @@
   text-transform: uppercase;
 }
 
+/* "e1RM" keeps its lower-case e inside the capitals around it. */
+.progress-metric-term {
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
 .progress-chart {
   margin: 0;
   padding: 10px 22px 0;
@@ -201,10 +207,20 @@
   line-height: 1.25;
 }
 
+.progress-stats strong small {
+  color: var(--color-neutral-700);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* Where the figure came from ("04 Oct · 72.5 kg × 6"). 13px, not 11: it is
+   read, not glanced at, and it may wrap to two lines in a third of the
+   column. */
 .progress-stats span {
   display: block;
+  margin-top: 2px;
   color: var(--color-neutral-700);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
