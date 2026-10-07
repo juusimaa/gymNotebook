@@ -58,7 +58,7 @@ public static class JwtTokenFactory
     //
     //   verify: sub + email. The address is checked again when the link is used, so a
     //           token minted for one address can never confirm another.
-    //   reset:  sub + tv. Completing a reset bumps TokenVersion (PR 4), which makes this
+    //   reset:  sub + tv. Completing a reset bumps TokenVersion, which makes this
     //           tv stale — that is what makes a reset link single-use, with no token table.
     public static string CreateLinkToken(User user, LinkPurpose purpose, string secret, DateTimeOffset now)
     {

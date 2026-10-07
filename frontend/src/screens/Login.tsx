@@ -1,21 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { login, register, resendVerification } from '../api/auth'
+import {
+  login,
+  register,
+  requestPasswordReset,
+  resendVerification,
+} from '../api/auth'
 import {
   describeAuthError,
   INTERRUPTED_WRITE_NOTICE,
   isEmailNotVerified,
 } from '../api/authErrors'
+import { ApiError } from '../api/client'
 import { getPrivacyNotice } from '../api/privacy'
 import {
   clearInterruptedWrite,
   hasInterruptedWrite,
 } from '../auth/invalidation'
+import { readLoginEntry } from '../auth/loginEntry'
 import { setToken } from '../auth/token'
 import './Login.css'
 
 // docs/ui/README.md, screen 1, and specs/002 contracts/ui.md → /login. One
-// route, three modes switched in place rather than separate pages, so the
+// route, several modes switched in place rather than separate pages, so the
 // browser's back button leaves the screen instead of stepping through them:
 //
 //   signIn  Email + password → the notebook. A 403 email_not_verified (right
@@ -24,21 +31,23 @@ import './Login.css'
 //   create  Email + password + the name on the cover (+ the invite code until
 //           specs/002 PR 5) → always `inbox`: the API answers every signup the
 //           same way, so the screen can't and doesn't say more.
-//   inbox   "Check your inbox", with "Send the link again", which uses the
-//           email and password still held in this component's state. Leaving
-//           the screen unmounts it, and the password goes with it.
-type Mode = 'signIn' | 'create' | 'inbox'
+//   forgot  Email only → always `resetSent`, for the same reason as create:
+//           the API answers every reset request the same way.
+//
+// and two result states that replace the form:
+//
+//   inbox      "Check your inbox", with "Send the link again", which uses the
+//              email and password still held in this component's state.
+//              Leaving the screen unmounts it, and the password goes with it.
+//   resetSent  "If there's an account for this address, a link is on its way."
+type Mode = 'signIn' | 'create' | 'forgot' | 'inbox' | 'resetSent'
 
-// /verify-email hands the confirmed address over in router state, so signing in
-// right after confirming needs only the password. Router state is `any`; this
-// guard is what makes it safe to read.
-function prefilledEmail(state: unknown): string {
-  return typeof state === 'object' &&
-    state !== null &&
-    'email' in state &&
-    typeof state.email === 'string'
-    ? state.email
-    : ''
+// Shown when a request fails in Forgot mode. describeAuthError's 400 mentions a
+// password, which this form doesn't have.
+function describeResetRequestError(err: unknown): string {
+  return err instanceof ApiError && err.status === 400
+    ? 'Check the email address'
+    : describeAuthError(err)
 }
 
 export default function Login() {
@@ -51,13 +60,18 @@ export default function Login() {
   // the component with the new value. The inputs below are *controlled*: React
   // holds the text and the <input> just shows it — which is what makes "keep the
   // email after a 401" free (only the password is cleared).
-  const [mode, setMode] = useState<Mode>('signIn')
-  const [email, setEmail] = useState(() => prefilledEmail(location.state))
+  // How the screen was opened (auth/loginEntry.ts): plain sign-in, or with an
+  // address or a mode handed over by /verify-email or /reset-password. Read once.
+  const [entry] = useState(() => readLoginEntry(location.state))
+  const [mode, setMode] = useState<Mode>(entry.mode)
+  const [email, setEmail] = useState(entry.email)
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   // null means no message; the <p> isn't rendered at all rather than left empty.
-  const [message, setMessage] = useState<string | null>(null)
+  // Starts as the entry notice ("that reset link has expired"), if any; like
+  // any message, it goes once the user moves on.
+  const [message, setMessage] = useState<string | null>(entry.notice)
   // Disables the buttons while a request is in flight, so a double-tap can't
   // spend two of the ten-per-minute auth rate-limit slots.
   const [submitting, setSubmitting] = useState(false)
@@ -85,12 +99,14 @@ export default function Login() {
     }
   }, [])
 
-  // The inbox state replaces the form the user just tapped in, so move focus
-  // to its heading: a screen reader announces the new state, and nobody is
-  // left focused on a button that no longer exists.
-  const inboxHeadingRef = useRef<HTMLHeadingElement>(null)
+  // A result state replaces the form the user just tapped in, so move focus to
+  // its heading: a screen reader announces the new state, and nobody is left
+  // focused on a button that no longer exists.
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
-    if (mode === 'inbox') inboxHeadingRef.current?.focus()
+    if (mode === 'inbox' || mode === 'resetSent') {
+      resultHeadingRef.current?.focus()
+    }
   }, [mode])
 
   function switchMode(next: Mode) {
@@ -137,6 +153,19 @@ export default function Login() {
     }
   }
 
+  async function sendResetLink() {
+    setMessage(null)
+    setSubmitting(true)
+    try {
+      await requestPasswordReset({ email })
+      setMode('resetSent')
+    } catch (err) {
+      setMessage(describeResetRequestError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   async function resend() {
     setMessage(null)
     setSubmitting(true)
@@ -161,7 +190,7 @@ export default function Login() {
     </p>
   )
 
-  // Shared by both forms. type="email" brings the email keyboard and the
+  // Shared by all three forms. type="email" brings the email keyboard and the
   // browser's own format check before a request is spent; the backend's loose
   // check stays as the backstop. autoComplete="username" because, to a password
   // manager, the address *is* the username.
@@ -196,7 +225,7 @@ export default function Login() {
 
       {mode === 'inbox' ? (
         <section className="login-inbox" aria-labelledby="inbox-heading">
-          <h2 id="inbox-heading" ref={inboxHeadingRef} tabIndex={-1}>
+          <h2 id="inbox-heading" ref={resultHeadingRef} tabIndex={-1}>
             Check your inbox
           </h2>
           <p>
@@ -225,13 +254,33 @@ export default function Login() {
             </button>
           </p>
         </section>
+      ) : mode === 'resetSent' ? (
+        <section className="login-inbox" aria-labelledby="reset-sent-heading">
+          <h2 id="reset-sent-heading" ref={resultHeadingRef} tabIndex={-1}>
+            Check your inbox
+          </h2>
+          {/* "If": the API answers the same whether or not the address has
+              an account (FR-013), so the screen can't know either. */}
+          <p>
+            If there&apos;s an account for <strong>{email}</strong>, we&apos;ve
+            sent a link to choose a new password. It works for one hour.
+          </p>
+          <p className="muted">
+            Nothing there? Check the spam folder, or ask for a new link.
+          </p>
+          <p className="muted login-switch">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => switchMode('signIn')}
+            >
+              Back to sign in
+            </button>
+          </p>
+        </section>
       ) : (
         <>
-          <p className="muted login-intro">
-            {mode === 'signIn'
-              ? 'Sign in with your email to open your notebook.'
-              : 'Create your notebook. An invite code is required for now.'}
-          </p>
+          <p className="muted login-intro">{INTROS[mode]}</p>
           {interruptedWrite && (
             <p className="form-message" role="status">
               {INTERRUPTED_WRITE_NOTICE}
@@ -249,23 +298,43 @@ export default function Login() {
             className="form-stack"
             onSubmit={(e) => {
               e.preventDefault()
-              void (mode === 'signIn' ? signIn() : createAccount())
+              void (mode === 'signIn'
+                ? signIn()
+                : mode === 'create'
+                  ? createAccount()
+                  : sendResetLink())
             }}
           >
             {emailField}
-            <label className="field">
-              <span className="label">Password</span>
-              <input
-                className="input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={
-                  mode === 'signIn' ? 'current-password' : 'new-password'
-                }
-                required
-              />
-            </label>
+            {mode !== 'forgot' && (
+              <label className="field">
+                <span className="label">Password</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={
+                    mode === 'signIn' ? 'current-password' : 'new-password'
+                  }
+                  required
+                />
+              </label>
+            )}
+            {/* Right under the field it's about (contracts/ui.md). Left-aligned
+                and small, so it reads as a hint rather than a second action
+                competing with "Sign in". */}
+            {mode === 'signIn' && (
+              <p className="muted login-forgot">
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  onClick={() => switchMode('forgot')}
+                >
+                  Forgot your password?
+                </button>
+              </p>
+            )}
 
             {mode === 'create' && (
               <>
@@ -302,7 +371,7 @@ export default function Login() {
               type="submit"
               disabled={submitting}
             >
-              {mode === 'signIn' ? 'Sign in' : 'Create account'}
+              {SUBMIT_LABELS[mode]}
             </button>
 
             {/* Describe the core service before registration. This is a
@@ -336,6 +405,17 @@ export default function Login() {
                   Create an account
                 </button>
               </>
+            ) : mode === 'forgot' ? (
+              <>
+                Remembered it?{' '}
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  onClick={() => switchMode('signIn')}
+                >
+                  Sign in
+                </button>
+              </>
             ) : (
               <>
                 Already have an account?{' '}
@@ -361,4 +441,20 @@ export default function Login() {
       )}
     </main>
   )
+}
+
+// The three form modes' copy, as lookup tables rather than nested ternaries.
+type FormMode = 'signIn' | 'create' | 'forgot'
+
+const INTROS: Record<FormMode, string> = {
+  signIn: 'Sign in with your email to open your notebook.',
+  create: 'Create your notebook. An invite code is required for now.',
+  forgot:
+    "Enter the address you signed up with and we'll send a link to choose a new password.",
+}
+
+const SUBMIT_LABELS: Record<FormMode, string> = {
+  signIn: 'Sign in',
+  create: 'Create account',
+  forgot: 'Send link',
 }

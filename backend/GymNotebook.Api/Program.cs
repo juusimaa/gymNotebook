@@ -88,8 +88,8 @@ var rateLimitPermitLimit = builder.Configuration.GetValue("RateLimit:PermitLimit
 var rateLimitWindowSeconds = builder.Configuration.GetValue("RateLimit:WindowSeconds", 60);
 
 // The two email policies (specs/002 plan D12, FR-020), per client IP like "auth" but per
-// hour: "email-request" on the routes that send an email (resend now, reset request in
-// PR 4), "email-link" on the routes that consume a link. Configurable for the same reason
+// hour: "email-request" on the routes that send an email (resend, reset request),
+// "email-link" on the routes that consume a link. Configurable for the same reason
 // as above — the test host raises them so a class of tests isn't throttled by its own
 // earlier tests, and EmailRateLimitedGymNotebookFactory shrinks them to hit them.
 var emailRequestPermitLimit = builder.Configuration.GetValue("EmailRequestRateLimit:PermitLimit", 5);
@@ -720,6 +720,109 @@ auth.MapPost("/verify-email", async (VerifyEmailRequest request, AppDbContext db
    .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .RequireRateLimiting("email-link");
 
+// "Forgot your password?" (specs/002 Story 3, FR-013). Always 202: whether a link went
+// out depends on the account, and the answer must not. Any existing account gets one,
+// confirmed or not — completing a reset confirms the address (FR-008), so someone who
+// forgot their password before confirming isn't locked out.
+//
+// No branch hashes a password here, so the "account exists" branch does the same work as
+// the other one (one indexed lookup) and needs no dummy hash; the email itself is sent by
+// the outbox worker after this response. The email caps (EmailCaps) bound how often one
+// inbox can be sent a link, whoever asks.
+auth.MapPost("/password-reset", async (PasswordResetRequest request, AppDbContext db, EmailOutbox outbox, EmailTemplates templates, TimeProvider clock, CancellationToken ct) =>
+{
+    // A malformed address says nothing about accounts, so 400 here is safe.
+    var email = AccountInput.NormalizeEmail(request.Email);
+    if (!AccountInput.IsValidEmail(email))
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Email == email, ct);
+    if (user is not null)
+    {
+        outbox.Enqueue(templates.PasswordReset(email, JwtTokenFactory.CreateLinkToken(user, LinkPurpose.Reset, jwtSecret, clock.GetUtcNow())));
+    }
+
+    return Results.Accepted();
+}).WithName("RequestPasswordReset")
+   .WithSummary("Emails a password reset link")
+   .WithDescription("Always answers 202 for a well-formed address. Sends a reset link, valid for one hour, only if the address has an account.")
+   .Produces(StatusCodes.Status202Accepted)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .RequireRateLimiting("email-request");
+
+// The reset link's target (specs/002 Story 3, FR-007, FR-008). The page at
+// /reset-password reads the token from the URL fragment and posts it here with the new
+// password. Succeeding signs this browser in — the answer is a fresh session token — and
+// every other session out.
+//
+// A link works once without any token table: it carries the account's TokenVersion
+// ("tv"), and completing the reset bumps it, so the same link then reads as stale. Every
+// way a link can fail is 400 expired/invalid, never 401, because the frontend treats a
+// 401 as "your session ended" (FR-009).
+auth.MapPost("/password-reset/confirm", async (ConfirmPasswordResetRequest request, AppDbContext db, LifecycleOptions lifecycle, TimeProvider clock, HttpContext http, CancellationToken ct) =>
+{
+    var now = clock.GetUtcNow();
+    var link = JwtTokenFactory.ReadLinkToken(request.Token, LinkPurpose.Reset, jwtSecret, now);
+    if (link.Status != LinkTokenStatus.Valid)
+    {
+        return LinkError(link.Status);
+    }
+
+    // After the link, so a dead link is reported as such even if the form was also wrong:
+    // asking for a new link is what the user needs to hear first.
+    if (!AccountInput.IsValidPassword(request.NewPassword))
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    // A first, unlocked look: is the link already used (or the account gone)? Checked
+    // again under the lock by PasswordReplacement, which is what makes it race-free; this
+    // one just saves hashing a password for a link that can't work.
+    var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == link.UserId, ct);
+    if (user is null || user.TokenVersion != link.TokenVersion)
+    {
+        return LinkError(LinkTokenStatus.Invalid);
+    }
+
+    // A suspended account changes nothing (Story 3, scenario 4) and gets the same 403 as
+    // login, so the screen can show the privacy contact path. Only someone holding a live
+    // link for the account learns this. No lock needed for the same reason as login
+    // (specs/001 Q6): suspension is only ever set while ingress is disabled.
+    if (user.SignInSuspendedAt is not null)
+    {
+        return Results.Json(new ErrorResponse("account_suspended"), statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    // The link's "tv" is the version the lock check expects, so two tabs submitting the
+    // same link at once can't both win: the second finds the version already bumped.
+    var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+    var outcome = await PasswordReplacement.ReplaceAsync(db, user.Id, link.TokenVersion, newHash, confirmEmailAt: now, lifecycle, ct);
+    switch (outcome)
+    {
+        case PasswordReplacementOutcome.Busy:
+            return AccountLifecycle.TemporarilyUnavailable(http);
+        // Revoked: someone else used the link, or changed the password, first. Superseded:
+        // this reset committed, but a deletion or another change followed before a token
+        // could go out. Either way this link has nothing more to give — and there is no
+        // session to end, so not 401.
+        case PasswordReplacementOutcome.Revoked or PasswordReplacementOutcome.Superseded:
+            return LinkError(LinkTokenStatus.Invalid);
+    }
+
+    user.TokenVersion = link.TokenVersion + 1;
+    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
+    return Results.Ok(new AuthResponse(token));
+}).WithName("ConfirmPasswordReset")
+   .WithSummary("Sets a new password from a reset link")
+   .WithDescription("Takes the token from a reset link and the new password. Sets it, signs out every other session, confirms the address if it wasn't yet, and returns a fresh JWT. 400 with code expired or invalid when the link doesn't work (also once it has been used), invalid_request for a password that breaks the rules; 403 account_suspended; 503 temporarily_unavailable if the account is busy with another lifecycle operation.")
+   .Produces<AuthResponse>(StatusCodes.Status200OK)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
+   .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable)
+   .RequireRateLimiting("email-link");
+
 // The smallest possible protected route. ClaimsPrincipal is another parameter Minimal
 // APIs knows how to supply: it's HttpContext.User, already populated by the bearer
 // handler — and already past the token_version check in OnTokenValidated — by the time
@@ -753,10 +856,9 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
 // Requires a valid token *and* the current password: a stolen token alone shouldn't be
 // enough to change the password and lock the real owner out.
 //
-// Revoking every token is an account-lifecycle operation, so this endpoint takes
-// *exclusive* access (specs/001 research R4) in a transaction it owns, and is not under
-// the shared-access LifecycleFilter — holding shared access while asking for exclusive
-// would be a lock upgrade, which deadlocks two concurrent callers (analysis I1).
+// Revoking every token is an account-lifecycle operation, so the write goes through
+// PasswordReplacement, which takes *exclusive* access (specs/001 research R4) — and so
+// this endpoint is not under the shared-access LifecycleFilter (see there for why).
 auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, LifecycleOptions lifecycle, HttpContext http, CancellationToken ct) =>
 {
     // The new password follows the same rules as at signup (AccountInput, specs/002
@@ -779,60 +881,23 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
         return Results.Unauthorized();
     }
 
-    // BCrypt is deliberately slow, so verifying and hashing happen *before* taking the
-    // exclusive lock, keeping the time every other request of this account waits short.
-    // A concurrent change in between shows up under the lock as a token-version mismatch.
+    // Hashed before PasswordReplacement takes the exclusive lock (see there for why).
     var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-    var newVersion = tokenVersion + 1;
-
-    await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+    var outcome = await PasswordReplacement.ReplaceAsync(db, userId, tokenVersion, newHash, confirmEmailAt: null, lifecycle, ct);
+    switch (outcome)
     {
-        var outcome = await AccountLifecycle.AcquireExclusiveAsync(db, userId, tokenVersion, lifecycle.ExclusiveLockTimeoutMs, ct);
-        if (outcome != GuardOutcome.Ok)
-        {
-            return AccountLifecycle.ToResult(outcome, http);
-        }
-
-        // The new hash and the version bump land together or not at all. The bump is what
-        // revokes every token issued so far (see PLAN.md, Auth section); the fresh token
-        // minted below carries the new version, so the caller isn't logged out by it.
-        //
-        // A database failure here — including one EF's execution strategy wraps, such as a
-        // lock_timeout on the user's row (T099) — is before COMMIT, so nothing changed and
-        // the old password and tokens still stand: 503 temporarily_unavailable, safe to
-        // retry, rather than an unhandled 500.
-        try
-        {
-            await db.Users
-                .Where(u => u.Id == userId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(u => u.PasswordHash, newHash)
-                    .SetProperty(u => u.TokenVersion, newVersion), ct);
-        }
-        catch (Exception ex) when (AccountLifecycle.IsDatabaseFailure(ex))
-        {
+        case PasswordReplacementOutcome.Busy:
             return AccountLifecycle.TemporarilyUnavailable(http);
-        }
-        await transaction.CommitAsync(CancellationToken.None);
-    }
-
-    // Delivery guard, only after the exclusive transaction has fully ended (so shared
-    // access is never requested while exclusive is held). If a deletion or another password
-    // change won in the meantime, the new version is no longer current and the stale token
-    // is not emitted — 401 instead (spike A4).
-    await using (var delivery = await db.Database.BeginTransactionAsync(ct))
-    {
-        var outcome = await AccountLifecycle.AcquireSharedAsync(db, userId, newVersion, lifecycle.SharedLockTimeoutMs, ct);
-        if (outcome != GuardOutcome.Ok)
-        {
+        // Revoked: this token was already stale under the lock — the same bare 401 as any
+        // revoked token. Superseded: the change committed, but a deletion or another
+        // change followed, so the new token would be stale too (spike A4).
+        case PasswordReplacementOutcome.Revoked or PasswordReplacementOutcome.Superseded:
             return Results.Unauthorized();
-        }
-        await delivery.CommitAsync(CancellationToken.None);
     }
 
     // `user` is an untracked copy, so updating it changes nothing in the database; it only
     // lets the token factory mint a token with the version that was just committed.
-    user.TokenVersion = newVersion;
+    user.TokenVersion = tokenVersion + 1;
     var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
     return Results.Ok(new AuthResponse(token));
 })

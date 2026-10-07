@@ -90,4 +90,38 @@ public class EmailRateLimitingTests(EmailRateLimitedGymNotebookFactory factory) 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
         Assert.NotNull(response.Headers.RetryAfter);
     }
+    // A policy counts per client IP across every route it's on, so these share counters
+    // with the two tests above. Whichever order xUnit runs them in, the third request of
+    // each test is over the limit of two, so the assertions hold either way.
+    [Fact]
+    public async Task PasswordReset_ExceedingEmailRequestLimit_Returns429WithRetryAfter()
+    {
+        // Arrange: an unknown address — the limit counts requests, not emails sent.
+        var request = new PasswordResetRequest("nobody@example.test");
+        await _client.PostAsJsonAsync("/auth/password-reset", request);
+        await _client.PostAsJsonAsync("/auth/password-reset", request);
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/auth/password-reset", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.NotNull(response.Headers.RetryAfter);
+    }
+
+    [Fact]
+    public async Task ConfirmPasswordReset_ExceedingEmailLinkLimit_Returns429WithRetryAfter()
+    {
+        // Arrange: invalid tokens count here too, so tokens can't be guessed without bound.
+        var request = new ConfirmPasswordResetRequest("not-a-token", "whatever-password");
+        await _client.PostAsJsonAsync("/auth/password-reset/confirm", request);
+        await _client.PostAsJsonAsync("/auth/password-reset/confirm", request);
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/auth/password-reset/confirm", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.NotNull(response.Headers.RetryAfter);
+    }
 }

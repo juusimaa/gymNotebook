@@ -32,6 +32,17 @@ interface ResendVerificationRequest {
   password: string
 }
 
+// "Forgot your password?" (POST /auth/password-reset). Only the address.
+interface PasswordResetRequest {
+  email: string
+}
+
+// The reset link's token, read from the URL fragment, and the password to set.
+interface ConfirmPasswordResetRequest {
+  token: string
+  newPassword: string
+}
+
 export interface AuthResponse {
   token: string
 }
@@ -85,6 +96,28 @@ export function verifyEmail(token: string): Promise<VerifyEmailResponse> {
   return request<VerifyEmailResponse>('/auth/verify-email', {
     method: 'POST',
     body: { token },
+    unauthorized: 'local',
+  })
+}
+
+// 202 for every well-formed address, whether or not it has an account (specs/002
+// FR-013): the screen can only say "if there's an account, a link is on its way".
+export function requestPasswordReset(
+  body: PasswordResetRequest,
+): Promise<void> {
+  return request<void>('/auth/password-reset', { method: 'POST', body })
+}
+
+// Sets the new password and returns a fresh session token, which the caller
+// stores: the reset signs this browser in and every other session out. Link
+// failures are 400 expired/invalid, like verifyEmail, and `local` for the same
+// reason — whatever session this browser held has nothing to do with the link.
+export function confirmPasswordReset(
+  body: ConfirmPasswordResetRequest,
+): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/password-reset/confirm', {
+    method: 'POST',
+    body,
     unauthorized: 'local',
   })
 }

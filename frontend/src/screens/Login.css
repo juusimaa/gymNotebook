@@ -10,6 +10,13 @@
   margin-top: var(--space-2);
 }
 
+/* "Forgot your password?", right under the password field it's about. The
+   form's own gap already separates it; no extra margin. */
+.login-forgot {
+  margin: 0;
+  font-size: 13px;
+}
+
 /* "New here? Create an account" / "Already have an account? Sign in" /
    "Back to sign in": the line that switches between the screen's modes. */
 .login-switch {
@@ -18,7 +25,8 @@
   font-size: 13px;
 }
 
-/* The "Check your inbox" state (specs/002 contracts/ui.md). */
+/* The "Check your inbox" and "Reset sent" states (specs/002 contracts/ui.md),
+   and the /verify-email and /reset-password screens' results. */
 .login-inbox {
   margin-top: var(--space-6);
 }

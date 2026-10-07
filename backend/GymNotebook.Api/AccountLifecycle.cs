@@ -120,11 +120,12 @@ public static class AccountLifecycle
         AcquireAsync(db, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, requireConfirmedEmail: true, ct);
 
     // Exclusive access for the operations that end or revoke an account's access: password
-    // change and account deletion (AccountDeletion.cs). Those endpoints own their transaction and never
-    // run under LifecycleFilter: asking for exclusive access while already holding shared
-    // access would be a lock upgrade, and two concurrent upgraders deadlock (analysis I1).
-    // No confirmed-address check here: password reset (specs/002 PR 4) takes exclusive
-    // access for an account that may not be confirmed yet — completing it confirms it.
+    // change and reset (PasswordReplacement.cs) and account deletion (AccountDeletion.cs).
+    // Those own their transaction and never run under LifecycleFilter: asking for exclusive
+    // access while already holding shared access would be a lock upgrade, and two
+    // concurrent upgraders deadlock (analysis I1). No confirmed-address check here: a
+    // password reset takes exclusive access for an account that may not be confirmed yet
+    // — completing it confirms it (specs/002 FR-008).
     public static Task<GuardOutcome> AcquireExclusiveAsync(AppDbContext db, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
         AcquireAsync(db, "pg_advisory_xact_lock", userId, tokenVersion, lockTimeoutMs, requireConfirmedEmail: false, ct);
 

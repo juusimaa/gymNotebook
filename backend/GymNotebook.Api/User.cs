@@ -18,7 +18,7 @@ public class User
     // account; the unique index in AppDbContext is what guarantees it.
     public required string Email { get; set; }
 
-    // Null until the address is confirmed by its link (or, from PR 4, by a completed
+    // Null until the address is confirmed by its link (or by a completed
     // password reset). Set once, never cleared. An unconfirmed account can't sign in and
     // its tokens are rejected (specs/002 plan D5); the API only ever exposes "confirmed or
     // not", the exact time appears only in the export.

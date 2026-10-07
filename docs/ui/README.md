@@ -18,9 +18,11 @@ Tokens live in the prototype's stylesheet as CSS custom properties: `--color-bg 
 ## Screens
 
 ### 1. Login — `/login`
-One route with three modes, switched in place rather than as separate pages, so the browser's back button leaves the screen instead of stepping through them (specs/002 contracts/ui.md).
-- **Sign in:** Email, Password, "Sign in". Below the form: "New here? Create an account". Backs onto `POST /auth/login`. A 401 ("Email or password is wrong") returns here with the address kept and the password cleared. A 403 `email_not_verified` (right password, address not confirmed) is not an error line: it switches to **Check your inbox**. Arriving from a confirmation link fills the address in.
+One route with three modes and two result states, switched in place rather than as separate pages, so the browser's back button leaves the screen instead of stepping through them (specs/002 contracts/ui.md).
+- **Sign in:** Email, Password, "Forgot your password?" (a text button right under the password), "Sign in". Below the form: "New here? Create an account". Backs onto `POST /auth/login`. A 401 ("Email or password is wrong") returns here with the address kept and the password cleared. A 403 `email_not_verified` (right password, address not confirmed) is not an error line: it switches to **Check your inbox**. Arriving from a confirmation link fills the address in.
 - **Create account:** Email, Password (`new-password`), "Name on the cover" (`nickname`, at most 50 characters), invite code until milestone 12 PR 5, "Create account", and "Already have an account? Sign in". A short service description sits immediately before the action's end of the form: the free, invite-only training log, provider, core records, and why the email and password are asked for. It describes what registration requests; it is not notice acknowledgement or consent. Backs onto `POST /auth/register`, which answers every valid signup the same way, so it always goes on to **Check your inbox**.
+- **Forgot password:** Email and "Send link", then "Remembered it? Sign in". Backs onto `POST /auth/password-reset`, which answers every address the same way, so it always goes on to **Reset sent**. Opened from `/reset-password` with a dead link, it starts here with a line saying why ("That reset link has expired…" / "…no longer works…").
+- **Reset sent:** "Check your inbox" — "If there's an account for *address*, we've sent a link to choose a new password. It works for one hour." — and "Back to sign in". Focus moves to its heading.
 - **Check your inbox:** names the address, says the link lasts 48 hours, "Send the link again" (`POST /auth/verification` with the email and password still held in the screen's memory; leaving the screen drops the password), "Back to sign in". Focus moves to its heading when it appears.
 
 Email fields are `type="email"`, `inputmode="email"`, `autocomplete="username"`, with auto-capitalisation, auto-correct and spell-check off. Rate-limit rejections (429) show an inline message under the button, not a toast.
@@ -31,6 +33,11 @@ Public: the link often opens in a mail app's own browser, or in Safari while the
 - **This link has expired** (48 hours): a way to sign in, where the unconfirmed sign-in offers a fresh link.
 - **This link doesn't work** (tampered, cut short, or no token): "Go to sign in".
 - **Couldn't confirm yet** (offline, 429, server error): the reason and **Try again**, with the token still held in memory.
+
+### 1b. Reset password — `/reset-password#token=…`
+Public, for the same reason as 1a; also where the "finish creating your account" email leads. Reads the token from the URL fragment once and removes it from the address bar, but posts nothing until the form is submitted, so a mail scanner opening the link changes nothing.
+- **Form:** New password and Repeat new password (both `new-password`), "Set password", and a muted line: "This signs you in here and out everywhere else, including the app on your home screen." Different passwords are caught on the screen, before a request. Backs onto `POST /auth/password-reset/confirm`; on success the returned token is stored and the screen goes to `/` (replacing itself in history), through the usual guards. A password the server refuses, a 403 `account_suspended` (the existing suspension copy), a 429 or a 503 show as an inline line under the form.
+- **This link no longer works** (expired, already used, tampered, or no token): one sentence on why ("Reset links work for one hour." / "Each reset link works once.") and **Send a new link**, which opens `/login` in Forgot password mode with the reason shown.
 
 ### 2. Cover — `/`
 The page you land on after login; the owner name comes from `displayName` on `GET /auth/me`. Volume, year, one "Open the notebook" primary action, then "Signed in as *address*" in small muted type (it may wrap anywhere, so a long address never widens the page) and "Sign out" below it as text. Deliberately carries no other data — it is the closed cover of the book, and its job is to make opening the log a decision rather than a dashboard. Sign-out drops the token client-side.

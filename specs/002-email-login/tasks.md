@@ -54,9 +54,9 @@ description: "Task list for the Email Login and Open Signup feature"
 
 ## PR 4 — Password reset
 
-- [ ] T040 Extract change-password's exclusive-lock update into a shared helper; `POST /auth/password-reset` and `/confirm` use it (plan D3).
-- [ ] T041 Tests: Story 3 scenarios, single use, sessions revoked, unconfirmed account confirmed by reset, suspended account unchanged, rate limit.
-- [ ] T042 Frontend: Forgot mode + Reset sent state, `/reset-password` route, docs/ui.
+- [x] T040 Extract change-password's exclusive-lock update into a shared helper; `POST /auth/password-reset` and `/confirm` use it (plan D3).
+- [x] T041 Tests: Story 3 scenarios, single use, sessions revoked, unconfirmed account confirmed by reset, suspended account unchanged, rate limit.
+- [x] T042 Frontend: Forgot mode + Reset sent state, `/reset-password` route, docs/ui.
 
 ## PR 5 — Turnstile and removing the invite code (opens signup)
 
