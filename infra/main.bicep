@@ -35,6 +35,11 @@ param jwtSecret string
 @secure()
 param inviteCode string
 
+// Resend API key for outgoing email (specs/002 plan D7). The API refuses to start
+// without it, because Email__Backend is 'resend' in Azure.
+@secure()
+param resendApiKey string
+
 var tags = {
   'app-onboard-skill': 'true'
   'app-onboard-session-id': sessionId
@@ -76,6 +81,7 @@ module api './modules/container-app-api.bicep' = {
     neonConnectionString: neonConnectionString
     jwtSecret: jwtSecret
     inviteCode: inviteCode
+    resendApiKey: resendApiKey
     tags: tags
   }
 }

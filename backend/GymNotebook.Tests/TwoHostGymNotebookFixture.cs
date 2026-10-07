@@ -456,6 +456,8 @@ public sealed class LifecycleTestHost : WebApplicationFactory<Program>
         builder.UseSetting("INVITE_CODE", "");
         builder.UseSetting("PRIVACY_LIFECYCLE_ENABLED", "false");
         builder.UseSetting("CORS_ORIGINS", GymNotebookFactory.AllowedOrigin);
+        builder.UseSetting("Email:Backend", "memory");
+        builder.UseSetting("APP_URL", GymNotebookFactory.AppUrl);
         builder.UseSetting("Logging:LogLevel:Default", "Warning");
         foreach (var (key, value) in _settings)
         {

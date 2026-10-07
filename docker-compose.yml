@@ -21,12 +21,21 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
+      # Not Development, so Scalar and the developer exception page stay off as in a
+      # deployed app; not Production, so the console email backend is allowed and
+      # confirmation links appear in `docker compose logs backend` (specs/002 plan D7).
+      ASPNETCORE_ENVIRONMENT: Local
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=postgres;Password=${POSTGRES_PASSWORD}"
       Jwt__Secret: "${Jwt__Secret}"
       Jwt__ExpiryMinutes: "${Jwt__ExpiryMinutes}"
       INVITE_CODE: "${INVITE_CODE}"
       CORS_ORIGINS: "${CORS_ORIGINS}"
       PRIVACY_LIFECYCLE_ENABLED: "${PRIVACY_LIFECYCLE_ENABLED:-false}"
+      Email__Backend: "${Email__Backend:-console}"
+      RESEND_API_KEY: "${RESEND_API_KEY:-}"
+      EMAIL_FROM: "${EMAIL_FROM:-}"
+      APP_URL: "${APP_URL:-http://localhost:5173}"
+      EMAIL_DAILY_CAP: "${EMAIL_DAILY_CAP:-90}"
     ports:
       - "8080:8080"
     depends_on:

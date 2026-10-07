@@ -243,6 +243,11 @@ Jwt__ExpiryMinutes=30
 INVITE_CODE=
 CORS_ORIGINS=http://localhost:5173
 PRIVACY_LIFECYCLE_ENABLED=false
+Email__Backend=console
+RESEND_API_KEY=
+EMAIL_FROM=
+APP_URL=http://localhost:5173
+EMAIL_DAILY_CAP=90
 VITE_API_URL=http://localhost:8080
 ```
 
@@ -266,6 +271,8 @@ The variable *names* are identical everywhere — the app reads `INVITE_CODE` an
 | `Jwt__Secret` | `.env` (user-secrets before milestone 2) | Container Apps **secret** |
 | `ConnectionStrings__Default` | `.env`, points at the `db` service | Container Apps **secret** — it embeds Neon's password |
 | `CORS_ORIGINS`, `Jwt__ExpiryMinutes`, `PRIVACY_LIFECYCLE_ENABLED` | `.env` | plain env value — not sensitive |
+| `RESEND_API_KEY` | `.env`, normally empty (the console backend needs none) | Container Apps **secret** (`resend-api-key`), from the `RESEND_API_KEY` GitHub secret |
+| `Email__Backend`, `EMAIL_FROM`, `APP_URL`, `EMAIL_DAILY_CAP` | `.env` (`console`; Compose runs as `Local`, where that is allowed) | plain env values in `container-app-api.bicep` (`resend`, the `mail.gymnotebook.fit` sender, `https://gymnotebook.fit`); the cap uses its default |
 | `FORWARDED_HEADERS_ENABLED` | not set (off) — deliberately absent from `.env.example` and Compose | plain env value `true`, set in `container-app-api.bicep` (see Rate limiting) |
 
 Three rules that come with this:

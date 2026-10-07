@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<WorkoutExercise> WorkoutExercises => Set<WorkoutExercise>();
     public DbSet<SetEntry> SetEntries => Set<SetEntry>();
     public DbSet<Exercise> Exercises => Set<Exercise>();
+    public DbSet<EmailSend> EmailSends => Set<EmailSend>();
 
     // Model configuration that conventions can't infer. Anything set here ends up in the
     // migrations, so a change here means a new `dotnet ef migrations add`.
@@ -102,6 +103,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(e => e.UserId);
+        });
+
+        modelBuilder.Entity<EmailSend>(entity =>
+        {
+            // EmailCaps runs three statements per claim: delete rows older than 24 h
+            // (range on sent_at), count the last 24 h (sent_at again), and count one
+            // recipient's rows (recipient_hash). One index each keeps all three cheap.
+            entity.HasIndex(s => s.RecipientHash);
+            entity.HasIndex(s => s.SentAt);
         });
     }
 }

@@ -25,6 +25,9 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string AllowedOrigin = "http://localhost:5173";
     public const string SecondAllowedOrigin = "http://localhost:4173";
 
+    // The frontend origin that links in test emails point at (APP_URL below).
+    public const string AppUrl = "https://app.example.test";
+
     // One throwaway Postgres in Docker per factory instance. The tag must match
     // docker-compose.yml so tests and the local stack run the same server version.
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
@@ -63,7 +66,14 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
         // test in CorsTests exercises the split-and-trim in Program.cs rather than only
         // the single-origin case appsettings.Development.json would give.
         builder.UseSetting("CORS_ORIGINS", $"{AllowedOrigin}, {SecondAllowedOrigin}");
+
+        // Email goes to MemoryEmailSender, where tests can read it, never to the console
+        // backend's log or a real provider — whatever the runner's environment says.
+        // APP_URL pinned so tests can assert the exact links emails carry.
+        builder.UseSetting("Email:Backend", "memory");
+        builder.UseSetting("APP_URL", AppUrl);
     }
+
 
     // Start Postgres first: touching `Services` is what lazily builds the host, which runs
     // ConfigureWebHost, which needs the container's mapped port for the connection string.
