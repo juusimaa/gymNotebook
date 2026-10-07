@@ -9,6 +9,8 @@ param neonConnectionString string
 param jwtSecret string
 @secure()
 param inviteCode string
+@secure()
+param resendApiKey string
 param tags object
 
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
@@ -50,6 +52,10 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
         {
           name: 'invite-code'
           value: inviteCode
+        }
+        {
+          name: 'resend-api-key'
+          value: resendApiKey
         }
       ]
     }
@@ -109,6 +115,21 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
                 name: 'FORWARDED_HEADERS_ENABLED'
                 value: 'true'
               }
+              {
+                // Outgoing email through Resend (specs/002 plan D7). The API refuses to
+                // start in Production with any other backend, or without the key, sender
+                // and app URL below. Links in emails point at the frontend's own domain.
+                name: 'Email__Backend'
+                value: 'resend'
+              }
+              {
+                name: 'EMAIL_FROM'
+                value: 'Gym Notebook <no-reply@mail.gymnotebook.fit>'
+              }
+              {
+                name: 'APP_URL'
+                value: 'https://gymnotebook.fit'
+              }
             ],
             [
               {
@@ -122,6 +143,10 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
               {
                 name: 'INVITE_CODE'
                 secretRef: 'invite-code'
+              }
+              {
+                name: 'RESEND_API_KEY'
+                secretRef: 'resend-api-key'
               }
             ]
           )

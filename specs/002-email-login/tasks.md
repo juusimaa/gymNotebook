@@ -24,17 +24,18 @@ description: "Task list for the Email Login and Open Signup feature"
 - [x] T002 Constitution 3.0.0: Principle V and Q2 amended.
 - [x] T003 PLAN.md milestone 12 entry; "Deliberately out of scope" and Open items point to it. AGENTS.md current status.
 - [x] T004 (owner) Answer O1–O3 in plan.md: rename, interim accepted, Resend EU (2026-10-06).
-- [ ] T005 (owner) Review and merge.
+- [x] T005 (owner) Review and merge.
 
 ## PR 2 — Email plumbing (nothing user-visible)
 
-- [ ] T010 `EmailSend` entity, `AppDbContext` config, migration `AddEmailSends`; review the generated migration.
-- [ ] T011 `IEmailSender` + `ConsoleEmailSender`, `MemoryEmailSender`, `ResendEmailSender` (`HttpClient`, 10 s timeout); startup validation per plan D7 (console only in Development; resend requires key, from, app URL).
-- [ ] T012 `EmailOutbox`: bounded `Channel` + `BackgroundService` that sends and logs failures without addresses (plan D6).
-- [ ] T013 `EmailCaps.TryClaimAsync`: HMAC recipient hash, prune > 24 h, per-address 5 and daily `EMAIL_DAILY_CAP`, one transaction (plan D8).
-- [ ] T014 Email templates as plain C# (text + minimal HTML): confirmation, already-registered, finish-signup, password reset.
-- [ ] T015 Tests: caps per address and per day, hash stores no address, pruning, console backend refused outside Development, template links use `APP_URL` and the fragment form.
-- [ ] T016 [P] Config plumbing: `.env.example`, `docker-compose.yml`, `infra/main.bicep` + `container-app-api.bicep` (`resend-api-key` secret, plain env values), `deploy.yml` parameter. README configuration table.
+- [x] T010 `EmailSend` entity, `AppDbContext` config, migration `AddEmailSends`; review the generated migration.
+- [x] T011 `IEmailSender` + `ConsoleEmailSender`, `MemoryEmailSender`, `ResendEmailSender` (`HttpClient`, 10 s timeout); startup validation per plan D7 (console only in Development; resend requires key, from, app URL).
+- [x] T012 `EmailOutbox`: bounded `Channel` + `BackgroundService` that sends and logs failures without addresses (plan D6).
+- [x] T013 `EmailCaps.TryClaimAsync`: HMAC recipient hash, prune > 24 h, per-address 5 and daily `EMAIL_DAILY_CAP`, one transaction (plan D8).
+- [x] T014 Email templates as plain C# (text + minimal HTML): confirmation, already-registered, finish-signup, password reset.
+- [x] T015 Tests: caps per address and per day, hash stores no address, pruning, console backend refused outside Development, template links use `APP_URL` and the fragment form.
+- [x] T016 [P] Config plumbing: `.env.example`, `docker-compose.yml`, `infra/main.bicep` + `container-app-api.bicep` (`resend-api-key` secret, plain env values), `deploy.yml` parameter. README configuration table.
+- [x] T017 (operator) `RESEND_API_KEY` GitHub secret exists **before PR 2 merges**: the deploy passes it to Bicep, and the API refuses to start in Azure without it. Moved forward from T031; the sending domain can still be verified before PR 3, since PR 2 sends nothing.
 
 ## PR 3 — Email accounts (invite code still on)
 

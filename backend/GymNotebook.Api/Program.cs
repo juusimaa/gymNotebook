@@ -113,6 +113,51 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<NotebookExport>();
 builder.Services.AddScoped<AccountDeletion>();
 
+// Outgoing email (specs/002 plan D6–D8). Loaded and checked here, at boot, like the
+// connection string: EmailOptions.Load throws if the backend is unknown, if console/memory
+// is configured in Production, or if resend is missing its key, sender or app URL.
+var emailOptions = EmailOptions.Load(builder.Configuration, builder.Environment.IsProduction());
+builder.Services.AddSingleton(emailOptions);
+builder.Services.AddSingleton<EmailTemplates>();
+
+// The queue handlers write to, and the background worker that drains it: applies the caps,
+// then hands each message to the IEmailSender registered below.
+builder.Services.AddSingleton<EmailOutbox>();
+builder.Services.AddHostedService<EmailOutboxWorker>();
+
+// The caps are keyed with Jwt:Secret (see EmailCaps.HashRecipient), so they need a factory
+// to receive it; everything else comes from the container as usual.
+builder.Services.AddScoped(services => new EmailCaps(
+    services.GetRequiredService<AppDbContext>(),
+    jwtSecret,
+    emailOptions.DailyCap,
+    services.GetRequiredService<TimeProvider>()));
+
+// Exactly one sender, chosen by Email:Backend.
+switch (emailOptions.Backend)
+{
+    case EmailOptions.ConsoleBackend:
+        builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
+        break;
+    case EmailOptions.MemoryBackend:
+        // Registered under its own type as well, so tests can resolve MemoryEmailSender
+        // and read Messages; both registrations return the same singleton.
+        builder.Services.AddSingleton<MemoryEmailSender>();
+        builder.Services.AddSingleton<IEmailSender>(services => services.GetRequiredService<MemoryEmailSender>());
+        break;
+    case EmailOptions.ResendBackend:
+        // A typed HttpClient (IHttpClientFactory, part of ASP.NET Core): the factory pools
+        // and recycles the underlying handlers, which avoids both socket exhaustion from
+        // new HttpClient() per call and stale DNS from one client kept forever. The
+        // 10-second timeout bounds how long one stuck send holds up the queue behind it.
+        builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.resend.com/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        break;
+}
+
 // Register AppDbContext with the Npgsql (PostgreSQL) provider. AddDbContext uses a
 // *scoped* lifetime: one AppDbContext per HTTP request, created when a handler asks
 // for it and disposed when the response is done. EF Core itself is database-agnostic;

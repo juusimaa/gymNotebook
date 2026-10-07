@@ -82,6 +82,7 @@ jobs:
                 neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
                 jwtSecret='${{ secrets.JWT_SECRET }}' \
                 inviteCode='${{ secrets.INVITE_CODE }}' \
+                resendApiKey='${{ secrets.RESEND_API_KEY }}' \
               --query properties.outputs.frontendFqdn.value \
               --output tsv)
             echo "frontend_fqdn=$frontend_fqdn" >> "$GITHUB_OUTPUT"
@@ -104,7 +105,8 @@ jobs:
                 corsOrigins="https://${{ steps.first-deploy.outputs.frontend_fqdn }},https://gymnotebook.fit" \
                 neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
                 jwtSecret='${{ secrets.JWT_SECRET }}' \
-                inviteCode='${{ secrets.INVITE_CODE }}'
+                inviteCode='${{ secrets.INVITE_CODE }}' \
+                resendApiKey='${{ secrets.RESEND_API_KEY }}'
 
       - name: Verify the API health endpoint
         uses: azure/cli@v3
