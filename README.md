@@ -71,6 +71,10 @@ npm run dev
 
 Vite serves the app on <http://localhost:5173> with hot reload. It reads `VITE_API_URL` from the root `.env` (the same file Compose uses — `vite.config.ts` points `envDir` there) and calls the backend at that address, so start the backend first, by either route above. Both origins — `:5173` for this and `:3000` for the container — are in `CORS_ORIGINS`, so the two can run side by side.
 
+### On a phone
+
+The deployed app can be installed to the home screen. On iOS, open it in Safari, then Share → **Add to Home Screen**. On Android, open it in Chrome, then ⋮ → **Install app**. It then opens full-screen like an app. On iOS the home-screen app keeps its storage separate from Safari, so you sign in once more there. See [docs/ui/README.md → Home screen](docs/ui/README.md#visual-direction) for how it's set up.
+
 ## API documentation
 
 The API documents itself: every endpoint is annotated and the OpenAPI document is built from the code at startup. With the app running from the SDK as above:

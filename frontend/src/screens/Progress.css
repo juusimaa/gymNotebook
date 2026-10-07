@@ -1,5 +1,5 @@
 .progress {
-  height: 100dvh;
+  height: var(--app-height);
   min-height: 0;
   overflow: hidden;
   padding: 0;

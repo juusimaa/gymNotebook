@@ -69,7 +69,9 @@
   position: sticky;
   bottom: 0;
   margin-top: var(--space-6);
-  padding: var(--space-3) 0 var(--space-4);
+  /* Sticks to the viewport's bottom edge, under the body's safe-area
+     padding, so it adds the home-indicator inset itself. */
+  padding: var(--space-3) 0 calc(var(--space-4) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--color-divider);
   background: var(--color-bg);
 }
