@@ -190,38 +190,3 @@ public class RegisterValidationTests(GymNotebookFactory factory) : IClassFixture
         Assert.False(await db.Users.AnyAsync(u => u.Email == "ann@example.test"));
     }
 }
-
-// The gated-registration cases, while the invite code still exists (it goes in specs/002
-// PR 5). A separate class because they need a different fixture (INVITE_CODE set) — see
-// InviteCodeGymNotebookFactory for why that can't be a runtime toggle on the shared one.
-public class InviteCodeGatedRegisterTests(InviteCodeGymNotebookFactory factory) : IClassFixture<InviteCodeGymNotebookFactory>
-{
-    private readonly HttpClient _client = factory.CreateClient();
-
-    private static RegisterRequest Request(string? inviteCode) =>
-        new(EmailTestSupport.UniqueEmail(), EmailTestSupport.Password, "Test user", inviteCode);
-
-    [Fact]
-    public async Task Register_WithoutInviteCode_Returns403()
-    {
-        var response = await _client.PostAsJsonAsync("/auth/register", Request(null));
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Register_WrongInviteCode_Returns403()
-    {
-        var response = await _client.PostAsJsonAsync("/auth/register", Request("not-the-code"));
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Register_CorrectInviteCode_Returns202()
-    {
-        var response = await _client.PostAsJsonAsync("/auth/register", Request(InviteCodeGymNotebookFactory.RequiredInviteCode));
-
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-    }
-}

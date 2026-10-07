@@ -525,7 +525,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // demo's Create account action, independently of notice acknowledgement.
     // Milestone 12 (specs/002): shown in the Create account mode only, and it
     // names the email address instead of a username.
-    const registrationService = `<sc-if value="{{ isLoginCreate }}" hint-placeholder-val="{{ false }}"><p style="margin:20px 0 10px;text-align:center;font-size:13px;color:var(--color-neutral-700)">Gym Notebook is a free, invite-only training log provided by Jouni Uusimaa. Creating an account asks us to keep your private record of workout dates, exercises and sets, and show your progress chart. Your email address and password let you return to that notebook; the address is also where we send the link that confirms it.</p></sc-if>`;
+    const registrationService = `<sc-if value="{{ isLoginCreate }}" hint-placeholder-val="{{ false }}"><p style="margin:20px 0 10px;text-align:center;font-size:13px;color:var(--color-neutral-700)">Gym Notebook is a free training log provided by Jouni Uusimaa. Creating an account asks us to keep your private record of workout dates, exercises and sets, and show your progress chart. Your email address and password let you return to that notebook; the address is also where we send the link that confirms it.</p></sc-if>`;
     replacePrivacyAnchor(
       '        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">',
       '        ' + registrationService + '\n        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">'
@@ -850,7 +850,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       isLoginWithPassword: this.state.loginMode !== "forgot",
       isLoginInbox: this.state.loginMode === "inbox",
       isLoginResetSent: this.state.loginMode === "resetSent",
-      loginIntro: { create: "Create your notebook. An invite code is required for now.", forgot: "Enter the address you signed up with and we'll send a link to choose a new password." }[this.state.loginMode] || "Sign in with your email to open your notebook.",
+      // Turnstile on the two forms that email an unproven address (milestone 12 PR 5).
+      isLoginCaptcha: this.state.loginMode === "create" || this.state.loginMode === "forgot",
+      // The bundled source's invite-code field, hidden since the invite code was removed.
+      hasInviteCode: false,
+      loginIntro: { create: "Create your notebook.", forgot: "Enter the address you signed up with and we'll send a link to choose a new password." }[this.state.loginMode] || "Sign in with your email to open your notebook.",
       loginAction: { create: "Create account", forgot: "Send link" }[this.state.loginMode] || "Sign in",
       submitLogin: this.submitLogin,
       setLoginSignIn: this.setLoginMode("signIn"),
@@ -890,6 +894,11 @@ document.addEventListener('DOMContentLoaded', async function() {
             <span ${loginLabelStyle}>Name on the cover</span>
             <input class="input" type="text" placeholder="Ann" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
           </label>
+          </sc-if>
+          <sc-if value="{{ isLoginCaptcha }}" hint-placeholder-val="{{ false }}">
+          <div aria-label="Cloudflare Turnstile (stand-in)" style="min-height:65px;box-sizing:border-box;border:1px solid var(--color-divider);border-radius:var(--radius-sm);background:var(--color-surface);display:flex;align-items:center;gap:10px;padding:0 14px;font-size:14px;color:var(--color-text)"><span style="color:var(--color-accent)">&#10003;</span> Success! <span style="margin-left:auto;font-size:11px;color:var(--color-neutral-600)">Cloudflare Turnstile</span></div>
+          </sc-if>
+          <sc-if value="{{ hasInviteCode }}" hint-placeholder-val="{{ false }}">
           <label class="field" ${loginFieldStyle}>
             <span ${loginLabelStyle}>Invite code</span>`
     );

@@ -9,6 +9,7 @@ import {
 import {
   describeAuthError,
   INTERRUPTED_WRITE_NOTICE,
+  isCaptchaFailure,
   isEmailNotVerified,
 } from '../api/authErrors'
 import { ApiError } from '../api/client'
@@ -20,6 +21,8 @@ import {
 import { readLoginEntry } from '../auth/loginEntry'
 import { setToken } from '../auth/token'
 import './Login.css'
+import Turnstile from './Turnstile'
+import { TURNSTILE_SITE_KEY } from './turnstileSiteKey'
 
 // docs/ui/README.md, screen 1, and specs/002 contracts/ui.md → /login. One
 // route, several modes switched in place rather than separate pages, so the
@@ -28,11 +31,11 @@ import './Login.css'
 //   signIn  Email + password → the notebook. A 403 email_not_verified (right
 //           password, unconfirmed address) switches to `inbox` instead of
 //           showing an error.
-//   create  Email + password + the name on the cover (+ the invite code until
-//           specs/002 PR 5) → always `inbox`: the API answers every signup the
-//           same way, so the screen can't and doesn't say more.
-//   forgot  Email only → always `resetSent`, for the same reason as create:
-//           the API answers every reset request the same way.
+//   create  Email + password + the name on the cover + the Turnstile bot
+//           check → always `inbox`: the API answers every signup the same
+//           way, so the screen can't and doesn't say more.
+//   forgot  Email + the bot check → always `resetSent`, for the same reason
+//           as create: the API answers every reset request the same way.
 //
 // and two result states that replace the form:
 //
@@ -43,9 +46,10 @@ import './Login.css'
 type Mode = 'signIn' | 'create' | 'forgot' | 'inbox' | 'resetSent'
 
 // Shown when a request fails in Forgot mode. describeAuthError's 400 mentions a
-// password, which this form doesn't have.
+// password, which this form doesn't have — but a 400 captcha is about the bot
+// check, not the address, and keeps describeAuthError's copy.
 function describeResetRequestError(err: unknown): string {
-  return err instanceof ApiError && err.status === 400
+  return err instanceof ApiError && err.status === 400 && !isCaptchaFailure(err)
     ? 'Check the email address'
     : describeAuthError(err)
 }
@@ -67,7 +71,11 @@ export default function Login() {
   const [email, setEmail] = useState(entry.email)
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
+  // The Turnstile token for the next create/forgot submit, null until the
+  // widget has one. Single-use, so every attempt bumps captchaRound, which
+  // remounts the widget (its `key`) for a fresh one.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaRound, setCaptchaRound] = useState(0)
   // null means no message; the <p> isn't rendered at all rather than left empty.
   // Starts as the entry notice ("that reset link has expired"), if any; like
   // any message, it goes once the user moves on.
@@ -109,9 +117,23 @@ export default function Login() {
     }
   }, [mode])
 
+  // Only the two forms that make the API email an address nobody has proven,
+  // and only when a site key switches the check on.
+  const needsCaptcha =
+    TURNSTILE_SITE_KEY !== '' && (mode === 'create' || mode === 'forgot')
+
+  // After a create or forgot attempt, whatever its outcome: the token has been
+  // spent, so drop it and ask the widget for another.
+  function renewCaptcha() {
+    setCaptchaToken(null)
+    setCaptchaRound((round) => round + 1)
+  }
+
   function switchMode(next: Mode) {
     setMode(next)
     setMessage(null)
+    // The form remounts per mode (its `key`), and the widget with it.
+    setCaptchaToken(null)
     // The password typed for one action isn't carried into another. The
     // address is: it's the same person either way.
     setPassword('')
@@ -144,12 +166,20 @@ export default function Login() {
     setMessage(null)
     setSubmitting(true)
     try {
-      await register({ email, password, displayName, inviteCode })
+      // `?? undefined` leaves the field out of the JSON when there's no token
+      // (the check is off), rather than sending null.
+      await register({
+        email,
+        password,
+        displayName,
+        turnstileToken: captchaToken ?? undefined,
+      })
       setMode('inbox')
     } catch (err) {
       setMessage(describeAuthError(err))
     } finally {
       setSubmitting(false)
+      renewCaptcha()
     }
   }
 
@@ -157,12 +187,16 @@ export default function Login() {
     setMessage(null)
     setSubmitting(true)
     try {
-      await requestPasswordReset({ email })
+      await requestPasswordReset({
+        email,
+        turnstileToken: captchaToken ?? undefined,
+      })
       setMode('resetSent')
     } catch (err) {
       setMessage(describeResetRequestError(err))
     } finally {
       setSubmitting(false)
+      renewCaptcha()
     }
   }
 
@@ -337,39 +371,34 @@ export default function Login() {
             )}
 
             {mode === 'create' && (
-              <>
-                <label className="field">
-                  <span className="label">Name on the cover</span>
-                  <input
-                    className="input"
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    autoComplete="nickname"
-                    maxLength={50}
-                    required
-                  />
-                </label>
-                <label className="field">
-                  <span className="label">Invite code</span>
-                  <input
-                    className="input num"
-                    type="text"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value)}
-                    autoComplete="off"
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                </label>
-              </>
+              <label className="field">
+                <span className="label">Name on the cover</span>
+                <input
+                  className="input"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  autoComplete="nickname"
+                  maxLength={50}
+                  required
+                />
+              </label>
             )}
 
+            {needsCaptcha && (
+              <Turnstile
+                key={captchaRound}
+                action={mode === 'create' ? 'signup' : 'password_reset'}
+                onToken={setCaptchaToken}
+              />
+            )}
+
+            {/* Held until the bot check has a token, rather than sending a
+                request the API is certain to refuse. */}
             <button
               className="btn btn-primary btn-block login-submit"
               type="submit"
-              disabled={submitting}
+              disabled={submitting || (needsCaptcha && captchaToken === null)}
             >
               {SUBMIT_LABELS[mode]}
             </button>
@@ -380,12 +409,11 @@ export default function Login() {
                 P1/P2). */}
             {mode === 'create' && (
               <p className="muted login-service">
-                Gym Notebook is a free, invite-only training log provided by
-                Jouni Uusimaa. Creating an account asks us to keep your private
-                record of workout dates, exercises and sets, and show your
-                progress chart. Your email address and password let you return
-                to that notebook; the address is also where we send the link
-                that confirms it.
+                Gym Notebook is a free training log provided by Jouni Uusimaa.
+                Creating an account asks us to keep your private record of
+                workout dates, exercises and sets, and show your progress chart.
+                Your email address and password let you return to that notebook;
+                the address is also where we send the link that confirms it.
               </p>
             )}
             {messageLine}
@@ -448,7 +476,7 @@ type FormMode = 'signIn' | 'create' | 'forgot'
 
 const INTROS: Record<FormMode, string> = {
   signIn: 'Sign in with your email to open your notebook.',
-  create: 'Create your notebook. An invite code is required for now.',
+  create: 'Create your notebook.',
   forgot:
     "Enter the address you signed up with and we'll send a link to choose a new password.",
 }

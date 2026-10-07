@@ -4,7 +4,7 @@ namespace GymNotebook.Api;
 // client can leave any of them out; the handler checks them all (AccountInput) and
 // answers 400 rather than letting a missing field surface as a binding error.
 //
-// InviteCode is nullable because it's optional from the client's side; whether it's
-// *required* is decided by the server's INVITE_CODE setting (see PLAN.md, Auth section),
-// and the handler compares the two. It goes away in specs/002 PR 5.
-public record RegisterRequest(string? Email, string? Password, string? DisplayName, string? InviteCode);
+// TurnstileToken is what the Cloudflare widget gave the browser. Optional from the
+// client's side: whether it's *required* is decided by the server's TURNSTILE_SECRET_KEY
+// (see Turnstile.cs), and without one the field is ignored.
+public record RegisterRequest(string? Email, string? Password, string? DisplayName, string? TurnstileToken = null);

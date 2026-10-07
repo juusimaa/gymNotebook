@@ -3,6 +3,9 @@ param appName string
 param managedEnvironmentId string
 param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 param apiUrl string
+// Cloudflare Turnstile's site key: public (it's in every page that shows the widget), so
+// a plain env value rendered into config.js like API_URL. Empty hides the widget.
+param turnstileSiteKey string = ''
 param tags object
 
 // Optional custom domain (e.g. gymnotebook.fit). Empty means "Azure FQDN only",
@@ -78,6 +81,10 @@ resource containerApp 'Microsoft.App/containerApps@2026-01-01' = {
             {
               name: 'API_URL'
               value: apiUrl
+            }
+            {
+              name: 'TURNSTILE_SITE_KEY'
+              value: turnstileSiteKey
             }
           ]
         }

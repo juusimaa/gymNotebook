@@ -28,7 +28,6 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=postgres;Password=${POSTGRES_PASSWORD}"
       Jwt__Secret: "${Jwt__Secret}"
       Jwt__ExpiryMinutes: "${Jwt__ExpiryMinutes}"
-      INVITE_CODE: "${INVITE_CODE}"
       CORS_ORIGINS: "${CORS_ORIGINS}"
       PRIVACY_LIFECYCLE_ENABLED: "${PRIVACY_LIFECYCLE_ENABLED:-false}"
       Email__Backend: "${Email__Backend:-console}"
@@ -36,6 +35,10 @@ services:
       EMAIL_FROM: "${EMAIL_FROM:-}"
       APP_URL: "${APP_URL:-http://localhost:5173}"
       EMAIL_DAILY_CAP: "${EMAIL_DAILY_CAP:-90}"
+      # Empty switches the bot check off (TurnstileOptions.cs); set together with the
+      # frontend's TURNSTILE_SITE_KEY below.
+      TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY:-}"
+      TURNSTILE_HOSTNAMES: "${TURNSTILE_HOSTNAMES:-}"
     ports:
       - "8080:8080"
     depends_on:
@@ -52,6 +55,7 @@ services:
     # VITE_API_URL keeps one value in .env for the dev server and this container.
     environment:
       API_URL: "${VITE_API_URL}"
+      TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY:-}"
     ports:
       - "3000:80"
 

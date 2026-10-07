@@ -96,7 +96,7 @@ Three rules the bare formula doesn't cover:
 ```
 GET    /health               -- liveness + DB reachability, for Compose and Azure probes
 
-POST   /auth/register        -- email, password, display name; always 202, the difference goes only to the inbox; gated by INVITE_CODE until milestone 12 PR 5; rate-limited per IP
+POST   /auth/register        -- email, password, display name; always 202, the difference goes only to the inbox; behind the Turnstile bot check; rate-limited per IP
 POST   /auth/login           -- email + password, returns JWT; 403 email_not_verified for an unconfirmed address; rate-limited per IP
 POST   /auth/verification    -- send the confirmation link again (email + password); always 204
 POST   /auth/verify-email    -- the confirmation link's token; returns the confirmed address, 400 expired/invalid
@@ -159,7 +159,7 @@ Three rules so the document is worth reading rather than a list of bare paths:
 - **Links in emails are JWTs with a `purpose` claim**, signed with the same secret: `verify` (48 h, carries the address, which must still match) and `reset` (1 h, also carries the address, plus `tv`, so completing a reset makes it single-use). The address ties a link to the inbox it was sent to: after a restore rewinds the id sequence, an id alone could name another account. The bearer handler refuses any token with a `purpose`, so a link is never a session, and a link is read only for its own purpose. They travel in the URL fragment (`/verify-email#token=…`, `/reset-password#token=…`), which browsers never send to a server; the page removes it from the address bar. Link failures are 400 `expired` / `invalid`, never 401, because the frontend reads every 401 as "your session ended".
 - **An unconfirmed account's tokens don't work either.** No code path mints one, but `OnTokenValidated` and the lifecycle guard's shared check both require `email_verified_at`. Exclusive access doesn't, because a password reset confirms the address as it completes.
 - **A password reset works like a password change without the current password**: the link stands in for it. Both go through `PasswordReplacement`, which takes exclusive lifecycle access, writes the new hash and bumps `token_version` (revoking every session and, through the link's `tv`, the link itself), then runs the delivery guard before a token goes out. The reset also stamps `email_verified_at` if it was empty, so someone who forgot their password before confirming isn't locked out; a suspended account changes nothing and gets 403 `account_suspended`. Asking for a link always answers 202, and nothing on that route hashes a password, so no branch is slower than another. A reset that loses a race to a deletion or another change answers 400 `invalid` rather than change-password's 401: there is no session to end, and the link has nothing more to give.
-- Registration gated by a shared `INVITE_CODE` environment variable until milestone 12 PR 5: unset/empty means registration is open, set means the code must match. It reaches the app from `.env` locally and from a Container Apps secret in Azure — see Configuration. `ASP.NET Core Identity` is intentionally skipped in favor of a lean, hand-rolled `User` table + JWT — it's simpler to fully understand and matches the subscription-tracker approach.
+- **Signup is open, behind a bot check** (milestone 12 PR 5, which removed the `INVITE_CODE` gate). Signup and "Forgot your password?" are the two routes that email an address nobody has proven yet, so both require a [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) token when `TURNSTILE_SECRET_KEY` is set (`Turnstile.cs`). The per-IP limits key on an address a botnet has thousands of; Turnstile is what stops a script walking a list of other people's addresses through either route. The API asks Cloudflare's `siteverify` and accepts only a successful answer for one of `TURNSTILE_HOSTNAMES` with the form's own action (`signup` / `password_reset`), so a token solved on another site or on the other form doesn't count. Cloudflare's test keys, which answer without an action, are accepted for local testing. It **fails closed**: if Cloudflare can't be reached, those two forms answer 400 `captcha` until it's back, rather than the check switching itself off for whoever broke it. A secret without hostnames stops the boot. Unset is off, which is what local development and the tests run; the frontend shows the widget only when it has the public site key, so the two halves are switched on together. Sign-in has no captcha: it needs a password and is rate limited. `ASP.NET Core Identity` is intentionally skipped in favor of a lean, hand-rolled `User` table + JWT — it's simpler to fully understand and matches the subscription-tracker approach.
 
 ### Token lifetime and revocation
 
@@ -180,7 +180,7 @@ A token is checked when a request arrives, but a deletion or password change can
 
 ### Rate limiting
 
-`POST /auth/login` and `POST /auth/register` are rate-limited per IP using the built-in `Microsoft.AspNetCore.RateLimiting` middleware (a fixed window is sufficient). Without it, an email-and-password login endpoint on a public URL is an open invitation to credential stuffing, and the invite code protects registration from *signups*, not from being hammered. In-process counters are the accepted limitation: with one backend replica that's correct, and if this ever scales out, the limiter needs shared state — the same trade-off subscription-tracker recorded and deferred.
+`POST /auth/login` and `POST /auth/register` are rate-limited per IP using the built-in `Microsoft.AspNetCore.RateLimiting` middleware (a fixed window is sufficient). Without it, an email-and-password login endpoint on a public URL is an open invitation to credential stuffing, and the bot check on registration stops scripted *signups*, not a person hammering the form. In-process counters are the accepted limitation: with one backend replica that's correct, and if this ever scales out, the limiter needs shared state — the same trade-off subscription-tracker recorded and deferred.
 
 Two more per-IP policies cover the email routes (specs/002 plan D12), each with its own counters: `email-request`, 5 per hour, on the routes that send an email (`POST /auth/verification`, `POST /auth/password-reset`), and `email-link`, 10 per hour, on the routes that consume a link (`POST /auth/verify-email`, `POST /auth/password-reset/confirm`). They sit on top of the email caps, which bound what is sent per address and per day whichever route asked (`EmailRequestRateLimit:*`, `EmailLinkRateLimit:*` configuration; the test host raises them).
 
@@ -192,7 +192,7 @@ The password-verified account operations (`POST /account/export` and `POST /acco
 
 *Before milestone 12:* password *reset* and email verification were not in this plan, and neither was any email-sending path. That is the same line subscription-tracker drew and then had to walk back: unverified accounts mean the invite code, not verification, is what stands between a public URL and open signup. Worth knowing that's the trade being made, rather than discovering it at deploy time.
 
-**Planned to change in milestone 12** ([specs/002-email-login/](specs/002-email-login/)): email sign-in, confirmation and password reset replace the invite code, following subscription-tracker's open-signup design. Email sending (PR 2), email sign-in with confirmation (PR 3) and password reset (PR 4) have landed and are described above; Turnstile with the invite code's removal (PR 5) has not.
+**Changed in milestone 12** ([specs/002-email-login/](specs/002-email-login/)): email sign-in, confirmation and password reset replace the invite code, following subscription-tracker's open-signup design. Email sending (PR 2), email sign-in with confirmation (PR 3) and password reset (PR 4) have landed and are described above; and so have Turnstile and the invite code's removal (PR 5), which opened signup.
 
 ## Frontend
 
@@ -251,7 +251,6 @@ POSTGRES_PASSWORD=devpassword
 ConnectionStrings__Default=Host=db;Database=gymnotebook;Username=postgres;Password=devpassword
 Jwt__Secret=replace-me-with-a-generated-key
 Jwt__ExpiryMinutes=30
-INVITE_CODE=
 CORS_ORIGINS=http://localhost:5173
 PRIVACY_LIFECYCLE_ENABLED=false
 Email__Backend=console
@@ -259,6 +258,10 @@ RESEND_API_KEY=
 EMAIL_FROM=
 APP_URL=http://localhost:5173
 EMAIL_DAILY_CAP=90
+TURNSTILE_SECRET_KEY=
+TURNSTILE_HOSTNAMES=
+TURNSTILE_SITE_KEY=
+VITE_TURNSTILE_SITE_KEY=
 VITE_API_URL=http://localhost:8080
 ```
 
@@ -274,23 +277,25 @@ Because a missing connection string would otherwise produce an app that starts c
 
 ### Secrets, and how they differ per environment
 
-The variable *names* are identical everywhere — the app reads `INVITE_CODE` and knows nothing about where it came from. What changes is delivery:
+The variable *names* are identical everywhere — the app reads `Jwt__Secret` and knows nothing about where it came from. What changes is delivery:
 
 | | Local (Compose) | Azure |
 |---|---|---|
-| `INVITE_CODE` | `.env`, gitignored | Container Apps **secret**, via `secretref` |
-| `Jwt__Secret` | `.env` (user-secrets before milestone 2) | Container Apps **secret** |
+| `Jwt__Secret` | `.env` (user-secrets before milestone 2) | Container Apps **secret**, via `secretref` |
 | `ConnectionStrings__Default` | `.env`, points at the `db` service | Container Apps **secret** — it embeds Neon's password |
 | `CORS_ORIGINS`, `Jwt__ExpiryMinutes`, `PRIVACY_LIFECYCLE_ENABLED` | `.env` | plain env value — not sensitive |
 | `RESEND_API_KEY` | `.env`, normally empty (the console backend needs none) | Container Apps **secret** (`resend-api-key`), from the `RESEND_API_KEY` GitHub secret |
 | `Email__Backend`, `EMAIL_FROM`, `APP_URL`, `EMAIL_DAILY_CAP` | `.env` (`console`; Compose runs as `Local`, where that is allowed) | plain env values in `container-app-api.bicep` (`resend`, the `mail.gymnotebook.fit` sender, `https://gymnotebook.fit`); the cap uses its default |
+| `TURNSTILE_SECRET_KEY` | `.env`, normally empty (check off) | Container Apps **secret** (`turnstile-secret-key`), from the `TURNSTILE_SECRET_KEY` GitHub secret |
+| `TURNSTILE_HOSTNAMES` | `.env`, empty unless trying the test keys (`example.com`) | plain env value `gymnotebook.fit` in `container-app-api.bicep` |
+| `TURNSTILE_SITE_KEY` (frontend) | `.env` for the Compose frontend, `VITE_TURNSTILE_SITE_KEY` for the dev server; normally empty | plain env value on the frontend app, from the `TURNSTILE_SITE_KEY` GitHub *variable* (public), rendered into `config.js` like `API_URL` |
 | `FORWARDED_HEADERS_ENABLED` | not set (off) — deliberately absent from `.env.example` and Compose | plain env value `true`, set in `container-app-api.bicep` (see Rate limiting) |
 
 Three rules that come with this:
 
-- **Secrets are `secretref`, never plain env values.** A Container Apps environment variable is readable by anyone with portal access to the app and shows up in `az containerapp show` output; a secret doesn't. This is exactly what subscription-tracker did for its own `SECRET_KEY` and `INVITE_CODE`, and it's the pattern being copied.
-- **Production values are generated fresh, never promoted from local dev.** The `.env` invite code and signing key are development conveniences that have been on a laptop, in a shell history, and possibly in a screenshot. The deployed ones should have existed nowhere else.
-- **`INVITE_CODE` empty means registration is open.** That's the right default locally and for the test suite, and the wrong one in Azure. Since it's the only thing standing between a public URL and open signup (email verification being out of scope), the deploy checklist has to include *actually setting it* — an unset secret fails open, silently, and looks exactly like a working deploy.
+- **Secrets are `secretref`, never plain env values.** A Container Apps environment variable is readable by anyone with portal access to the app and shows up in `az containerapp show` output; a secret doesn't. This is exactly what subscription-tracker did for its own `SECRET_KEY`, and it's the pattern being copied.
+- **Production values are generated fresh, never promoted from local dev.** The `.env` signing key and keys like it are development conveniences that have been on a laptop, in a shell history, and possibly in a screenshot. The deployed ones should have existed nowhere else.
+- **An empty `TURNSTILE_SECRET_KEY` means no bot check.** That's the right default locally and for the test suite, and the wrong one in Azure, where signup is open. The deploy passes the GitHub secret into Bicep, so it has to exist *before* the deploy that needs it — the same rule as `RESEND_API_KEY`. (Until milestone 12 this rule was about `INVITE_CODE`, whose empty value meant open registration.)
 
 `POSTGRES_DB` and `POSTGRES_PASSWORD` are local-only: Azure has no database container, Neon replaces it, and its credentials arrive inside the connection string.
 
@@ -346,7 +351,7 @@ git config core.hooksPath .githooks
 
 ## Open items / decisions still to make
 
-- **GitHub visibility — resolved: public.** The repo is `juusimaa/gymNotebook` and it's public, which makes `INVITE_CODE` the only thing between a deployed URL and open signup (email verification being out of scope). So the deploy checklist item about actually setting it is not optional. Milestone 12 removes the invite code, and only together with the protections that replace it.
+- **GitHub visibility — resolved: public.** The repo is `juusimaa/gymNotebook` and it's public, which makes `INVITE_CODE` the only thing between a deployed URL and open signup (email verification being out of scope). So the deploy checklist item about actually setting it is not optional. Milestone 12 removes the invite code, and only together with the protections that replace it. *Done in milestone 12 PR 5:* the code is gone, and email confirmation, the email caps and Turnstile stand in its place.
 - **How `is_bodyweight` gets set — resolved.** When autocomplete has no match, the new-workout screen asks whether the new name is loaded or bodyweight. The bulk save creates the exercise, then its response supplies the id for a follow-up `PATCH /exercises/{id}` when the bodyweight flag must be set. Existing exercises carry the flag in autocomplete results and workout blocks, and the milestone 9 edit screen remains the after-the-fact correction path.
 - **UI design — implemented, see [`docs/ui/`](docs/ui/README.md).** The spec and prototype settle the visual direction, the tokens and the component-library question (none) for the screens in milestones 5, 7, 8 and 9. The implemented screens include their own loading, empty and error states and stay aligned with the prototype.
 
@@ -398,7 +403,7 @@ git config core.hooksPath .githooks
 
     **Phase 8, documentation and validation** (T079–T080, 2026-09-28): `README.md` now describes the flag-on local setup, the privacy test suite and the shared 100,000-set export/deletion fixture. Backend format and all 250 tests passed; frontend typecheck, lint, format, all 142 tests and build passed. The focused export fixture also passed over local Kestrel; the command and measurements are in `docs/privacy/release-checklist.md`. This local regression check does not establish the deployed Neon/proxy performance criteria. Production remains flag-off while the provider, restore, deployed transport/performance, reviewed notice and owner walkthrough gates remain open.
 
-12. **Email login and open signup** — in progress, through Spec Kit ([specs/002-email-login/](specs/002-email-login/)). The invite code goes, and with it the only thing that stood between a public URL and anyone's signup, so it is replaced by what subscription-tracker shipped for the same reason (its milestone 9 and its open-signup change): sign-in by email and password, confirmation before the first sign-in, password reset by emailed link, answers that never reveal whether an address has an account, per-address and daily email caps, and Cloudflare Turnstile on the two forms that email an unproven address. Links are short-lived signed JWTs with a `purpose` claim instead of a token table, and a reset is single-use because it bumps `token_version`. Existing username accounts are wiped rather than migrated (only the owner had used the service); the username stays as the name on the cover. Planned as four implementation PRs after the plan: email plumbing, email accounts (invite code still on), password reset, then Turnstile plus removing the invite code, which is the step that opens signup.
+12. **Email login and open signup** — ✅ done in code, through Spec Kit ([specs/002-email-login/](specs/002-email-login/)). The invite code goes, and with it the only thing that stood between a public URL and anyone's signup, so it is replaced by what subscription-tracker shipped for the same reason (its milestone 9 and its open-signup change): sign-in by email and password, confirmation before the first sign-in, password reset by emailed link, answers that never reveal whether an address has an account, per-address and daily email caps, and Cloudflare Turnstile on the two forms that email an unproven address. Links are short-lived signed JWTs with a `purpose` claim instead of a token table, and a reset is single-use because it bumps `token_version`. Existing username accounts are wiped rather than migrated (only the owner had used the service); the username stays as the name on the cover. Four implementation PRs after the plan: email plumbing, email accounts (invite code still on), password reset, then Turnstile plus removing the invite code, which is the step that opened signup. In PR 5 the Turnstile widget turned out not to fit a 320px phone in its "flexible" size (300px minimum, against about 265px between the gutters), so it falls back to the compact widget on narrow screens. Still to do outside the code: the go-live steps in [plan.md](specs/002-email-login/plan.md#go-live-order-operations) — Turnstile keys before the merge, then deleting the `INVITE_CODE` GitHub secret, and the owner's phone walkthrough (SC-001).
 
     **PR 3, email accounts** (T021–T030): `User` gains `email` and `email_verified_at`, and `username` is renamed `display_name` with its unique index dropped. The generated migration was rewritten by hand: EF guessed `username` → `email` as a rename and gave `display_name` an empty-string default, which would have run on a table full of users. `UserEmailMigrationTests` proves the hand-written one refuses to. Register, login, `POST /auth/verification` and `POST /auth/verify-email` as above, a `/verify-email` screen, and three modes on `/login`. The finish-signup email already links to `/reset-password`, which arrives with PR 4. Most existing tests now seed confirmed accounts directly, and the ones about signing up go through the inbox (`EmailTestSupport`).
 

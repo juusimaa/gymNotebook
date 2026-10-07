@@ -60,9 +60,9 @@ description: "Task list for the Email Login and Open Signup feature"
 
 ## PR 5 — Turnstile and removing the invite code (opens signup)
 
-- [ ] T050 `Turnstile.VerifyAsync` over `HttpClient`, fail closed; startup check that hostnames are set when the secret is; wired into register and reset request.
-- [ ] T051 Tests (stubbed `HttpMessageHandler`): off by default, required when on, wrong hostname, wrong action, test keys, no hostnames, Cloudflare unreachable.
-- [ ] T052 Frontend: Turnstile component (flexible size, theme auto, remount per attempt), site key in runtime `config.js` like `API_URL`.
-- [ ] T053 Remove the invite code: `Program.cs`, `RegisterRequest`, `InviteCodeGymNotebookFactory` and its tests, base fixture pin, `TwoHostGymNotebookFixture`, Login copy ("invite-only"), `authErrors`, `client.ts` comment, `.env.example`, compose, Bicep param/secret/env, `deploy.yml`, README, PLAN.md, PRODUCT.md, docs/ui, docs/privacy.
-- [ ] T054 Docs: suppliers (Cloudflare row: Turnstile makes it an HTTP recipient on two screens), notice candidate, PLAN.md milestone 12 marked done.
-- [ ] T055 (operator) Go-live steps 4–5 in plan.md. (owner) Phone walkthrough, SC-001.
+- [x] T050 `Turnstile.VerifyAsync` over `HttpClient`, fail closed; startup check that hostnames are set when the secret is; wired into register and reset request.
+- [x] T051 Tests (stubbed `HttpMessageHandler`): off by default, required when on, wrong hostname, wrong action, test keys, no hostnames, Cloudflare unreachable.
+- [x] T052 Frontend: Turnstile component (flexible size, theme auto, remount per attempt), site key in runtime `config.js` like `API_URL`. *Amended in PR 5: the flexible widget's 300px minimum doesn't fit a 320px phone (about 265px between the gutters), so narrower boxes get the compact widget.*
+- [x] T053 Remove the invite code: `Program.cs`, `RegisterRequest`, `InviteCodeGymNotebookFactory` and its tests, base fixture pin, `TwoHostGymNotebookFixture`, Login copy ("invite-only"), `authErrors`, `client.ts` comment, `.env.example`, compose, Bicep param/secret/env, `deploy.yml`, README, PLAN.md, PRODUCT.md, docs/ui, docs/privacy.
+- [x] T054 Docs: suppliers (Cloudflare row: Turnstile makes it an HTTP recipient on two screens), notice candidate, PLAN.md milestone 12 marked done.
+- [ ] T055 (operator) Go-live steps 4–5 in plan.md: the `TURNSTILE_SECRET_KEY` GitHub secret and the `TURNSTILE_SITE_KEY` GitHub *variable* exist **before PR 5 merges** (the deploy passes both to Bicep), then delete the `INVITE_CODE` secret. (owner) Cloudflare Turnstile supplier review (suppliers.md row). (owner) Phone walkthrough, SC-001.

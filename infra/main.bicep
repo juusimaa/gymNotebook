@@ -32,8 +32,12 @@ param neonConnectionString string
 @secure()
 param jwtSecret string
 
+// Cloudflare Turnstile (specs/002 plan D9): the secret goes to the API, the public site
+// key to the frontend's config.js. The API refuses signups and reset requests without a
+// passing token once the secret is set, so the two must come from the same widget.
 @secure()
-param inviteCode string
+param turnstileSecretKey string
+param turnstileSiteKey string
 
 // Resend API key for outgoing email (specs/002 plan D7). The API refuses to start
 // without it, because Email__Backend is 'resend' in Azure.
@@ -80,7 +84,7 @@ module api './modules/container-app-api.bicep' = {
     corsOrigins: corsOrigins
     neonConnectionString: neonConnectionString
     jwtSecret: jwtSecret
-    inviteCode: inviteCode
+    turnstileSecretKey: turnstileSecretKey
     resendApiKey: resendApiKey
     tags: tags
   }
@@ -94,6 +98,7 @@ module frontend './modules/container-app-frontend.bicep' = {
     managedEnvironmentId: managedEnvironment.outputs.id
     containerImage: frontendContainerImage
     apiUrl: 'https://${api.outputs.fqdn}'
+    turnstileSiteKey: turnstileSiteKey
     customDomainName: frontendCustomDomain
     customDomainCertificateName: frontendCustomDomainCertificateName
     tags: tags
