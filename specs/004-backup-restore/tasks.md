@@ -5,7 +5,7 @@
 ## PR 1 — Plan (this PR)
 
 - [ ] T001 `specs/004-backup-restore/` spec, plan, data model, contracts, UI draft and tasks.
-- [ ] T002 (owner) Answer plan Q1–Q5; fold the answers into the spec's Clarifications and the plan's decisions.
+- [x] T002 (owner) Answer plan Q1–Q5; fold the answers into the spec's Clarifications and the plan's decisions.
 
 ## PR 2 — The export leaves the flag, and records the last backup (backend)
 

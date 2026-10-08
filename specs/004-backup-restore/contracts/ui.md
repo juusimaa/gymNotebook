@@ -10,7 +10,7 @@ The draft drops the small-caps kicker above the heading that the privacy screens
 
 ## Cover
 
-A **Backup & restore** ghost link on its own line below Change password · Sign out, and above Privacy & account when that shows. It is always shown (not tied to the privacy flag). The last-backup date doesn't appear on the cover (plan Q5).
+A **Backup & restore** ghost link on its own line below Change password · Sign out, and above Privacy & account when that shows. It is always shown (not tied to the privacy flag). The last-backup date doesn't appear on the cover (owner, plan Q5).
 
 ## Backup & restore, `/backup`
 

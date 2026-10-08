@@ -18,6 +18,11 @@
 - Q: Which formats can a copy be taken in? → A: **JSON and CSV.** JSON is the full backup and the only format that can be restored. CSV is one row per set, for Excel and other spreadsheets. No XLSX, which would need a new dependency.
 - Q: Where does "last backup" come from? → A: **The server, on the account.** A completed JSON backup records its time on the account, so every device shows the same date. This amends spec 001's "No export record/history is persisted" (plan D6), and the time is removed with the account.
 - Q: Where does it live, and does it wait for the privacy flag? → A: **Its own screen, off the cover, not behind the flag.** Privacy & account links to it instead of having its own export screen.
+- Q: Ship the backup outside the privacy flag before spec 001 releases? → A: Yes, once the processing-decision amendment is signed. The export's deployed-transport gate has already passed.
+- Q: Does restore need the current password? → A: No. It only adds pages, like logging them.
+- Q: How large a backup can be restored? → A: 25 MB, configurable.
+- Q: Which CSV columns? → A: As in the API contract: recorded values only, one row per set, no e1RM.
+- Q: Show the last-backup date on the cover? → A: No, only on the Backup & restore screen.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -134,7 +139,7 @@ As a lifter, I can see when I last took a full backup, so I know whether it's ti
 - **FR-017**: With the privacy flag on and no optional-details consent, the four optional details are dropped from restored pages, and the response counts them. File privacy records are never applied (consent and acknowledgement are the account's own).
 - **FR-018**: The response reports pages added, sets added, exercises created (names), pages already present, exercises whose classification differed (names) and optional details dropped. The screen turns it into a sentence summary with a link to Sessions.
 - **FR-019**: Restore is rate limited per account and refuses bodies over the size limit (plan D9, proposed 25 MB) with 413 before reading them.
-- **FR-020**: Restore needs a valid session, not the password: it only adds, like logging a page (plan D8, open for review).
+- **FR-020**: Restore needs a valid session, not the password: it only adds, like logging a page (plan D8; owner, 2026-10-08).
 
 **States and copy**
 
@@ -166,6 +171,6 @@ As a lifter, I can see when I last took a full backup, so I know whether it's ti
 
 ## Assumptions and dependencies
 
-- Spec 001's export code (`NotebookExport.cs`, `ExportData.tsx`, `api/download.ts`) is the base. Its deployed-transport gate has passed (T053 spike Part B and SC-003, 2026-09-29), so taking it out of the flag adds no untested path to production. 001's open gates (notice content, suppliers, retention evidence) don't depend on the export (plan Q1).
+- Spec 001's export code (`NotebookExport.cs`, `ExportData.tsx`, `api/download.ts`) is the base. Its deployed-transport gate has passed (T053 spike Part B and SC-003, 2026-09-29), so taking it out of the flag adds no untested path to production. 001's open gates (notice content, suppliers, retention evidence) don't depend on the export. The owner accepted shipping it unflagged (plan Q1).
 - The privacy processing decision (P1/P2) needs an amendment for `LastBackupAt` and for restore's processing, signed by the owner before release (Principle V: email and new account records need their own reviewed change). Browser storage (P5) is unchanged: a chosen file is read in memory and never stored.
 - Durable logging (spec 003) is independent. If it lands first, restored pages start at revision 1; if after, its migration defaults them to 1.

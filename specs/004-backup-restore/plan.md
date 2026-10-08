@@ -2,7 +2,7 @@
 
 **Branch**: `004-backup-restore` | **Date**: 2026-10-08 | **Spec**: [spec.md](spec.md)
 
-**Status**: Draft for owner review (constitution Principle VII). Decisions D1–D10 below are proposals until this plan is merged; the four in the spec's Clarifications are the owner's (2026-10-08). Questions Q1–Q5 are open.
+**Status**: Draft for owner review (constitution Principle VII). Decisions D1–D10 below are proposals until this plan is merged; the nine in the spec's Clarifications are the owner's (2026-10-08), including the answers to Q1–Q5 below.
 
 ## Summary
 
@@ -30,7 +30,7 @@ See [data-model.md](data-model.md), [API contract](contracts/api.md), [UI contra
 | II. Focused changes | Pass. Six PRs, listed in [tasks.md](tasks.md). |
 | III. Learning | Pass. The restore is a readable sequence (validate → match → insert); the CSV writer is a pure function with its rules in comments. |
 | IV. Verification | Pass. Restore is a persistence change, tested against real Postgres, including the round trip at reference size. |
-| V. Security & privacy | Pass, with decisions to review. The export's password, guards and limits are kept. Restore adds a large-body write route: a size cap, a per-account limit and one-at-a-time (D9), and it never trusts file ids (D7). `LastBackupAt` is a new personal record: export, deletion and the processing decision cover it (D6). Leaving the flag puts the export in production while 001's other release gates (notice content, suppliers, retention evidence) are still open (Q1). |
+| V. Security & privacy | Pass, with decisions to review. The export's password, guards and limits are kept. Restore adds a large-body write route: a size cap, a per-account limit and one-at-a-time (D9), and it never trusts file ids (D7). `LastBackupAt` is a new personal record: export, deletion and the processing decision cover it (D6). Leaving the flag puts the export in production while 001's other release gates (notice content, suppliers, retention evidence) are still open; accepted by the owner (Q1). |
 | VI. Docs aligned | Pass. PLAN.md (API, Milestones), `docs/ui/README.md` and `prototype.html` (the new screen, the replaced export screen, the cover), README.md (the restore size setting), 001's export contract (the added field) and `docs/privacy/processing-decision.md` change with the behaviour. |
 | VII. Reviewed plans | This document is the draft under review. |
 
@@ -50,9 +50,9 @@ See [data-model.md](data-model.md), [API contract](contracts/api.md), [UI contra
 
 **D7 — Restore treats the file as untrusted data, and ids as labels.** The body is parsed into DTOs with `System.Text.Json` (no polymorphism, max depth 8). File ids are used only to join the file's own arrays; every row is inserted with a new id and the caller's `UserId`. Values are checked with the same rules as `POST /workouts` and `PUT /workouts/{id}/exercises` (shared validation helpers, not copies). `account`, `privacyRecords`, `fieldGuide`, `createdAt` fields and `userId` fields are ignored. `CreatedAt` is the restore time.
 
-**D8 — No password for restore.** Restore only adds pages, the same as logging them by hand, which needs only a session. A password step would also bring the per-account BCrypt throttle into a flow that doesn't need it. The trade-off: a stolen session could fill a notebook with junk pages, which it already can, one page at a time. *Open: Q2.*
+**D8 — No password for restore.** Restore only adds pages, the same as logging them by hand, which needs only a session. A password step would also bring the per-account BCrypt throttle into a flow that doesn't need it. The trade-off: a stolen session could fill a notebook with junk pages, which it already can, one page at a time. *Owner, 2026-10-08: no password (Q2).*
 
-**D9 — Limits.** Request body ≤ `Restore:MaxBytes` (default 25 MB; the reference notebook's export measured 10.4 MB, `docs/privacy/release-checklist.md`), enforced by Kestrel's per-endpoint limit before the body is read (413). One restore per account at a time via `pg_try_advisory_xact_lock` in a new "restore" namespace (429 `restore_in_progress`), mirroring the export. A per-account rate limit of 5 restores per 10 minutes. A 120 s statement budget, like export. *Open: Q3.*
+**D9 — Limits.** Request body ≤ `Restore:MaxBytes` (default 25 MB; the reference notebook's export measured 10.4 MB, `docs/privacy/release-checklist.md`), enforced by Kestrel's per-endpoint limit before the body is read (413). One restore per account at a time via `pg_try_advisory_xact_lock` in a new "restore" namespace (429 `restore_in_progress`), mirroring the export. A per-account rate limit of 5 restores per 10 minutes. A 120 s statement budget, like export. *Owner, 2026-10-08: 25 MB (Q3).*
 
 **D10 — Matching rules.** A page is "already there" when `startedAt` equals an existing workout's `startedAt` for the account. That is unique in practice, survives renames, and makes restoring the same file idempotent, because restored pages keep the file's `startedAt`. The lookup is one query over the file's distinct instants (`= ANY(@instants)`), not one per page. Exercises match by `NormalizedName` with the existing normalizer. Inserts use `AddRange` per table inside the transaction; the 100k-set case is measured in the fixture (SC-003) before reaching for `COPY`.
 
@@ -62,10 +62,10 @@ See [data-model.md](data-model.md), [API contract](contracts/api.md), [UI contra
 | --- | --- | --- | --- |
 | `Restore__MaxBytes` | optional | optional | new, plain env; default 26214400 (25 MB) |
 
-## Open questions (owner)
+## Resolved questions (owner, 2026-10-08)
 
-- **Q1 — The export outside the flag.** The export's own technical gates have passed on the deployed stack: spike Part B (T053, 2026-09-29) and SC-003 (11.5 s for the 100,000-set notebook, `docs/privacy/release-checklist.md`). 001's still-open gates concern the notice content, suppliers, retention and the owner walkthrough, not the export. Proposal: ship the backup unflagged once the processing-decision amendment (D6) is signed. Alternative: keep the whole feature behind the flag until 001 releases.
-- **Q2 — Password for restore.** Proposed: none (D8). Alternative: the current password, like export and deletion.
-- **Q3 — Size cap.** 25 MB (D9), about twice the reference notebook. Larger, or smaller?
-- **Q4 — CSV columns.** As in the [API contract](contracts/api.md#csv-columns): one row per set, page details repeated on each row, no e1RM. Add or drop any column?
-- **Q5 — Last backup on the cover.** Proposed: only on the Backup & restore screen, to keep the cover calm. Alternative: a quiet line under the cover's link ("Last backup 3 Oct").
+- **Q1 — The export outside the flag.** The export's own technical gates have passed on the deployed stack: spike Part B (T053, 2026-09-29) and SC-003 (11.5 s for the 100,000-set notebook, `docs/privacy/release-checklist.md`). 001's still-open gates concern the notice content, suppliers, retention and the owner walkthrough, not the export. **Answer: ship unflagged**, once the processing-decision amendment (D6, T018) is signed.
+- **Q2 — Password for restore.** **Answer: none** (D8).
+- **Q3 — Size cap.** **Answer: 25 MB** (D9), about 2.5 times the reference notebook, configurable.
+- **Q4 — CSV columns.** As in the [API contract](contracts/api.md#csv-columns): one row per set, page details repeated on each row, no e1RM. **Answer: as proposed.**
+- **Q5 — Last backup on the cover.** **Answer: only on the Backup & restore screen**, to keep the cover calm.

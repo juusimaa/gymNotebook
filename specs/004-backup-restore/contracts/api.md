@@ -21,7 +21,7 @@ Spec 001's export, now mapped always.
 
 Adds the pages from a backup file that the notebook doesn't have.
 
-- **Auth**: bearer. No password (plan D8, Q2).
+- **Auth**: bearer. No password (plan D8; owner, Q2).
 - **Request**: `Content-Type: application/json`; the body is the backup file exactly as downloaded. Larger than `Restore:MaxBytes` (default 25 MB): **413** before the body is read. Not JSON: **415**.
 - **200**:
   ```json
