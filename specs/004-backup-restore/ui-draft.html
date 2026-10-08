@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backup &amp; restore — UI draft</title>
+<!--
+  UI draft for specs/004-backup-restore (GitHub issue #129). A reference
+  artifact like docs/ui/prototype.html, not a build input. Tokens and base
+  classes are copied from frontend/src/styles/ (tokens.css, base.css) and
+  frontend/src/screens/Privacy.css so the draft looks like the app; the fonts
+  load from the app's self-hosted files when this file is opened from the repo.
+  Everything is simulated: no request leaves the page. A real .json file chosen
+  under Restore is read in memory only, to show its summary.
+-->
+<style>
+@font-face { font-family: 'Cormorant Garamond'; font-weight: 400 600; font-display: swap;
+  src: url('../../frontend/public/fonts/cormorant-garamond-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Lora'; font-weight: 400 500; font-display: swap;
+  src: url('../../frontend/public/fonts/lora-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Lora'; font-style: italic; font-weight: 400; font-display: swap;
+  src: url('../../frontend/public/fonts/lora-italic-latin.woff2') format('woff2'); }
+
+:root {
+  --color-bg: #f3f2f2; --color-surface: #eae9e9; --color-text: #201f1d;
+  --color-accent: #b68235; --color-divider: color-mix(in srgb, #201f1d 16%, transparent);
+  --color-error: #9b3a2a;
+  --color-neutral-300: #d7d3d3; --color-neutral-700: #605d5d;
+  --color-accent-700: #7d5411;
+  --font-heading: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-heading-weight: 600;
+  --font-body: 'Lora', Georgia, 'Times New Roman', serif;
+  --space-1: 4.6px; --space-2: 9.2px; --space-3: 13.8px; --space-4: 18.4px;
+  --space-6: 27.6px; --space-8: 36.8px;
+  --radius-md: 4px; --radius-lg: 7px;
+  --color-shadow: #2d2b2b;
+  --shadow-md: 0 3px 10px color-mix(in srgb, var(--color-shadow) 16%, transparent);
+  --page-max-width: 430px; --hit-target: 44px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #191715; --color-surface: #211f1d; --color-text: #e1ddd8;
+    --color-accent: #ad7b2f; --color-divider: color-mix(in srgb, #e1ddd8 16%, transparent);
+    --color-error: #d9826d; --color-neutral-300: #3a3737; --color-neutral-700: #9b9797;
+    --color-accent-700: #cc9a55; --color-shadow: #000;
+    --shadow-md: 0 3px 10px color-mix(in srgb, var(--color-shadow) 45%, transparent);
+  }
+}
+
+/* ---- base.css, the parts this screen uses ---- */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* Lora ships 400–500 only: cap bold at 500 so the browser never fakes a heavier cut. */
+strong, b { font-weight: 500; }
+html { font-synthesis: none; }
+html { color-scheme: light dark; }
+::selection { background: color-mix(in srgb, var(--color-accent) 35%, transparent); }
+body { margin: 0; background: var(--color-bg); color: var(--color-text);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+h1, h2 { font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  line-height: 1.12; letter-spacing: -0.015em; margin: 0 0 var(--space-2); text-wrap: balance; }
+p { margin: 0 0 var(--space-3); }
+a { color: var(--color-accent-700); text-decoration: none; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-neutral-700); }
+.page { max-width: var(--page-max-width); margin: 0 auto; min-height: 100dvh;
+  padding: var(--space-8) var(--space-6); display: flex; flex-direction: column; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--hit-target); cursor: pointer; text-decoration: none;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 16px;
+  letter-spacing: 0.04em; line-height: 1.2; color: var(--color-text); background: transparent;
+  border: 1px solid transparent; padding: var(--space-2) calc(var(--space-3) * 1.2); border-radius: var(--radius-md); }
+.btn:focus-visible { outline: 2px solid var(--color-accent-700); outline-offset: 2px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { min-height: 48px; font-size: 17px; color: var(--color-accent-700); border: 2px solid var(--color-accent-700); }
+.btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.btn-primary:active { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+.btn-secondary { border-color: var(--color-divider); }
+.btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.btn-ghost { color: var(--color-accent-700); padding-inline: var(--space-1); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.btn-block { width: 100%; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.label, legend.label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-neutral-700); }
+.input { width: 100%; min-height: var(--hit-target); padding: 6px 12px; font: inherit; font-size: 16px;
+  color: var(--color-text); caret-color: var(--color-accent-700); background: transparent;
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md); }
+.input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.input:focus-visible { border-color: var(--color-accent-700); outline: none; }
+.input[aria-invalid='true'] { border-color: var(--color-error); box-shadow: inset 0 0 0 1px var(--color-error); }
+.form-stack { display: flex; flex-direction: column; gap: var(--space-4); }
+.form-message { margin: 0; font-size: 14px; line-height: 1.5; color: var(--color-error); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* ---- Privacy.css, the parts this screen uses ---- */
+.privacy-back { margin: 0 0 var(--space-4); font-size: 13px; }
+.privacy-heading { font-size: 32px; }
+.privacy-heading:focus { outline: none; }
+.privacy-block { border-top: 1px solid var(--color-divider); padding-top: var(--space-4); margin-top: var(--space-6); }
+.privacy-block h2 { font-size: 20px; margin: 0 0 var(--space-2); }
+.privacy-block > p { font-size: 14px; }
+progress { width: 100%; height: 3px; appearance: none; border: 0; background: var(--color-divider);
+  color: var(--color-accent-700); accent-color: var(--color-accent-700); border-radius: 2px; }
+progress::-webkit-progress-bar { background: var(--color-divider); }
+progress::-webkit-progress-value { background: var(--color-accent-700); }
+
+/* ---- New for this screen (would live in Backup.css) ---- */
+
+/* The last-backup line: a fact about the notebook, read before anything else
+   on the screen. Body size, muted, the date itself in ink. */
+.last-backup { font-size: 15px; margin: 0 0 var(--space-2); }
+.last-backup strong { font-weight: 500; color: var(--color-text); }
+/* The one moment of motion: when a backup completes, a gold rule draws under
+   the new date, left to right, then settles to a hairline. */
+.last-backup strong { background-image: linear-gradient(var(--color-accent), var(--color-accent));
+  background-repeat: no-repeat; background-position: 0 100%; background-size: 0 1px; padding-bottom: 1px; }
+.last-backup.is-fresh strong { animation: ink 1.1s cubic-bezier(.16, 1, .3, 1) forwards; }
+@keyframes ink { from { background-size: 0 2px; } 60% { background-size: 100% 2px; } to { background-size: 100% 1px; } }
+@media (prefers-reduced-motion: reduce) { .last-backup.is-fresh strong { animation: none; background-size: 100% 1px; } }
+
+/* Format choice: two full-width radio rows. The whole row is the label, so
+   the target is the row, not the 16px circle. Selected = accent-700 ring and
+   a faint gold wash, the same language as the primary button. */
+.format { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.format legend { padding: 0; margin-bottom: 6px; }
+.option { display: grid; grid-template-columns: 22px 1fr; gap: 2px var(--space-3); align-items: start;
+  min-height: var(--hit-target); padding: var(--space-3) var(--space-3); cursor: pointer;
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+  transition: border-color .2s, background-color .2s; }
+.option:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.option input { appearance: none; margin: 3px 0 0; width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid var(--color-neutral-700); display: grid; place-content: center; cursor: pointer; }
+.option input::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent-700);
+  transform: scale(0); transition: transform .18s cubic-bezier(.16, 1, .3, 1); }
+.option input:checked { border-color: var(--color-accent-700); }
+.option input:checked::before { transform: scale(1); }
+.option input:focus-visible { outline: 2px solid var(--color-accent-700); outline-offset: 3px; }
+.option:has(input:checked) { border-color: var(--color-accent-700);
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent); }
+.option-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 18px; line-height: 1.25; }
+.option-title small { font-family: var(--font-body); font-weight: 400; font-size: 12px; letter-spacing: .06em;
+  color: var(--color-neutral-700); margin-left: 4px; }
+.option-note { grid-column: 2; font-size: 13.5px; line-height: 1.45; color: var(--color-neutral-700); }
+
+.status { font-size: 14px; margin: 0; }
+.status-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+.done { font-size: 14px; margin: 0; }
+
+/* The restore summary: a ruled list, written like a contents page, not a card. */
+.summary { margin: var(--space-2) 0 var(--space-4); padding: 0; list-style: none;
+  border-top: 1px solid var(--color-accent); }
+.summary li { display: flex; justify-content: space-between; gap: var(--space-3); align-items: baseline;
+  padding: var(--space-2) 0; border-bottom: 1px solid var(--color-divider); font-size: 14px; }
+.summary li span:first-child { color: var(--color-neutral-700); }
+.summary li span:last-child { text-align: right; }
+.summary .file { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 18px;
+  color: var(--color-text); word-break: break-all; }
+.summary-focus:focus { outline: none; }
+.result { font-size: 17px; margin: var(--space-2) 0 var(--space-2); }
+.result-lines { margin: 0 0 var(--space-4); padding: 0; list-style: none; font-size: 14px; }
+.result-lines li { padding: 3px 0; }
+.result-lines li::before { content: ''; display: inline-block; width: 10px; height: 1px; margin-right: 8px;
+  vertical-align: middle; background: var(--color-accent); }
+.actions { display: flex; flex-direction: column; gap: var(--space-2); }
+.foot { margin-top: auto; padding-top: var(--space-8); }
+
+/* ---- Cover preview, abridged from Cover.css ---- */
+.cover { text-align: center; }
+.cover-frame { border: 1px solid var(--color-accent); border-radius: var(--radius-lg); padding: var(--space-8) var(--space-6);
+  margin-bottom: var(--space-6); box-shadow: var(--shadow-md); background: var(--color-surface); }
+.cover-title { font-weight: 400; font-size: 44px; margin: 0; }
+.cover-volume { font-size: 12px; letter-spacing: .28em; text-transform: uppercase; color: var(--color-neutral-700); margin: var(--space-3) 0 0; }
+.cover-account { font-size: 13px; color: var(--color-neutral-700); margin: var(--space-4) 0 var(--space-2); }
+.cover-actions { display: flex; justify-content: center; gap: var(--space-3); }
+.cover-line { margin: 0; }
+.is-new { position: relative; }
+.is-new::after { content: 'new'; position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
+  margin-left: 6px; font: 11px var(--font-body); letter-spacing: .08em; color: var(--color-neutral-700); }
+
+/* ---- Draft chrome: the state picker, outside the app's column ---- */
+.draft-bar { position: sticky; top: 0; z-index: 2; background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider); padding: 10px 16px; font-size: 13px; }
+.draft-bar-inner { max-width: 960px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.draft-bar b { font-family: var(--font-heading); font-size: 16px; margin-right: 6px; }
+.draft-bar label { display: inline-flex; gap: 6px; align-items: center; }
+.draft-bar select { font: inherit; font-size: 13px; min-height: 32px; padding: 2px 6px; color: var(--color-text);
+  background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-md); }
+.draft-bar .hint { color: var(--color-neutral-700); }
+@media (max-width: 520px) { .draft-bar .hint { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="draft-bar" role="region" aria-label="Draft controls">
+  <div class="draft-bar-inner">
+    <b>UI draft · #129</b>
+    <label>Screen
+      <select id="pick-screen">
+        <option value="backup">Backup &amp; restore</option>
+        <option value="cover">Cover</option>
+      </select>
+    </label>
+    <label>Jump to state
+      <select id="pick-state">
+        <option value="">— live —</option>
+        <optgroup label="Last backup">
+          <option value="never">No backup yet</option>
+        </optgroup>
+        <optgroup label="Backup">
+          <option value="receiving">Preparing backup</option>
+          <option value="done-json">Backup complete</option>
+          <option value="done-csv">Spreadsheet complete</option>
+          <option value="wrong-password">Wrong password</option>
+        </optgroup>
+        <optgroup label="Restore">
+          <option value="summary">File summary</option>
+          <option value="restoring">Restoring</option>
+          <option value="restored">Restored, with notes</option>
+          <option value="nothing">Nothing to restore</option>
+          <option value="not-backup">Not a backup (CSV chosen)</option>
+          <option value="newer">Newer version</option>
+          <option value="failed">Restore failed</option>
+        </optgroup>
+      </select>
+    </label>
+    <span class="hint">Password <code>wrong</code> shows the error. Choose any .json file to see its summary.</span>
+  </div>
+</div>
+
+<!-- ================= Cover (abridged) ================= -->
+<main class="page cover" id="screen-cover" hidden>
+  <div class="cover-frame">
+    <h1 class="cover-title">Gym Notebook</h1>
+    <p class="cover-volume num">Volume I · 2026</p>
+  </div>
+  <a class="btn btn-primary btn-block" href="#">Open the notebook</a>
+  <p class="cover-account">Signed in as jouni@example.com</p>
+  <div class="cover-actions">
+    <a class="btn btn-ghost" href="#">Change password</a>
+    <a class="btn btn-ghost" href="#">Sign out</a>
+  </div>
+  <p class="cover-line"><a class="btn btn-ghost is-new" href="#" data-go="backup">Backup &amp; restore</a></p>
+  <p class="cover-line"><a class="btn btn-ghost" href="#">Privacy &amp; account</a></p>
+</main>
+
+<!-- ================= Backup & restore ================= -->
+<main class="page" id="screen-backup">
+  <p class="privacy-back"><a class="btn btn-ghost" href="#" data-go="cover">← Cover</a></p>
+  <h1 class="privacy-heading" id="heading" tabindex="-1">Backup &amp; restore</h1>
+  <p class="last-backup muted" id="last-backup">Last full backup: <strong>3 October 2026, 09.42</strong></p>
+
+  <!-- Make a backup -->
+  <section class="privacy-block" aria-labelledby="h-backup">
+    <h2 id="h-backup">Make a backup</h2>
+    <form class="form-stack" id="backup-form" novalidate>
+      <fieldset class="format">
+        <legend class="label">Format</legend>
+        <label class="option">
+          <input type="radio" name="format" value="json" checked>
+          <span class="option-title">Full backup <small>JSON</small></span>
+          <span class="option-note">Everything in your notebook. This is the file you can restore from.</span>
+        </label>
+        <label class="option">
+          <input type="radio" name="format" value="csv">
+          <span class="option-title">Spreadsheet <small>CSV</small></span>
+          <span class="option-note">One row per set, for Excel or Numbers. It can’t be restored.</span>
+        </label>
+      </fieldset>
+
+      <label class="field">
+        <span class="label">Current password</span>
+        <input class="input" id="password" type="password" autocomplete="current-password" required>
+      </label>
+      <p class="muted" style="font-size:13px;margin:0">The file contains personal information. Keep it somewhere private.</p>
+
+      <p class="form-message" id="backup-error" role="alert" hidden></p>
+      <div class="status-stack" role="status" aria-live="polite" id="backup-status"></div>
+
+      <button class="btn btn-primary btn-block" id="backup-button" type="submit">Download backup</button>
+    </form>
+  </section>
+
+  <!-- Restore -->
+  <section class="privacy-block" aria-labelledby="h-restore">
+    <h2 id="h-restore">Restore from a backup</h2>
+    <div id="restore"></div>
+  </section>
+
+  <p class="foot"><a class="btn btn-ghost" href="#">Privacy &amp; account</a></p>
+</main>
+
+<script>
+// Draft behaviour only. Each state is a function that renders the section;
+// the "Jump to state" menu calls the same functions the live flow does.
+const $ = (id) => document.getElementById(id)
+const today = new Date()
+const pad = (n) => String(n).padStart(2, '0')
+const isoDay = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+const longDate = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+const hhmm = (d) => `${pad(d.getHours())}.${pad(d.getMinutes())}`
+const fmt = (n) => n.toLocaleString('en-GB')
+let timer = null
+let chosenName = 'gym-notebook-2026-09-01.json'
+
+// ---- Screens ----
+function showScreen(name) {
+  $('screen-cover').hidden = name !== 'cover'
+  $('screen-backup').hidden = name !== 'backup'
+  $('pick-screen').value = name
+  if (name === 'backup') $('heading').focus()
+}
+document.querySelectorAll('[data-go]').forEach((a) =>
+  a.addEventListener('click', (e) => { e.preventDefault(); showScreen(a.dataset.go) }))
+$('pick-screen').addEventListener('change', (e) => showScreen(e.target.value))
+
+// ---- Last backup ----
+function setLastBackup(date, fresh) {
+  const p = $('last-backup')
+  p.classList.remove('is-fresh')
+  p.innerHTML = date
+    ? `Last full backup: <strong>${longDate(date)}, ${hhmm(date)}</strong>`
+    : 'No full backup yet.'
+  if (fresh) { void p.offsetWidth; p.classList.add('is-fresh') }
+}
+
+// ---- Backup ----
+const format = () => document.querySelector('input[name=format]:checked').value
+function syncButton() {
+  $('backup-button').textContent = format() === 'json' ? 'Download backup' : 'Download spreadsheet'
+}
+document.querySelectorAll('input[name=format]').forEach((r) => r.addEventListener('change', () => {
+  syncButton(); backupIdle()
+}))
+
+function backupIdle() {
+  clearTimeout(timer)
+  $('backup-status').innerHTML = ''
+  $('backup-error').hidden = true
+  $('password').removeAttribute('aria-invalid')
+  $('password').disabled = false
+  syncButton()
+  $('backup-button').className = 'btn btn-primary btn-block'
+  $('backup-button').type = 'submit'
+}
+function backupError(text) {
+  backupIdle()
+  $('backup-error').textContent = text
+  $('backup-error').hidden = false
+  $('password').setAttribute('aria-invalid', 'true')
+  $('password').focus()
+}
+function backupReceiving() {
+  backupIdle()
+  $('password').disabled = true
+  const what = format() === 'json' ? 'backup' : 'spreadsheet'
+  $('backup-status').innerHTML =
+    `<p class="status">Preparing your ${what}…</p><progress aria-label="Backup progress"></progress>`
+  const b = $('backup-button')
+  b.textContent = 'Cancel'; b.className = 'btn btn-secondary btn-block'; b.type = 'button'
+}
+function backupDone(kind) {
+  backupIdle()
+  $('password').value = ''
+  if (kind === 'json') {
+    $('backup-status').innerHTML =
+      `<p class="done">Saved as <span class="num">gym-notebook-${isoDay}.json</span>. Your notebook has not changed.</p>`
+    setLastBackup(new Date(), true)
+  } else {
+    $('backup-status').innerHTML =
+      `<p class="done">Saved as <span class="num">gym-notebook-${isoDay}.csv</span>. A spreadsheet can’t be restored; keep a full backup too.</p>`
+  }
+  $('backup-button').textContent = 'Download again'
+}
+$('backup-form').addEventListener('submit', (e) => {
+  e.preventDefault()
+  const pw = $('password').value
+  if (!pw) return backupError('Enter your current password.')
+  if (pw === 'wrong') { $('password').value = ''; return backupError('Check your current password and try again.') }
+  const kind = format()
+  backupIdle(); $('password').disabled = true
+  $('backup-status').innerHTML = '<p class="status">Checking your password…</p>'
+  timer = setTimeout(() => { backupReceiving(); timer = setTimeout(() => backupDone(kind), 1600) }, 700)
+})
+$('backup-button').addEventListener('click', (e) => {
+  if ($('backup-button').type === 'button') { e.preventDefault(); backupIdle() }
+})
+
+// ---- Restore ----
+const sample = { taken: new Date(2026, 8, 1, 18, 4), pages: 212, first: new Date(2025, 0, 3),
+  last: new Date(2026, 7, 31), sets: 1846, exercises: 19 }
+
+function restoreIdle() {
+  clearTimeout(timer)
+  $('restore').innerHTML = `
+    <p>Adds the pages from a backup that aren’t in your notebook. Nothing already here is changed or removed.</p>
+    <input type="file" id="file" class="visually-hidden" accept=".json,application/json">
+    <label for="file" class="btn btn-secondary btn-block" id="file-label" tabindex="0">Choose backup file</label>`
+  wireFile()
+}
+function wireFile() {
+  const input = $('file'); const label = $('file-label')
+  label.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click() } })
+  input.addEventListener('change', () => { if (input.files[0]) readFile(input.files[0]) })
+}
+function chooseAgain() {
+  return `<div class="actions">
+    <input type="file" id="file" class="visually-hidden" accept=".json,application/json">
+    <label for="file" class="btn btn-ghost" id="file-label" tabindex="0">Choose another file</label></div>`
+}
+// Reads a chosen file in memory and summarises it, as the real screen will
+// (FR-012). Nothing is stored or sent.
+function readFile(file) {
+  chosenName = file.name
+  $('restore').innerHTML = `<p class="status" role="status">Reading ${escape(file.name)}…</p>`
+  if (file.size > 25 * 1024 * 1024) return restoreError('This file is larger than 25 MB, so it can’t be restored here.')
+  file.text().then((text) => {
+    let data
+    try { data = JSON.parse(text) } catch {
+      return restoreError(/\.csv$/i.test(file.name)
+        ? 'This isn’t a Gym Notebook backup. Choose the .json file from Make a backup. Spreadsheets can’t be restored.'
+        : 'This file is damaged or incomplete, so nothing was restored. Try another backup.')
+    }
+    if (!data || !Array.isArray(data.workouts) || !Array.isArray(data.sets)) {
+      return restoreError('This isn’t a Gym Notebook backup. Choose the .json file from Make a backup. Spreadsheets can’t be restored.')
+    }
+    if (data.formatVersion !== 1) {
+      return restoreError('This backup was made by a newer version of Gym Notebook. Reload the app and try again.')
+    }
+    const dates = data.workouts.map((w) => w.date).filter(Boolean).sort()
+    restoreSummary({
+      taken: data.snapshotAt ? new Date(data.snapshotAt) : null,
+      pages: data.workouts.length,
+      first: dates[0] ? new Date(dates[0]) : null,
+      last: dates.length ? new Date(dates[dates.length - 1]) : null,
+      sets: data.sets.length,
+      exercises: (data.exercises || []).length,
+    })
+  })
+}
+function restoreSummary(s) {
+  const range = s.first ? `, ${longDate(s.first)} – ${longDate(s.last)}` : ''
+  $('restore').innerHTML = `
+    <div class="summary-focus" id="summary" tabindex="-1" aria-label="Backup file summary">
+      <ul class="summary">
+        <li><span class="file">${escape(chosenName)}</span></li>
+        ${s.taken ? `<li><span>Backup taken</span><span class="num">${longDate(s.taken)}, ${hhmm(s.taken)}</span></li>` : ''}
+        <li><span>Pages</span><span class="num"><strong>${fmt(s.pages)}</strong>${range}</span></li>
+        <li><span>Sets · exercises</span><span class="num">${fmt(s.sets)} · ${fmt(s.exercises)}</span></li>
+      </ul>
+    </div>
+    <p class="muted" style="font-size:14px">Pages already in your notebook are skipped.</p>
+    <div class="actions">
+      <button class="btn btn-primary btn-block" id="do-restore" type="button">Restore missing pages</button>
+    </div>
+    ${chooseAgain()}`
+  wireFile()
+  $('do-restore').addEventListener('click', restoring)
+  $('summary').focus()
+}
+function restoring() {
+  $('restore').innerHTML = `<div class="status-stack" role="status" aria-live="polite">
+    <p class="status">Restoring… Keep this page open.</p><progress aria-label="Restore progress"></progress></div>`
+  timer = setTimeout(() => restored(), 1800)
+}
+function restored(notes = true) {
+  $('restore').innerHTML = `
+    <div id="result" tabindex="-1" class="summary-focus" role="status" aria-live="polite">
+      <p class="result">Restored <strong>2 pages</strong> and <strong>48 sets</strong>.</p>
+      <ul class="result-lines">
+        <li>210 pages were already in your notebook.</li>
+        ${notes ? `<li>New exercise: Sääriprässi.</li>
+        <li>Pull-up kept its current type (Bodyweight).</li>` : ''}
+      </ul>
+    </div>
+    <div class="actions">
+      <a class="btn btn-secondary btn-block" href="#">Open sessions</a>
+      <button class="btn btn-ghost" type="button" id="again">Restore another file</button>
+    </div>`
+  $('again').addEventListener('click', restoreIdle)
+  $('result').focus()
+}
+function nothingToRestore() {
+  $('restore').innerHTML = `
+    <div id="result" tabindex="-1" class="summary-focus" role="status">
+      <p class="result">Nothing to restore.</p>
+      <p class="muted" style="font-size:14px">All 212 pages are already in your notebook.</p>
+    </div>
+    <div class="actions"><button class="btn btn-ghost" type="button" id="again">Restore another file</button></div>`
+  $('again').addEventListener('click', restoreIdle)
+  $('result').focus()
+}
+function restoreError(text, retry) {
+  $('restore').innerHTML = `
+    <ul class="summary"><li><span class="file">${escape(chosenName)}</span></li></ul>
+    <p class="form-message" role="alert">${text}</p>
+    ${retry ? '<div class="actions" style="margin-top:var(--space-4)"><button class="btn btn-secondary btn-block" id="retry" type="button">Try again</button></div>' : ''}
+    ${chooseAgain()}`
+  wireFile()
+  if (retry) $('retry').addEventListener('click', restoring)
+}
+function escape(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+
+// ---- Jump to state ----
+$('pick-state').addEventListener('change', (e) => {
+  showScreen('backup')
+  const v = e.target.value
+  setLastBackup(new Date(2026, 9, 3, 9, 42)); backupIdle(); restoreIdle()
+  const csv = () => { document.querySelector('input[value=csv]').checked = true; syncButton() }
+  const json = () => { document.querySelector('input[value=json]').checked = true; syncButton() }
+  json()
+  switch (v) {
+    case 'never': setLastBackup(null); break
+    case 'receiving': backupReceiving(); break
+    case 'done-json': backupDone('json'); break
+    case 'done-csv': csv(); backupDone('csv'); break
+    case 'wrong-password': backupError('Check your current password and try again.'); break
+    case 'summary': chosenName = 'gym-notebook-2026-09-01.json'; restoreSummary(sample); break
+    case 'restoring': restoring(); clearTimeout(timer); break
+    case 'restored': restored(true); break
+    case 'nothing': nothingToRestore(); break
+    case 'not-backup': chosenName = 'gym-notebook-2026-09-01.csv'
+      restoreError('This isn’t a Gym Notebook backup. Choose the .json file from Make a backup. Spreadsheets can’t be restored.'); break
+    case 'newer': chosenName = 'gym-notebook-2027-03-14.json'
+      restoreError('This backup was made by a newer version of Gym Notebook. Reload the app and try again.'); break
+    case 'failed': chosenName = 'gym-notebook-2026-09-01.json'
+      restoreError('The restore didn’t finish, so nothing was added. Your notebook has not changed. Try again.', true); break
+  }
+})
+
+restoreIdle()
+setLastBackup(new Date(2026, 9, 3, 9, 42))
+</script>
+</body>
+</html>
