@@ -2,7 +2,7 @@
 
 **Branch**: `004-backup-restore` | **Date**: 2026-10-08 | **Spec**: [spec.md](spec.md)
 
-**Status**: Draft for owner review (constitution Principle VII). Decisions D1–D10 below are proposals until this plan is merged; the nine in the spec's Clarifications are the owner's (2026-10-08), including the answers to Q1–Q5 below.
+**Status**: Implemented (2026-10-08) in PRs #132–#136. *Originally:* Draft for owner review (constitution Principle VII). Decisions D1–D10 below are proposals until this plan is merged; the nine in the spec's Clarifications are the owner's (2026-10-08), including the answers to Q1–Q5 below.
 
 ## Summary
 

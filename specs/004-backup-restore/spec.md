@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft for owner review. Nothing here is approved for implementation until the owner merges this plan (Principle VII).
+**Status**: Implemented (2026-10-08) in PRs #132–#136; release checks SC-005 and SC-006 in tasks.md. *Originally:* Draft for owner review. Nothing here is approved for implementation until the owner merges this plan (Principle VII).
 
 **Input**: GitHub issue #129, "Data export/backup and import/restore": *Users should be able to backup their sessions. Add options to backup and restore data. Backup (=export) should also allow user to choose export file format (for example user wants to move data to Excel). If possible/feasible show last backup date.*
 

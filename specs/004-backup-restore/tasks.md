@@ -1,6 +1,6 @@
 # Tasks: Backup and Restore
 
-**Status**: PR 1 (#131), PR 2 (#132) and PR 3 (#133) merged on 2026-10-08. PR 4 (#135) merged. PR 5, the Backup & restore screen, is verified locally and awaiting owner review. AI implements by default; the owner names any task they will write themselves.
+**Status**: PRs 1–5 (#131, #132, #133, #135, #136) merged on 2026-10-08. PR 6, the release, adds the PLAN.md milestone entry; the owner checks T050–T051 are recorded below before it merges. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
@@ -55,4 +55,23 @@
 
 - [ ] T050 (owner) SC-005: open the CSV in Excel with Finnish and US settings and in Numbers or LibreOffice; record versions and results.
 - [ ] T051 (owner) SC-006: phone and keyboard-only walkthrough; record it.
-- [ ] T052 PLAN.md → Milestones: milestone 14 entry with what it turned out to involve.
+- [x] T052 PLAN.md → Milestones: milestone 14 entry with what it turned out to involve.
+
+**T050 record (SC-005)** — owner fills in. For each: app and version, OS and regional setting, and pass/fail for columns split, numbers numeric, non-ASCII intact, no formula evaluated.
+
+| App and version | OS, regional setting | Columns | Numbers | Non-ASCII | No formulas | Notes |
+|---|---|---|---|---|---|---|
+| Excel … | …, Finnish | | | | | |
+| Excel … | …, English (US) | | | | | |
+| Numbers / LibreOffice … | … | | | | | |
+
+**T051 record (SC-006)** — owner fills in. Each flow under two minutes, excluding download time.
+
+| Flow | Device, browser | Duration | Pass/fail | Notes |
+|---|---|---|---|---|
+| Full backup | Phone … | | | |
+| Spreadsheet (CSV) | Phone … | | | |
+| Restore two torn-out pages | Phone … | | | |
+| Full backup | Desktop, keyboard only … | | | |
+| Spreadsheet (CSV) | Desktop, keyboard only … | | | |
+| Restore two torn-out pages | Desktop, keyboard only … | | | |
