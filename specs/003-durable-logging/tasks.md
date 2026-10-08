@@ -1,17 +1,17 @@
 # Tasks: Durable Logging
 
-**Status**: Draft for owner review. Tasks start only after this plan is merged (Principle VII). AI implements by default; the owner names any task they will write themselves.
+**Status**: Plan merged in #127; PR 2 implementation complete, awaiting review. AI implements by default; the owner names any task they will write themselves.
 
-## PR 1 — Plan (this PR)
+## PR 1 — Plan (merged in #127)
 
-- [ ] T001 `specs/003-durable-logging/` spec, plan, data model, contracts and tasks.
+- [x] T001 `specs/003-durable-logging/` spec, plan, data model, contracts and tasks.
 
 ## PR 2 — Token renewal (backend)
 
-- [ ] T010 `auth_time` claim in `JwtTokenFactory.CreateToken`, set at sign-in, change-password and password reset; `Jwt:RenewalCapHours` with default 12.
-- [ ] T011 `POST /auth/token` in the `auth` group with the `auth` rate limit and `Cache-Control: no-store` (contracts/api.md).
-- [ ] T012 Tests: `RenewToken_ValidToken_ReturnsFreshTokenWithSameAuthTime`, `RenewToken_PastCap_Returns403RenewalRefused`, `RenewToken_WithoutAuthTime_Returns403`, `RenewToken_AfterPasswordChange_Returns401`, `RenewToken_LinkToken_Returns401`, `RenewToken_Expired_Returns401`, `RenewToken_Suspended_Returns403` (fake `TimeProvider`).
-- [ ] T013 PLAN.md → Auth: replace "No refresh tokens" with the renewal decision (D4–D6); README.md configuration table.
+- [x] T010 `auth_time` claim in `JwtTokenFactory.CreateToken`, set at sign-in, change-password and password reset; `Jwt:RenewalCapHours` with default 12.
+- [x] T011 `POST /auth/token` in the `auth` group with the `auth` rate limit and `Cache-Control: no-store` (contracts/api.md).
+- [x] T012 Tests: `RenewToken_ValidToken_ReturnsFreshTokenWithSameAuthTime`, `RenewToken_PastCap_Returns403RenewalRefused`, `RenewToken_WithoutAuthTime_Returns403`, `RenewToken_AfterPasswordChange_Returns401`, `RenewToken_LinkToken_Returns401`, `RenewToken_Expired_Returns401`, `RenewToken_Suspended_Returns403` (fake `TimeProvider`).
+- [x] T013 PLAN.md → Auth: replace "No refresh tokens" with the renewal decision (D4–D6); README.md configuration table.
 
 ## PR 3 — Token renewal (frontend)
 

@@ -5,9 +5,8 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace GymNotebook.Api;
 
-// Static and stateless on purpose: minting a token is a pure function of (user, secret,
-// expiry) with no dependencies to inject. Both /auth/login and, later, /auth/change-password
-// call this so a token issued either way has an identical shape.
+// Static and stateless on purpose: callers supply the clock time, so a renewed token
+// keeps the original password-proof time while receiving a fresh expiry.
 //
 // It also mints and reads the *link tokens* that go into emails (specs/002 plan D2): the
 // same signed-JWT format, told apart from a session token by a "purpose" claim. The bearer
@@ -17,14 +16,21 @@ namespace GymNotebook.Api;
 public static class JwtTokenFactory
 {
     public const string PurposeClaim = "purpose";
+    public const string AuthTimeClaim = "auth_time";
 
     // Confirmation lasts long enough to survive a weekend away from the inbox; a reset
     // link, which can set a password, as short as is still practical (data-model.md).
     public static readonly TimeSpan VerifyLifetime = TimeSpan.FromHours(48);
     public static readonly TimeSpan ResetLifetime = TimeSpan.FromHours(1);
 
-    public static string CreateToken(User user, string secret, int expiryMinutes)
+    public static string CreateToken(User user, string secret, int expiryMinutes,
+        DateTimeOffset? now = null, DateTimeOffset? authTime = null)
+        => CreateToken(user.Id, user.TokenVersion, secret, expiryMinutes, now, authTime);
+
+    public static string CreateToken(int userId, int tokenVersion, string secret, int expiryMinutes,
+        DateTimeOffset? now = null, DateTimeOffset? authTime = null)
     {
+        var issuedAt = now ?? TimeProvider.System.GetUtcNow();
         // Symmetric (shared-secret) signing: the same Jwt:Secret both signs the token here
         // and verifies it wherever validation happens later. Good enough for a single API
         // that never has to hand out tokens another service must independently verify.
@@ -34,19 +40,21 @@ public static class JwtTokenFactory
         var claims = new[]
         {
             // "sub" (subject) is the standard JWT claim for "who this token is about".
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
 
             // "tv" (token_version) has no standard claim name — it's this app's own
             // revocation mechanism (see PLAN.md, Auth section). Whatever validates the
             // token later compares this against the user's current TokenVersion in the
             // database; a mismatch means the token was issued before a password change
             // and should be rejected even though it hasn't expired yet.
-            new Claim("tv", user.TokenVersion.ToString()),
+            new Claim("tv", tokenVersion.ToString()),
+            // Unix seconds are stable across time zones and can be copied on renewal.
+            new Claim(AuthTimeClaim, (authTime ?? issuedAt).ToUnixTimeSeconds().ToString()),
         };
 
         var token = new JwtSecurityToken(
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
+            expires: issuedAt.AddMinutes(expiryMinutes).UtcDateTime,
             signingCredentials: credentials);
 
         // Serializes the token to the compact "header.payload.signature" string that

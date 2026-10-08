@@ -9,6 +9,7 @@ Renews the caller's session token.
 - **200**: `{ "token": "<jwt>" }`, a token with the configured lifetime and the caller's `auth_time`. `Cache-Control: no-store`.
 - **403** `{ "code": "renewal_refused" }`: the token has no `auth_time`, or its session started more than `Jwt:RenewalCapHours` ago. The current token stays valid until it expires.
 - **429**: the per-IP `auth` rate limit.
+- **503** `{ "code": "temporarily_unavailable" }`: the account lifecycle guard could not acquire shared access; retry later.
 
 ## `GET /workouts/{id}` (changed)
 

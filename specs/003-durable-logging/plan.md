@@ -2,7 +2,7 @@
 
 **Branch**: `003-durable-logging` | **Date**: 2026-10-07 | **Spec**: [spec.md](spec.md)
 
-**Status**: Draft for owner review (constitution Principle VII). Decisions D1–D10 below are proposals until this plan is merged; the seven in the spec's Clarifications are the owner's (2026-10-07).
+**Status**: Plan merged in #127. The seven in the spec's Clarifications are the owner's (2026-10-07).
 
 ## Summary
 
@@ -32,7 +32,7 @@ See [data-model.md](data-model.md), [API contract](contracts/api.md), [UI contra
 | IV. Verification | Pass. The revision check and renewal are tested against real Postgres; the scheduler's timing with fake timers. |
 | V. Security & privacy | Pass, with one decision to review (D5). Bearer JWTs and token-version revocation are kept. A renewal needs a valid, unexpired token, so it adds no way in. What changes is that a stolen token can be kept alive until the cap or a password change, instead of 30 minutes. No new storage, so P5 stands. |
 | VI. Docs aligned | Pass. PLAN.md (Auth, API, Milestones), `docs/ui/README.md` (session editor), README.md (the new setting) change with the behaviour. PLAN.md's "No refresh tokens" decision is replaced by D4, not silently dropped. |
-| VII. Reviewed plans | This document is the draft under review. |
+| VII. Reviewed plans | The plan was reviewed and merged in #127. |
 
 ## Design decisions
 
