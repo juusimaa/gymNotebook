@@ -53,7 +53,7 @@ Two structural facts follow from this being a *notebook*, and both drive the mod
 User            (id, email, email_verified_at?, display_name, password_hash, token_version, created_at,
                  privacy_account_id, acknowledged_privacy_notice_version?, privacy_notice_acknowledged_at?, sign_in_suspended_at?)
 Exercise        (id, user_id, name, normalized_name, is_bodyweight, created_at)
-Workout         (id, user_id, date, started_at, ended_at?, title?, bodyweight_kg?, location?, notes?, created_at)
+Workout         (id, user_id, revision, date, started_at, ended_at?, title?, bodyweight_kg?, location?, notes?, created_at)
 WorkoutExercise (id, workout_id, exercise_id, position)
 SetEntry        (id, workout_exercise_id, set_number, weight?, reps, is_warmup)
 ```
@@ -70,6 +70,7 @@ SetEntry        (id, workout_exercise_id, set_number, weight?, reps, is_warmup)
 - `weight` is `numeric(6, 2)` kilograms — nullable, per the point above. No unit column: kg is what the author trains in, and plate math runs in 1.25 kg steps. If lb support is ever wanted, it arrives as a display-layer preference on `User` over a canonical kg column, which is a cheap migration precisely because every existing row is already kg.
 - `is_warmup` flags sets that shouldn't count toward the progress metric (see below).
 - **A `Workout` row is one page, so `date` is deliberately not unique per user.** Two sessions on the same Tuesday are two rows, ordered by `started_at`. The progress chart's "per session" therefore means "per workout row", and a hard morning session isn't averaged into an easy evening one.
+- **`revision` starts at 1 and increases on each heading or set write.** A client may send `expectedRevision` to avoid silently replacing changes from another device; the check and increment are one conditional database update in the page write's transaction. Omitting it keeps the older last-write-wins behavior.
 - **`date` is kept as its own column even though `started_at` contains it**, which looks redundant and isn't. `started_at` is a `timestamptz` — an instant — and the page's date is a *local calendar date*, the one the lifter would write at the top. Those come apart at the edges of the day: a session started 00.30 in Helsinki is 21.30 the previous day in UTC, so deriving the date from the instant would file late-night training on the wrong page and quietly shift points on the progress chart. Storing the date the user means, alongside the instant the session began, keeps both honest.
 - **`ended_at` is nullable and duration is derived, not stored.** You will regularly forget to close a session out; a required field that can't be filled is worse than an absent one, and a stored duration would be a second source of truth to keep in sync with the two timestamps that already imply it.
 - **`title`, `location` and `bodyweight_kg` are all optional page-heading fields.** `title` is the session label ("Push A", "Week 3 Day 2") and is what makes a history list scannable — a column of bare dates is not. `bodyweight_kg` is `numeric(5, 2)`, same kg-only reasoning as set weight, and earns its place beyond habit: bodyweight exercises chart by reps, and a logged bodyweight is what would later let an unloaded pull-up and a +10kg one be compared honestly. `location` is free text for now rather than its own table — if it ever wants autocomplete, `Exercise` is the pattern to copy.
@@ -134,6 +135,8 @@ PUT    /account/privacy/optional-details-consent -- { statementVersion }: curren
 DELETE /account/privacy/optional-details-consent -- withdraw: clears the consent and every optional detail; returns { clearedWorkouts }
 POST   /account/delete                    -- { currentPassword, confirmDeletion: true }: permanent deletion; returns only retention dates
 ```
+
+`POST /workouts` and `GET /workouts/{id}` return the page's `revision` (the list remains unchanged). `PATCH /workouts/{id}`, `PUT /workouts/{id}/exercises`, and the three set writes accept optional `expectedRevision` in their JSON bodies, except set DELETE, which takes it in the query string. They increment the revision and return it on success (set DELETE returns 204; a following GET reads it). A stale value returns 409 `{ "code": "page_changed", "revision": <current> }` without writing; another user's page still returns 404. See [specs/003-durable-logging/contracts/api.md](specs/003-durable-logging/contracts/api.md).
 
 A completed `json` export (the default when `format` is omitted) best-effort records `User.LastBackupAt` after the final flush, on a separate connection under a fresh lifecycle guard. `csv` still returns JSON for browser conversion and leaves the time unchanged. Other format values, including explicit null, return 400 `invalid_request`. The file contains the **previous** `account.lastBackupAt`; the column is removed with the account. No file or backup history is stored, and completion does not prove the browser saved it. The backup routes require authentication and use `Cache-Control: no-store`. The owner-signed processing-decision amendment (spec 004 T018/Q1) is required before deploying the unflagged export.
 

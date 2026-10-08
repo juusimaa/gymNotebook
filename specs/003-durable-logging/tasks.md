@@ -25,10 +25,10 @@ The session token had no `iat`, so its lifetime couldn't be read from the payloa
 
 ## PR 4 — Workout revision (backend)
 
-- [ ] T030 Migration `AddWorkoutRevision`; `Revision` on `Workout`; `revision` in workout responses.
-- [ ] T031 Conditional increment on every write route, with optional `expectedRevision` and `409 page_changed` (D3, contracts/api.md).
-- [ ] T032 Tests: increments on each route; stale `expectedRevision` → 409 and nothing written; missing `expectedRevision` → accepted; another user's page with any revision → 404; two concurrent PUTs with the same revision → exactly one succeeds.
-- [ ] T033 PLAN.md → API and data model.
+- [x] T030 Migration `AddWorkoutRevision`; `Revision` on `Workout`; `revision` in workout responses.
+- [x] T031 Conditional increment on every write route, with optional `expectedRevision` and `409 page_changed` (D3, contracts/api.md).
+- [x] T032 Tests: increments on each route; stale `expectedRevision` → 409 and nothing written; missing `expectedRevision` → accepted; another user's page with any revision → 404; two concurrent PUTs with the same revision → exactly one succeeds.
+- [x] T033 PLAN.md → API and data model.
 
 ## PR 5 — Autosave (frontend)
 

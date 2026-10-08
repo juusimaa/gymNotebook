@@ -1257,7 +1257,7 @@ workouts.MapPost("/", async (CreateWorkoutRequest request, ClaimsPrincipal calle
     db.Workouts.Add(workout);
     await db.SaveChangesAsync(ct);
 
-    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+    var response = new WorkoutDetailResponse(workout.Id, workout.Revision, workout.Date, workout.StartedAt, workout.EndedAt,
         workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, Exercises: []);
 
     return Results.Created($"/workouts/{workout.Id}", response);
@@ -1341,7 +1341,7 @@ workouts.MapGet("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext
 
     var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
 
-    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+    var response = new WorkoutDetailResponse(workout.Id, workout.Revision, workout.Date, workout.StartedAt, workout.EndedAt,
         workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, workoutExercises);
 
     return Results.Ok(response);
@@ -1385,6 +1385,9 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
     }
     var storeAsNull = decision == OptionalDetailsDecision.StoreAsNull;
 
+    var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
+    if (revisionError is not null) return revisionError;
+
     if (request.HasDate)
     {
         workout.Date = request.Date!.Value;
@@ -1426,16 +1429,17 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 
     var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
 
-    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+    var response = new WorkoutDetailResponse(workout.Id, revision, workout.Date, workout.StartedAt, workout.EndedAt,
         workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, workoutExercises);
     return Results.Ok(response);
 })
     .WithName("UpdateWorkout")
     .WithSummary("Updates an existing workout")
-    .WithDescription("Modifies only the supplied workout fields. Explicit null clears nullable fields; date and startedAt cannot be null. Only the owner can update their workouts. With the privacy feature on, setting a non-empty title, location, notes or bodyweight without optional-details consent gets 403 optional_details_consent_required and nothing is changed.")
+    .WithDescription("Modifies only supplied fields. Optional expectedRevision rejects a stale page with 409 page_changed. Explicit null clears nullable fields; date and startedAt cannot be null. With the privacy feature on, setting optional details without consent gets 403 optional_details_consent_required.")
     .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
     .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
+    .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
     .Produces(StatusCodes.Status404NotFound);
 
 workouts.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
@@ -1479,6 +1483,9 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
     {
         return Results.BadRequest();
     }
+
+    var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
+    if (revisionError is not null) return revisionError;
 
     // This handler genuinely needs several saves: WorkoutExercise has no Exercise
     // *navigation property* (just the raw ExerciseId), so EF Core has no way to fix up the
@@ -1551,16 +1558,17 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
 
     var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
 
-    var response = new WorkoutDetailResponse(workout.Id, workout.Date, workout.StartedAt, workout.EndedAt,
+    var response = new WorkoutDetailResponse(workout.Id, revision, workout.Date, workout.StartedAt, workout.EndedAt,
         workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, workoutExercises);
 
     return Results.Ok(response);
 })
    .WithName("ReplaceWorkoutExercises")
    .WithSummary("Replaces a workout's exercises and sets")
-   .WithDescription("Atomically replaces every exercise block and set in the workout with the ones supplied. Exercise names are get-or-create; position and set number come from array order, never from the client.")
+   .WithDescription("Atomically replaces every exercise block and set. Optional expectedRevision rejects a stale page with 409 page_changed. Exercise names are get-or-create; position and set number come from array order.")
    .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
+   .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
    .Produces(StatusCodes.Status404NotFound);
 
 // The incremental counterpart to the bulk write: one set appended from the history view,
@@ -1582,6 +1590,9 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
     {
         return Results.BadRequest();
     }
+
+    var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
+    if (revisionError is not null) return revisionError;
 
     // Same reasoning as the PUT above: the exercise and the block each need to exist in
     // the database before the next step can reference them by id, and a failure partway
@@ -1616,14 +1627,15 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
     // the new set, not the whole WorkoutDetailResponse — the caller already has the rest
     // of the page and this is an incremental add.
     return Results.Json(
-        new SetEntryResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup),
+        new SetWriteResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup, revision),
         statusCode: StatusCodes.Status201Created);
 })
    .WithName("AddWorkoutSet")
    .WithSummary("Appends a set to a workout")
-   .WithDescription("Get-or-creates the exercise and its block in this workout, then appends the set at the next set number. Returns 201 with the new set; no Location header, since single sets have no GET route.")
-   .Produces<SetEntryResponse>(StatusCodes.Status201Created)
+   .WithDescription("Get-or-creates the exercise and its block, then appends the set. Optional expectedRevision rejects a stale page with 409 page_changed. Returns 201 with the set and new revision; no Location header, since single sets have no GET route.")
+   .Produces<SetWriteResponse>(StatusCodes.Status201Created)
    .Produces(StatusCodes.Status400BadRequest)
+   .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
    .Produces(StatusCodes.Status404NotFound);
 
 workouts.MapPatch("/{id:int}/sets/{setId:int}", async (int id, int setId, UpdateSetRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
@@ -1643,6 +1655,9 @@ workouts.MapPatch("/{id:int}/sets/{setId:int}", async (int id, int setId, Update
         return Results.NotFound();
     }
 
+    var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
+    if (revisionError is not null) return revisionError;
+
     // All three applied unconditionally — see UpdateSetRequest for why this one isn't the
     // sparse shape the other PATCH endpoints use. SetNumber and WorkoutExerciseId stay put:
     // moving a set between blocks or renumbering it is not what this route is for.
@@ -1652,15 +1667,16 @@ workouts.MapPatch("/{id:int}/sets/{setId:int}", async (int id, int setId, Update
 
     await db.SaveChangesAsync(ct);
 
-    return Results.Ok(new SetEntryResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup));
+    return Results.Ok(new SetWriteResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup, revision));
 })
    .WithName("UpdateWorkoutSet")
    .WithSummary("Updates a set")
-   .WithDescription("Replaces the weight, reps and warm-up flag of one set. All three are applied, so weight can be cleared by sending null.")
-   .Produces<SetEntryResponse>(StatusCodes.Status200OK)
+   .WithDescription("Replaces the weight, reps and warm-up flag of one set. All three are applied. Optional expectedRevision rejects a stale page with 409 page_changed.")
+   .Produces<SetWriteResponse>(StatusCodes.Status200OK)
+   .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
    .Produces(StatusCodes.Status404NotFound);
 
-workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, int? expectedRevision, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
     var userId = ParseUserId(caller);
     var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
@@ -1677,6 +1693,9 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
         return Results.NotFound();
     }
 
+    var (_, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, expectedRevision, ct);
+    if (revisionError is not null) return revisionError;
+
     // Nothing hangs off a SetEntry, so there's no cascade to think about — and the
     // surviving sets in the block keep their numbers rather than being renumbered, which
     // would change the ids the client is holding for rows it didn't touch.
@@ -1687,8 +1706,9 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
 })
    .WithName("DeleteWorkoutSet")
    .WithSummary("Deletes a set")
-   .WithDescription("Removes one set from a workout. The remaining sets in the block keep their set numbers.")
+   .WithDescription("Removes one set from a workout. Optional expectedRevision query parameter rejects a stale page with 409 page_changed. Remaining sets keep their set numbers.")
    .Produces(StatusCodes.Status204NoContent)
+   .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
    .Produces(StatusCodes.Status404NotFound);
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
@@ -1743,6 +1763,37 @@ static int ParseUserId(ClaimsPrincipal user)
         throw new InvalidOperationException("Authenticated user has no valid sub claim.");
     }
     return userId;
+}
+
+// Claim the next revision with one conditional UPDATE. This runs in the lifecycle
+// filter's transaction, so a later validation failure rolls the claim back with the
+// page write. PostgreSQL locks the row during the UPDATE: concurrent saves carrying
+// the same expected revision cannot both pass.
+static async Task<(int Revision, IResult? Error)> BumpWorkoutRevisionAsync(
+    AppDbContext db, Workout workout, int userId, int? expectedRevision, CancellationToken ct)
+{
+    var updated = await db.Workouts
+        .Where(w => w.Id == workout.Id && w.UserId == userId &&
+            (expectedRevision == null || w.Revision == expectedRevision))
+        .ExecuteUpdateAsync(s => s.SetProperty(w => w.Revision, w => w.Revision + 1), ct);
+
+    var current = await db.Workouts.AsNoTracking()
+        .Where(w => w.Id == workout.Id && w.UserId == userId)
+        .Select(w => (int?)w.Revision)
+        .SingleOrDefaultAsync(ct);
+
+    if (current is null) return (0, Results.NotFound());
+    if (updated == 0)
+    {
+        return (0, Results.Json(new PageChangedResponse("page_changed", current.Value),
+            statusCode: StatusCodes.Status409Conflict));
+    }
+
+    // ExecuteUpdate bypasses EF's tracker. Keep the tracked entity aligned so later
+    // SaveChanges for PATCH doesn't write an old revision back over the claimed one.
+    db.Entry(workout).Property(w => w.Revision).CurrentValue = current.Value;
+    db.Entry(workout).Property(w => w.Revision).IsModified = false;
+    return (current.Value, null);
 }
 
 // The one definition of what an ExerciseResponse looks like, shared by GET /exercises and

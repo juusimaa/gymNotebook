@@ -66,6 +66,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Workout>(entity =>
         {
+            entity.Property(w => w.Revision).HasDefaultValue(1);
             entity.Property(w => w.BodyweightKg).HasPrecision(5, 2);
             entity.Property(w => w.CreatedAt).HasDefaultValueSql("now()");
 

@@ -1,3 +1,3 @@
 namespace GymNotebook.Api;
 
-public record CreateSetRequest(string ExerciseName, decimal? Weight, int Reps, bool IsWarmup);
+public record CreateSetRequest(string ExerciseName, decimal? Weight, int Reps, bool IsWarmup, int? ExpectedRevision = null);

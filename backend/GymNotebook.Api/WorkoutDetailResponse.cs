@@ -2,6 +2,7 @@ namespace GymNotebook.Api;
 
 public record WorkoutDetailResponse(
     int Id,
+    int Revision,
     DateOnly Date,
     DateTimeOffset StartedAt,
     DateTimeOffset? EndedAt,

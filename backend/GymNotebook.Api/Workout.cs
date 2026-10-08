@@ -4,6 +4,7 @@ public class Workout
 {
     public int Id { get; set; }
     public int UserId { get; set; }
+    public int Revision { get; set; } = 1;
     public DateOnly Date { get; set; }
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? EndedAt { get; set; }
