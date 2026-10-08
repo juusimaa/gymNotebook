@@ -1,6 +1,6 @@
 # Tasks: Backup and Restore
 
-**Status**: PR 1 merged (#131, 2026-10-08). PR 2 backend implementation verified locally; awaiting owner review. AI implements by default; the owner names any task they will write themselves.
+**Status**: PR 1 (#131) and PR 2 (#132) merged on 2026-10-08. PR 3 backend implementation is verified locally and awaiting owner review. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
@@ -25,12 +25,14 @@
 
 ## PR 3 — Restore (backend)
 
-- [ ] T020 Restore DTOs and `NotebookRestore.Validate`: shape, version, references, values through the same validation helpers as the workout routes (extract them where they're inline today, without changing behaviour).
-- [ ] T021 `NotebookRestore.RestoreAsync`: shared lifecycle lock, restore advisory lock (new namespace), one transaction, the startedAt lookup in one query, exercise matching by `NormalizedName`, inserts per table, consent dropping (D7, D10).
-- [ ] T022 `POST /account/restore`: per-endpoint `MaxRequestBodySize` from `Restore:MaxBytes`, the per-account rate limit, the responses in contracts/api.md.
-- [ ] T023 Tests: `Restore_IntoEmptyAccount_AddsEverything`, `Restore_SameFileTwice_AddsNothing`, `Restore_ExistingStartedAt_SkipsPageUntouched`, `Restore_MatchingName_UsesExistingExercise`, `Restore_ClassificationDiffers_KeepsExisting`, `Restore_UnusedExercise_NotCreated`, `Restore_ForeignIds_NeverReachOtherUsers`, `Restore_BrokenReference_Returns400AndWritesNothing`, `Restore_InvalidValue_Returns400AndWritesNothing`, `Restore_UnsupportedVersion_Returns400`, `Restore_TooLarge_Returns413`, `Restore_NoConsentFlagOn_DropsOptionalDetails`, `Restore_FileConsent_NeverApplied`, `Restore_Concurrent_Returns429`, `Restore_DuringDeletion_LeavesNothing`.
-- [ ] T024 Reference round trip and timing on the 100,000-set fixture (SC-001, SC-003).
-- [ ] T025 Docs: PLAN.md (API, Auth → lifecycle coordination covers restore), README.md (`Restore__MaxBytes`).
+- [x] T020 Restore DTOs and `NotebookRestore.Validate`: shape, version, references and values; the exercise-name rule is shared with the workout routes without changing their behaviour.
+- [x] T021 `NotebookRestore.RestoreAsync`: shared lifecycle lock, restore advisory lock (new namespace), one transaction, the startedAt lookup in one query, exercise matching by `NormalizedName`, inserts per table, consent dropping (D7, D10).
+- [x] T022 `POST /account/restore`: per-endpoint `MaxRequestBodySize` from `Restore:MaxBytes`, the per-account rate limit, the responses in contracts/api.md.
+- [x] T023 Integration tests cover empty-account import, repeat and existing-page skips, exercise matching and classification, unused exercises, foreign file IDs, invalid values/references/version, real-Kestrel 413, consent on/off and ignored file consent, concurrent restore 429, rate limiting, and both restore/deletion orderings.
+- [x] T024 Reference export-to-restore round trip and timing on the 100,000-set fixture (SC-001, SC-003), comparing every restored notebook field apart from newly assigned IDs and creation time; completes under 60 s locally.
+- [x] T025 Docs: PLAN.md (API, Auth → lifecycle coordination covers restore), README.md and `.env.example` (`Restore__MaxBytes`).
+
+**PR 3 verification (2026-10-08):** all 446 backend tests pass against real PostgreSQL, including the 100,000-set full-field round trip, real-Kestrel upload cap and restore/deletion races. `dotnet format --verify-no-changes` and `git diff --check` pass. No database migration or new dependency.
 
 ## PR 4 — CSV writer and file pre-check (frontend helpers)
 

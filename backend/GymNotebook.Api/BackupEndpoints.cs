@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GymNotebook.Api.Data;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace GymNotebook.Api;
@@ -7,7 +8,7 @@ namespace GymNotebook.Api;
 // Backup is available independently of the privacy rollout (specs/004 D2).
 public static class BackupEndpoints
 {
-    public static void MapBackupEndpoints(this IEndpointRouteBuilder app)
+    public static void MapBackupEndpoints(this IEndpointRouteBuilder app, RestoreOptions restoreOptions, bool privacyLifecycleEnabled)
     {
         // User story 3: the notebook export. Deliberately *not* under the lifecycle filter
         // (it's on LifecycleCoverageTests' allow-list): the filter would hold shared access
@@ -32,6 +33,25 @@ public static class BackupEndpoints
            .Produces(StatusCodes.Status200OK, contentType: "application/json")
            .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
            .Produces(StatusCodes.Status401Unauthorized)
+           .Produces(StatusCodes.Status415UnsupportedMediaType)
+           .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests)
+           .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
+
+        app.MapPost("/account/restore", (HttpContext http, NotebookRestore restore) =>
+            restore.RunAsync(http, privacyLifecycleEnabled))
+           .RequireAuthorization()
+           .RequireAccountLifecycle()
+           .WithMetadata(new BackupNoStoreMetadata(), new RequestSizeLimitAttribute(restoreOptions.MaxBytes))
+           .RequireRateLimiting("restore")
+           .WithName("RestoreNotebook")
+           .WithTags("Backup")
+           .WithSummary("Adds missing workout pages from a full backup")
+           .WithDescription("Validates a version 1 backup and atomically adds only pages whose start times are absent. File account and privacy records are ignored.")
+           .Accepts<RestoreFile>("application/json")
+           .Produces<RestoreResponse>(StatusCodes.Status200OK)
+           .Produces<RestoreError>(StatusCodes.Status400BadRequest)
+           .Produces(StatusCodes.Status401Unauthorized)
+           .Produces(StatusCodes.Status413PayloadTooLarge)
            .Produces(StatusCodes.Status415UnsupportedMediaType)
            .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests)
            .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
