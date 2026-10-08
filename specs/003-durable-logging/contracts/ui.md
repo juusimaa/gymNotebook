@@ -4,7 +4,7 @@ Only the session editor changes on screen. All copy is proposed and open to revi
 
 ## Save state in the date line
 
-The date line ("Today 09.34 · add details") gains the save state at its end, as a polite live region. It never moves focus.
+The date line ("Today 09.34 · add details") gains the save state, as a polite live region. It never moves focus. *As built (PR 5):* the state sits on its own line directly under the dateline rather than inside it, because the dateline is a button and a live region inside it would change the button's name; the incomplete-row notice names the exercise, since "Set 3" alone could be in any block; and a heading the autosave can't send reads "Not saved: Enter a valid date and start time." in `--color-error`.
 
 | State | Text | Style |
 | --- | --- | --- |
@@ -12,13 +12,14 @@ The date line ("Today 09.34 · add details") gains the save state at its end, as
 | Waiting / saving | "Saving…" | muted |
 | Saved | "Saved 09.42" | muted |
 | Failed, retrying | "Not saved — retrying" | `--color-error` |
-| Incomplete row for 60 s | "Set 3 needs reps" (or "weight") | muted |
+| Incomplete row for 60 s | "Bench Press set 3 needs reps" (or "weight") | muted |
 | Conflict | "This page changed on another device." + **Reload page** (44px text button) | `--color-error` |
 | Deleted elsewhere | "This page no longer exists." | `--color-error` |
 
 ## Footer
 
-- **In-progress page** (new, or Continue logging): only **Finish session** (primary, full width), which flushes any pending save, then confirms as in #118. No Save button: autosave covers it (owner, 2026-10-07).
+- **In-progress page** (new, or Continue logging): only **Finish session** (primary, full width), which flushes any pending save, then confirms as in #118. No Save button: autosave covers it (owner, 2026-10-07). *As built:* the edit page of a session in progress has no Finished field either, since a time typed there would never be saved; Finish session is how it ends.
+- **After a conflict**, Cancel on a new page asks the ordinary discard question rather than offering to tear the page out, which would delete the other device's sets too.
 - **Finished page**: unchanged, explicit **Save changes**.
 
 ## Cancel on a new page

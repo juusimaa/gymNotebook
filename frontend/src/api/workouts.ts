@@ -31,6 +31,11 @@ export interface WorkoutExerciseResponse {
 // when the user did not supply a value.
 export interface WorkoutDetailResponse {
   id: number
+  // Goes up by one with every write to the page or its sets. A write may send
+  // the revision it was based on as expectedRevision; if the page has moved on
+  // since (another device saved it), the write is refused with 409
+  // page_changed and nothing is written (specs/003-durable-logging D3).
+  revision: number
   date: string
   startedAt: string
   endedAt: string | null
@@ -63,12 +68,14 @@ export interface UpdateWorkoutRequest {
   bodyweightKg?: number | null
   location?: string | null
   notes?: string | null
+  expectedRevision?: number
 }
 
 // The new-workout screen owns the complete draft, so saving replaces all blocks
 // and sets in one atomic request instead of sending one request per set.
 export interface PutWorkoutExercisesRequest {
   exercises: PutWorkoutExerciseInput[]
+  expectedRevision?: number
 }
 
 // Names, not exercise ids, are the write contract. The backend normalizes each name,
@@ -143,6 +150,9 @@ export function updateWorkout(
 export function deleteWorkout(id: number): Promise<void> {
   return request<void>(`/workouts/${id}`, { method: 'DELETE' })
 }
+
+// The 409 a write gets when its expectedRevision is stale.
+export const PAGE_CHANGED = 'page_changed'
 
 // Atomically replaces the workout's entire exercise/set contents. The response is
 // the freshly persisted detail, including ids, positions expressed as array order,

@@ -5,6 +5,7 @@ import {
   countDraftSets,
   describeDiscard,
   describeDraftSavedAt,
+  describeTearOut,
   draftFingerprint,
   editorDraftKey,
   holdEditorDraftsForSignIn,
@@ -135,6 +136,47 @@ describe('saveEditorDraft and loadEditorDraft', () => {
     )
 
     expect(loadEditorDraft(newPage, 7, store)?.savedWorkoutId).toBe(55)
+  })
+
+  // A restored copy saves itself against the revision it was made on, so a
+  // reload can't skip the version check (specs/003 D10).
+  it('keeps the revision the changes were made on', () => {
+    const store = fakeStore()
+
+    saveEditorDraft(
+      editPage,
+      { ownerId: 7, savedWorkoutId: 12, revision: 4, ...sampleContent() },
+      savedAt,
+      store,
+    )
+
+    expect(loadEditorDraft(editPage, 7, store)?.revision).toBe(4)
+  })
+
+  it('restores a copy stored before the revision existed', () => {
+    const store = fakeStore()
+    saveSample(store, editPage)
+    const stored = JSON.parse(
+      store.entries.get(editorDraftKey(editPage)) ?? '{}',
+    ) as Record<string, unknown>
+    delete stored.revision
+    store.entries.set(editorDraftKey(editPage), JSON.stringify(stored))
+
+    expect(loadEditorDraft(editPage, 7, store)).not.toBeNull()
+  })
+
+  it('treats a malformed revision as no draft', () => {
+    const store = fakeStore()
+    saveSample(store, editPage)
+    const stored = JSON.parse(
+      store.entries.get(editorDraftKey(editPage)) ?? '{}',
+    ) as Record<string, unknown>
+    store.entries.set(
+      editorDraftKey(editPage),
+      JSON.stringify({ ...stored, revision: '4' }),
+    )
+
+    expect(loadEditorDraft(editPage, 7, store)).toBeNull()
   })
 
   it("never returns another account's draft, and removes it", () => {
@@ -440,5 +482,20 @@ describe('describeDraftSavedAt', () => {
     expect(
       describeDraftSavedAt(savedAt.toISOString(), new Date(2026, 9, 6, 8)),
     ).toBe('4 October 2026, 09.42')
+  })
+})
+
+describe('describeTearOut', () => {
+  it('names the sets that go with the page', () => {
+    expect(describeTearOut(2)).toBe(
+      'Tear out this page? Its 2 sets go with it.',
+    )
+    expect(describeTearOut(1)).toBe(
+      'Tear out this page? Its 1 set goes with it.',
+    )
+  })
+
+  it('asks plainly when there are no sets', () => {
+    expect(describeTearOut(0)).toBe('Tear out this page?')
   })
 })

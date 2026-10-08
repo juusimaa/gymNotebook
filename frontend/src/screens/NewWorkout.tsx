@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -9,7 +10,13 @@ import {
   type MouseEvent,
 } from 'react'
 import { flushSync } from 'react-dom'
-import { Link, useNavigate, useParams, useRouteLoaderData } from 'react-router'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useRouteLoaderData,
+} from 'react-router'
 import type { MeResponse } from '../api/auth'
 import { ApiError, isOptionalDetailsConsentRequired } from '../api/client'
 import {
@@ -19,14 +26,20 @@ import {
 } from '../api/exercises'
 import {
   createWorkout,
+  deleteWorkout,
   getWorkout,
+  PAGE_CHANGED,
   replaceWorkoutExercises,
   updateWorkout,
+  type CreateWorkoutRequest,
+  type UpdateWorkoutRequest,
 } from '../api/workouts'
 import {
   addSetToExercise,
   type DraftFieldRef,
   describeDraftSet,
+  describeIncompleteSet,
+  describeUnsavedSets,
   type ExistingWorkoutDraft,
   createExistingWorkoutDraft,
   createInitialHeadingDraft,
@@ -34,8 +47,11 @@ import {
   createWorkoutExerciseDraft,
   describeHeadingWhen,
   dropOptionalDetails,
+  findIncompleteSet,
   needsExplicitFinishTime,
+  prepareAutosaveDraft,
   prepareWorkoutDraft,
+  type PreparedWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
   updateSetInExercise,
@@ -52,6 +68,7 @@ import {
   countDraftSets,
   describeDiscard,
   describeDraftSavedAt,
+  describeTearOut,
   draftFingerprint,
   loadEditorDraft,
   removeEditorDraft,
@@ -64,8 +81,15 @@ import {
   normalizeExerciseName,
 } from './exerciseFormat'
 import { OptionalDetailsChoice } from './OptionalDetailsConsent'
+import {
+  createIncompleteRowWatch,
+  createSaveScheduler,
+  type SaveOutcome,
+  type SaveStatus,
+} from './saveScheduler'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import { useVisualViewportHeight } from './useVisualViewportHeight'
+import { formatWorkoutTime } from './workoutFormat'
 import './NewWorkout.css'
 
 // The latest removal, kept so its "Removed … · Undo" line can put it back
@@ -162,15 +186,102 @@ const selectOnFocusProps = {
 // /workouts/new and /workouts/:id/edit render the same component. The key
 // gives each route (and each workout) its own editor instance, so the state
 // initialised from that route's stored draft never carries over to another.
+//
+// One exception: a new page's first autosave moves the address to its edit
+// page (specs/003 D9). That is still the same page being written, so the
+// address change carries the new page's key in router state, and the editor
+// (with its focus, and the phone's keyboard) stays as it is.
+const KEEP_NEW_PAGE_EDITOR = { editorKey: 'new' }
+
+function readEditorKey(state: unknown): string | null {
+  return typeof state === 'object' &&
+    state !== null &&
+    'editorKey' in state &&
+    typeof state.editorKey === 'string'
+    ? state.editorKey
+    : null
+}
+
 export default function NewWorkout() {
   const { workoutId } = useParams()
-  return <WorkoutEditor key={workoutId ?? 'new'} />
+  const location = useLocation()
+  return (
+    <WorkoutEditor key={readEditorKey(location.state) ?? workoutId ?? 'new'} />
+  )
+}
+
+// A write refused because the page moved on (409 page_changed) or is gone
+// (404): autosave stops, and the date line says which (specs/003 D10).
+type PageProblem = 'conflict' | 'gone'
+
+function pageProblemOf(error: unknown): PageProblem | null {
+  if (!(error instanceof ApiError)) return null
+  if (error.status === 409 && error.code === PAGE_CHANGED) return 'conflict'
+  if (error.status === 404) return 'gone'
+  return null
+}
+
+// What an autosave of this content would send, as one comparable string,
+// and how many complete sets that is. An edit that changes neither (typing
+// into a row that isn't complete yet) has nothing new to save.
+interface AutosaveTrigger {
+  fingerprint: string
+  setCount: number
+}
+
+function autosaveTrigger(
+  heading: WorkoutHeadingDraft,
+  exercises: WorkoutExerciseDraft[],
+): AutosaveTrigger {
+  const prepared = prepareAutosaveDraft(heading, exercises)
+  return prepared.ok
+    ? {
+        fingerprint: JSON.stringify(prepared.value),
+        setCount: prepared.setCount,
+      }
+    : { fingerprint: `invalid: ${prepared.message}`, setCount: 0 }
+}
+
+// What the server holds once a page is loaded (or reloaded after a conflict).
+function describeServerPage(draft: ExistingWorkoutDraft) {
+  const prepared = prepareAutosaveDraft(draft.heading, draft.exercises)
+  return {
+    heading: prepared.ok ? prepared.value.workout : null,
+    exercises: prepared.ok
+      ? JSON.stringify(prepared.value.exercises.exercises)
+      : null,
+    trigger: autosaveTrigger(draft.heading, draft.exercises),
+  }
+}
+
+// Gives blocks the exercise ids a save has just learned, by block client id.
+function withExerciseIds(
+  exercises: WorkoutExerciseDraft[],
+  ids: Map<string, number>,
+): WorkoutExerciseDraft[] {
+  return exercises.map((exercise) => {
+    const exerciseId = ids.get(exercise.clientId)
+    return exercise.exerciseId === null && exerciseId !== undefined
+      ? { ...exercise, exerciseId }
+      : exercise
+  })
+}
+
+// What a save sends: the prepared page, and which editor block each sent
+// block came from (an autosave leaves out blocks with no complete set).
+interface DraftSnapshot {
+  prepared: PreparedWorkoutDraft
+  blockIndexes: number[]
+  exercises: WorkoutExerciseDraft[]
 }
 
 function WorkoutEditor() {
   const navigate = useNavigate()
   const user = useRouteLoaderData('auth') as MeResponse
-  const { workoutId: workoutIdParam } = useParams()
+  const params = useParams()
+  // Read once: after a new page's first save the address becomes its edit
+  // page, but this stays the new page's editor (see KEEP_NEW_PAGE_EDITOR).
+  const [workoutIdParam] = useState(params.workoutId)
   const parsedWorkoutId = Number(workoutIdParam)
   const isEditing = workoutIdParam !== undefined
   const hasValidWorkoutId =
@@ -180,14 +291,14 @@ function WorkoutEditor() {
   // in this tab's sessionStorage, so a reload, a locked phone or an expired
   // sign-in doesn't lose a half-logged session. The copy this route left is
   // read once, at mount, and wins over a fresh page or the server's copy.
-  const draftRoute = useMemo<EditorDraftRoute | null>(() => {
+  const [initialRoute] = useState<EditorDraftRoute | null>(() => {
     if (!isEditing) return { kind: 'new' }
     return hasValidWorkoutId
       ? { kind: 'edit', workoutId: parsedWorkoutId }
       : null
-  }, [hasValidWorkoutId, isEditing, parsedWorkoutId])
+  })
   const [restoredDraft] = useState(() =>
-    draftRoute === null ? null : loadEditorDraft(draftRoute, user.userId),
+    initialRoute === null ? null : loadEditorDraft(initialRoute, user.userId),
   )
   // Shown as "Restored … from 09.42" until the page is saved or discarded.
   const [restoredAt, setRestoredAt] = useState<string | null>(
@@ -227,9 +338,9 @@ function WorkoutEditor() {
   const [exerciseSearchMessage, setExerciseSearchMessage] = useState<
     string | null
   >(null)
-  const [savingAction, setSavingAction] = useState<'save' | 'finish' | null>(
-    null,
-  )
+  const [savingAction, setSavingAction] = useState<
+    'save' | 'finish' | 'tear-out' | 'keep' | null
+  >(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(isEditing)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
@@ -283,6 +394,61 @@ function WorkoutEditor() {
       ? parsedWorkoutId
       : (restoredDraft?.savedWorkoutId ?? null),
   )
+  // The same id for code running after an await, which would otherwise see
+  // the value from the render it started in.
+  const savedWorkoutIdRef = useRef(savedWorkoutId)
+
+  // The stored copy's key: the route this editor opened on, except that a new
+  // page moves to its edit page's key once it exists on the server (D9).
+  const draftRoute = useMemo<EditorDraftRoute | null>(() => {
+    if (isEditing) return initialRoute
+    return savedWorkoutId === null
+      ? { kind: 'new' }
+      : { kind: 'edit', workoutId: savedWorkoutId }
+  }, [initialRoute, isEditing, savedWorkoutId])
+
+  // — Autosave (specs/003-durable-logging) —
+  // A session still in progress saves itself: a new page, or an edit page
+  // opened without a finish time. A finished page being corrected keeps the
+  // explicit Save changes. Decided when the page opens, so typing a finish
+  // time into the heading doesn't switch modes under the lifter's thumb.
+  const [isInProgress, setIsInProgress] = useState(!isEditing)
+  // The page revision this editor's changes are based on, sent with every
+  // write as expectedRevision (FR-011). A restored copy brings the revision
+  // it was made on.
+  const revisionRef = useRef<number | null>(restoredDraft?.revision ?? null)
+  // The revision of the page as loaded, for "Discard changes".
+  const serverRevision = useRef<number | null>(null)
+  // What the server holds, as last sent or loaded, so a save sends only the
+  // half that changed: the heading's fields, and the blocks as JSON.
+  const savedHeadingRef = useRef<CreateWorkoutRequest | null>(null)
+  const savedExercisesRef = useRef<string | null>(null)
+  // Exercises created by a save whose bodyweight choice hasn't been stored
+  // yet; retried with the next save if the PATCH fails.
+  const pendingBodyweightIds = useRef(new Set<number>())
+  // What autosave last saw, to tell a real change from a re-render. A new
+  // page starts from nothing, so a restored copy saves itself at once.
+  const lastAutosaveTrigger = useRef<AutosaveTrigger>({
+    fingerprint: '',
+    setCount: 0,
+  })
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
+  const [pageProblem, setPageProblem] = useState<PageProblem | null>(null)
+  // The same, for code running after an await.
+  const pageProblemRef = useRef(pageProblem)
+  useEffect(() => {
+    pageProblemRef.current = pageProblem
+  })
+  // A heading the autosave can't send ("Enter a valid date and start time.").
+  const [autosaveProblem, setAutosaveProblem] = useState<string | null>(null)
+  // After a conflict reload: what existed only in this tab (D10).
+  const [unsavedHere, setUnsavedHere] = useState<string[] | null>(null)
+  const [confirmingTearOut, setConfirmingTearOut] = useState(false)
+  const keepPageRef = useRef<HTMLButtonElement>(null)
+  // False once the editor has gone: a save finishing after that leaves the
+  // screen alone.
+  const isMounted = useRef(true)
 
   useEffect(() => {
     let cancelled = false
@@ -305,6 +471,16 @@ function WorkoutEditor() {
           const draft = createExistingWorkoutDraft(workout, createClientId)
           serverDraft.current = draft
           setBaseline(draftFingerprint(draft))
+          const known = describeServerPage(draft)
+          savedHeadingRef.current = known.heading
+          savedExercisesRef.current = known.exercises
+          lastAutosaveTrigger.current = known.trigger
+          // A restored copy keeps the revision it was made on, so if the
+          // page has moved on since, its save is refused rather than
+          // overwriting the other device's sets. A copy from before the
+          // revision existed can only take the server's.
+          serverRevision.current = workout.revision
+          revisionRef.current = restoredDraft?.revision ?? workout.revision
           // Unsaved changes from before a reload or sign-in win over the
           // server's copy; "Discard changes" goes back to it.
           const shown = restoredDraft ?? draft
@@ -313,6 +489,7 @@ function WorkoutEditor() {
           setExercises(shown.exercises)
           setRestoredAt(restoredDraft?.savedAt ?? null)
           setSavedWorkoutId(workout.id)
+          setIsInProgress(draft.endTime === '')
 
           // A session still in progress shows "last time" on the blocks it
           // already has, as it does on blocks picked now; a finished page
@@ -338,9 +515,9 @@ function WorkoutEditor() {
           if (
             error instanceof ApiError &&
             error.status === 404 &&
-            draftRoute !== null
+            initialRoute !== null
           ) {
-            removeEditorDraft(draftRoute)
+            removeEditorDraft(initialRoute)
           }
           setLoadMessage(
             error instanceof ApiError && error.status === 404
@@ -360,44 +537,64 @@ function WorkoutEditor() {
     return () => {
       cancelled = true
     }
-  }, [draftRoute, hasValidWorkoutId, isEditing, parsedWorkoutId, restoredDraft])
+  }, [
+    hasValidWorkoutId,
+    initialRoute,
+    isEditing,
+    parsedWorkoutId,
+    restoredDraft,
+  ])
 
-  const cancelTarget = isEditing ? `/workouts/${parsedWorkoutId}` : '/workouts'
+  // A page deleted elsewhere has no page of its own to go back to.
+  const cancelTarget =
+    isEditing && pageProblem !== 'gone'
+      ? `/workouts/${parsedWorkoutId}`
+      : '/workouts'
 
   const isDirty =
     !isLoading && draftFingerprint({ heading, endTime, exercises }) !== baseline
 
-  // Keeps the stored copy in step with the draft: written while it differs
-  // from where it started, removed when it doesn't. Without consent the four
-  // optional details are never stored (they're never shown or sent either).
+  // Writes the stored copy while the draft differs from what the server has,
+  // and removes it when it doesn't. Without consent the four optional details
+  // are never stored (they're never shown or sent either). It records the
+  // revision the changes are based on, so a restored copy still meets the
+  // version check. No token: the session has ended and invalidation has
+  // already cleared or held the copy; writing now would undo that.
+  const detailsNotAllowed = optionalDetails.status === 'not-allowed'
+  const writeStoredDraft = useCallback(
+    (
+      route: EditorDraftRoute,
+      content: {
+        heading: WorkoutHeadingDraft
+        endTime: string
+        exercises: WorkoutExerciseDraft[]
+      },
+      dirty: boolean,
+    ) => {
+      if (isDraftClosed.current || getToken() === null) return
+      if (!dirty) {
+        removeEditorDraft(route)
+        return
+      }
+      saveEditorDraft(route, {
+        ownerId: user.userId,
+        savedWorkoutId: savedWorkoutIdRef.current,
+        revision: revisionRef.current,
+        heading: detailsNotAllowed
+          ? dropOptionalDetails(content.heading)
+          : content.heading,
+        endTime: content.endTime,
+        exercises: content.exercises,
+      })
+    },
+    [detailsNotAllowed, user.userId],
+  )
+
+  // Keeps the stored copy in step with every edit. lastSavedAt is here so a
+  // save, which moves the revision on, rewrites it too.
   useEffect(() => {
-    if (
-      draftRoute === null ||
-      isLoading ||
-      loadMessage !== null ||
-      isDraftClosed.current
-    ) {
-      return
-    }
-    // No token: the session has ended and invalidation has already cleared
-    // or held the copy. Writing now would undo that.
-    if (getToken() === null) {
-      return
-    }
-    if (!isDirty) {
-      removeEditorDraft(draftRoute)
-      return
-    }
-    saveEditorDraft(draftRoute, {
-      ownerId: user.userId,
-      savedWorkoutId,
-      heading:
-        optionalDetails.status === 'not-allowed'
-          ? dropOptionalDetails(heading)
-          : heading,
-      endTime,
-      exercises,
-    })
+    if (draftRoute === null || isLoading || loadMessage !== null) return
+    writeStoredDraft(draftRoute, { heading, endTime, exercises }, isDirty)
   }, [
     draftRoute,
     endTime,
@@ -405,10 +602,9 @@ function WorkoutEditor() {
     heading,
     isDirty,
     isLoading,
+    lastSavedAt,
     loadMessage,
-    optionalDetails.status,
-    savedWorkoutId,
-    user.userId,
+    writeStoredDraft,
   ])
 
   // The discard question takes focus so a keyboard user lands on the safe
@@ -438,6 +634,7 @@ function WorkoutEditor() {
 
     if (action === 'leave') {
       isDraftClosed.current = true
+      void scheduler.stop()
       void navigate(cancelTarget)
       return
     }
@@ -446,6 +643,8 @@ function WorkoutEditor() {
       setHeading(serverDraft.current.heading)
       setEndTime(serverDraft.current.endTime)
       setExercises(serverDraft.current.exercises)
+      // Back to the server's page, so back to its revision too.
+      revisionRef.current = serverRevision.current
     } else {
       const fresh = createInitialHeadingDraft(new Date())
       setBaseline(
@@ -455,6 +654,11 @@ function WorkoutEditor() {
       setEndTime('')
       setExercises([])
       setSavedWorkoutId(null)
+      savedWorkoutIdRef.current = null
+      revisionRef.current = null
+      savedHeadingRef.current = null
+      savedExercisesRef.current = null
+      setLastSavedAt(null)
     }
   }
 
@@ -819,7 +1023,7 @@ function WorkoutEditor() {
     // edit page's search leaves the page itself out (excludeWorkoutId), so
     // it's never one of this page's own sets. A finished page being
     // corrected gets none: its "last time" could be a later session.
-    const isLogging = !isEditing || serverDraft.current?.endTime === ''
+    const isLogging = isInProgress
     const draft = createWorkoutExerciseDraft(
       createClientId(),
       createClientId(),
@@ -885,12 +1089,309 @@ function WorkoutEditor() {
     }))
   }
 
-  function openFinishQuestion() {
+  // — Saving —
+
+  // The heading as a PATCH: only fields that differ from the server's, so
+  // an unchanged heading costs no request. The four optional details are
+  // left out entirely unless the account allows them: omitted keeps what the
+  // server has, where null would clear it while consent is still loading.
+  function headingChanges(
+    workout: CreateWorkoutRequest,
+  ): UpdateWorkoutRequest | null {
+    const saved = savedHeadingRef.current
+    const fields: (keyof CreateWorkoutRequest)[] = detailsAllowed
+      ? ['date', 'startedAt', 'title', 'bodyweightKg', 'location', 'notes']
+      : ['date', 'startedAt']
+    const changes: UpdateWorkoutRequest = {}
+    for (const field of fields) {
+      if (saved === null || saved[field] !== workout[field]) {
+        Object.assign(changes, { [field]: workout[field] })
+      }
+    }
+    return Object.keys(changes).length === 0 ? null : changes
+  }
+
+  // Writes one snapshot of the draft (D1: the same bulk PUT as before, not
+  // per-set routes). The first time, it creates the page. After that it
+  // sends the heading only when it changed and the blocks only when they
+  // changed, and a finish time when given (null reopens the page). Every
+  // write carries the revision this editor holds and keeps the one that
+  // comes back (FR-011), so a stale write is refused, not applied. A new
+  // exercise saved as bodyweight gets that choice stored once it has an id.
+  // Returns the page's id and the exercise ids it learned, by block client
+  // id; throws what the API threw.
+  async function persistDraft(
+    snapshot: DraftSnapshot,
+    endedAt?: string | null,
+  ): Promise<{ workoutId: number; learnedIds: Map<string, number> }> {
+    const { workout, exercises } = snapshot.prepared
+    let workoutId = savedWorkoutIdRef.current
+    const expected = () => revisionRef.current ?? undefined
+
+    if (workoutId === null) {
+      const created = await createWorkout(workout)
+      workoutId = created.id
+      savedWorkoutIdRef.current = created.id
+      revisionRef.current = created.revision
+      savedHeadingRef.current = workout
+      savedExercisesRef.current = '[]'
+      setSavedWorkoutId(created.id)
+    }
+
+    const learnedIds = new Map<string, number>()
+    const blocks = JSON.stringify(exercises.exercises)
+    if (blocks !== savedExercisesRef.current) {
+      const saved = await replaceWorkoutExercises(workoutId, {
+        ...exercises,
+        expectedRevision: expected(),
+      })
+      revisionRef.current = saved.revision
+      savedExercisesRef.current = blocks
+
+      // New exercises start as loaded on the backend; the response supplies
+      // their ids, so an ask-on-create bodyweight choice can stick. The ids
+      // also go back into the draft, so the next save doesn't ask again.
+      snapshot.blockIndexes.forEach((draftIndex, sentIndex) => {
+        const draft = snapshot.exercises[draftIndex]
+        const savedBlock = saved.exercises[sentIndex]
+        if (draft.exerciseId !== null || savedBlock === undefined) return
+        learnedIds.set(draft.clientId, savedBlock.exerciseId)
+        if (draft.isBodyweight) {
+          pendingBodyweightIds.current.add(savedBlock.exerciseId)
+        }
+      })
+      if (learnedIds.size > 0 && isMounted.current) {
+        setExercises((current) => withExerciseIds(current, learnedIds))
+      }
+    }
+
+    await Promise.all(
+      [...pendingBodyweightIds.current].map(async (exerciseId) => {
+        await updateExerciseRecord(exerciseId, { isBodyweight: true })
+        pendingBodyweightIds.current.delete(exerciseId)
+      }),
+    )
+
+    const changes = headingChanges(workout)
+    if (changes !== null || endedAt !== undefined) {
+      const updated = await updateWorkout(workoutId, {
+        ...changes,
+        ...(endedAt === undefined ? {} : { endedAt }),
+        expectedRevision: expected(),
+      })
+      revisionRef.current = updated.revision
+      savedHeadingRef.current = { ...workout }
+    }
+
+    return { workoutId, learnedIds }
+  }
+
+  // The scheduler's save: whatever the draft holds right now, complete sets
+  // only (FR-002). Nothing is sent for a new page until it has a complete
+  // set, so an exercise added and abandoned never becomes a page (FR-003).
+  async function autosave(): Promise<SaveOutcome> {
+    // The session ended; the held draft resumes after signing in again.
+    if (getToken() === null) return 'failed'
+
+    const snapshot = latestDraft.current
+    const prepared = prepareAutosaveDraft(
+      detailsAllowed ? snapshot.heading : dropOptionalDetails(snapshot.heading),
+      snapshot.exercises,
+    )
+    if (!prepared.ok) {
+      // Nothing to retry until the heading is fixed, which is an edit.
+      setAutosaveProblem(prepared.message)
+      return 'saved'
+    }
+    setAutosaveProblem(null)
+    if (savedWorkoutIdRef.current === null && prepared.setCount === 0) {
+      return 'saved'
+    }
+
+    const isNewPage = savedWorkoutIdRef.current === null
+    let learnedIds: Map<string, number>
+    try {
+      const saved = await persistDraft({
+        prepared: prepared.value,
+        blockIndexes: prepared.blockIndexes,
+        exercises: snapshot.exercises,
+      })
+      learnedIds = saved.learnedIds
+    } catch (error: unknown) {
+      return autosaveFailed(error)
+    }
+    if (!isMounted.current) return 'saved'
+
+    setLastSavedAt(new Date().toISOString())
+    setRestoredAt(null)
+    // Everything on screen went (no row was left out): this is now the
+    // state the stored copy is measured against. The ids learned by the
+    // save are part of it, as they are of the draft from here on.
+    const coveredAll =
+      prepared.blockIndexes.length === snapshot.exercises.length &&
+      prepared.setCount === countDraftSets(snapshot.exercises)
+    const savedFingerprint = coveredAll
+      ? draftFingerprint({
+          ...snapshot,
+          exercises: withExerciseIds(snapshot.exercises, learnedIds),
+        })
+      : null
+    if (savedFingerprint !== null) setBaseline(savedFingerprint)
+
+    // Bring the stored copy up to date now rather than on the next render:
+    // its revision has moved on, and Keep page may leave before then.
+    const latest = latestDraft.current
+    const route = currentDraftRoute()
+    if (isNewPage) removeEditorDraft({ kind: 'new' })
+    if (route !== null) {
+      writeStoredDraft(
+        route,
+        latest,
+        savedFingerprint === null ||
+          draftFingerprint({
+            ...latest,
+            exercises: withExerciseIds(latest.exercises, learnedIds),
+          }) !== savedFingerprint,
+      )
+    }
+    return 'saved'
+  }
+
+  function currentDraftRoute(): EditorDraftRoute | null {
+    if (isEditing) return initialRoute
+    const id = savedWorkoutIdRef.current
+    return id === null ? { kind: 'new' } : { kind: 'edit', workoutId: id }
+  }
+
+  // A refused autosave: a conflict or a deleted page stops autosave and says
+  // so on the date line; withdrawn consent drops the details and tries
+  // again; anything else (offline, a server error) is retried by the
+  // scheduler.
+  function autosaveFailed(error: unknown): SaveOutcome {
+    const problem = pageProblemOf(error)
+    if (problem !== null) {
+      if (isMounted.current) setPageProblem(problem)
+      return 'stopped'
+    }
+    if (isOptionalDetailsConsentRequired(error) && isMounted.current) {
+      dropWithdrawnDetails()
+    }
+    return 'failed'
+  }
+
+  // Consent was withdrawn elsewhere while this page was open, and the server
+  // refused the details (specs/001 contracts/ui.md → Rejected save). Not a
+  // session problem: keep the draft, drop only those details, say so, and
+  // offer the opt-in entry again.
+  function dropWithdrawnDetails() {
+    setHeading(dropOptionalDetails)
+    optionalDetails.setStatus('not-allowed')
+    setSaveMessage(
+      isInProgress
+        ? 'This account no longer allows a title, bodyweight, gym or notes, so they were removed from this page and not saved. The rest of your page is kept.'
+        : 'This account no longer allows a title, bodyweight, gym or notes, so they were removed from this page and not saved. The rest of your draft is kept; save again.',
+    )
+  }
+
+  // The autosave reads the draft through this ref, so a save that starts
+  // after a debounce sends what is on screen then, not when it was asked
+  // for. Updated before the trigger effect below runs, which may save at once.
+  const latestDraft = useRef({ heading, endTime, exercises })
+  useEffect(() => {
+    latestDraft.current = { heading, endTime, exercises }
+  })
+  const autosaveRef = useRef(autosave)
+  useEffect(() => {
+    autosaveRef.current = autosave
+  })
+  const [scheduler] = useState(() =>
+    createSaveScheduler({
+      save: () => autosaveRef.current(),
+      onStatus: setSaveStatus,
+    }),
+  )
+
+  // Leaving stops autosave. What wasn't saved stays in the stored copy, and
+  // opening the page again restores it and saves it then. (Resumed on mount
+  // because StrictMode, in development, unmounts and mounts once more.)
+  useEffect(() => {
+    isMounted.current = true
+    scheduler.resume()
+    return () => {
+      isMounted.current = false
+      void scheduler.stop()
+    }
+  }, [scheduler])
+
+  // A phone locked between sets, or a switch to another app, saves now
+  // rather than in two seconds that may never come.
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') void scheduler.flush()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () =>
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [scheduler])
+
+  // Every change to what an autosave would send asks for one: about two
+  // seconds after the last edit, or at once when a set has just become
+  // complete (FR-001). A re-render that changes nothing to send asks nothing.
+  const autosaves = isInProgress && !isLoading && loadMessage === null
+  const trigger = useMemo(
+    () =>
+      autosaveTrigger(
+        detailsAllowed ? heading : dropOptionalDetails(heading),
+        exercises,
+      ),
+    [detailsAllowed, exercises, heading],
+  )
+  useEffect(() => {
+    if (!autosaves) return
+    const previous = lastAutosaveTrigger.current
+    if (trigger.fingerprint === previous.fingerprint) return
+    lastAutosaveTrigger.current = trigger
+    scheduler.edit({ immediate: trigger.setCount > previous.setCount })
+  }, [autosaves, scheduler, trigger])
+
+  // A first save moved the new page onto the server: its address and its
+  // stored copy move to the edit page (D9), without a new history entry, so
+  // a reload or Continue logging opens this same page.
+  useEffect(() => {
+    if (isEditing || savedWorkoutId === null || isDraftClosed.current) return
+    removeEditorDraft({ kind: 'new' })
+    void navigate(`/workouts/${savedWorkoutId}/edit`, {
+      replace: true,
+      state: KEEP_NEW_PAGE_EDITOR,
+    })
+  }, [isEditing, navigate, savedWorkoutId])
+
+  // The incomplete-row notice: a row with a weight but no reps, left like
+  // that for a minute, is named on the date line.
+  const incompleteSet = autosaves ? findIncompleteSet(exercises) : null
+  const incompleteKey =
+    incompleteSet === null
+      ? null
+      : `${incompleteSet.setClientId}:${incompleteSet.needs}`
+  const [dueIncompleteKey, setDueIncompleteKey] = useState<string | null>(null)
+  const [incompleteWatch] = useState(() =>
+    createIncompleteRowWatch(setDueIncompleteKey),
+  )
+  useEffect(() => {
+    incompleteWatch.observe(incompleteKey)
+  }, [incompleteKey, incompleteWatch])
+  useEffect(() => () => incompleteWatch.dispose(), [incompleteWatch])
+
+  // Finish session flushes any pending save first (FR-007), so the question
+  // is asked about a page the server already has. A conflict or a deleted
+  // page found on the way is shown instead of the question.
+  async function openFinishQuestion() {
+    await scheduler.flush()
+    if (!isMounted.current || pageProblemRef.current !== null) return
     setFinishAsksTime(needsExplicitFinishTime(heading, new Date()))
     setFinishTime('')
     setConfirmingFinish(true)
   }
-
   // A finish-time problem belongs to the question, so it goes with it.
   function closeFinishQuestion() {
     if (invalidField?.kind === 'finishTime') {
@@ -900,6 +1401,9 @@ function WorkoutEditor() {
     setConfirmingFinish(false)
   }
 
+  // The explicit save: Confirm finish, and Save changes on a finished page.
+  // Unlike autosave it takes every row, so a half-filled one must be fixed
+  // or removed, and the field is pointed at.
   async function saveWorkout(finishSession: boolean) {
     const isSaving = savingAction !== null
     if (isSaving) {
@@ -921,7 +1425,10 @@ function WorkoutEditor() {
     // Capture the confirmation instant, not the later instant after network
     // I/O — unless the question asked when the session ended, in which case
     // that answer on the page's own date is the end (needsExplicitFinishTime).
-    let endedAt: string | null = finishSession ? new Date().toISOString() : null
+    // Left undefined, the finish time isn't touched.
+    let endedAt: string | null | undefined = finishSession
+      ? new Date().toISOString()
+      : undefined
     if (finishSession && finishAsksTime) {
       endedAt = createLocalEndedAt(
         prepared.value.workout.date,
@@ -934,6 +1441,7 @@ function WorkoutEditor() {
         return
       }
     }
+    // A finished page's Finished field: a time, or empty to reopen it.
     if (isEditing && !finishSession && endTime !== '') {
       endedAt = createLocalEndedAt(
         prepared.value.workout.date,
@@ -945,89 +1453,169 @@ function WorkoutEditor() {
         pointAtProblem({ kind: 'heading', field: 'endTime' })
         return
       }
+    } else if (isEditing && !finishSession) {
+      endedAt = null
     }
-    let workoutId = savedWorkoutId
 
     setSavingAction(finishSession ? 'finish' : 'save')
     setSaveMessage(null)
     setInvalidField(null)
+    // No autosave may run alongside: two writes with one revision would
+    // refuse each other.
+    await scheduler.stop()
 
     try {
-      if (workoutId === null) {
-        const created = await createWorkout(prepared.value.workout)
-        workoutId = created.id
-        setSavedWorkoutId(created.id)
-      } else {
-        // Corrections made after a failed attempt must reach the existing page.
-        await updateWorkout(
-          workoutId,
-          isEditing
-            ? { ...prepared.value.workout, endedAt }
-            : prepared.value.workout,
-        )
-      }
-
-      const saved = await replaceWorkoutExercises(
-        workoutId,
-        prepared.value.exercises,
+      const { workoutId } = await persistDraft(
+        {
+          prepared: prepared.value,
+          blockIndexes: exercises.map((_, index) => index),
+          exercises,
+        },
+        endedAt,
       )
-
-      // New exercises start as loaded on the backend. The bulk response now
-      // supplies their ids, allowing an ask-on-create bodyweight choice to stick.
-      const newBodyweightExerciseIds = new Set<number>()
-      exercises.forEach((exercise, index) => {
-        if (exercise.exerciseId === null && exercise.isBodyweight) {
-          const savedExercise = saved.exercises[index]
-          if (savedExercise !== undefined) {
-            newBodyweightExerciseIds.add(savedExercise.exerciseId)
-          }
-        }
-      })
-
-      await Promise.all(
-        [...newBodyweightExerciseIds].map((exerciseId) =>
-          updateExerciseRecord(exerciseId, { isBodyweight: true }),
-        ),
-      )
-
-      if (!isEditing && endedAt !== null) {
-        await updateWorkout(workoutId, { endedAt })
-      }
 
       // Saved: the stored copy has done its job.
       isDraftClosed.current = true
-      if (draftRoute !== null) removeEditorDraft(draftRoute)
+      const route = currentDraftRoute()
+      if (route !== null) removeEditorDraft(route)
+      removeEditorDraft({ kind: 'new' })
       // The screen it lands on confirms the save, so leaving the editor never
       // leaves the lifter guessing whether the sets made it.
-      const notice =
-        endedAt !== null && finishSession
-          ? 'Session finished and saved.'
-          : isEditing
-            ? 'Changes saved.'
-            : 'Page saved. It stays open for more sets.'
-      void navigate(isEditing ? `/workouts/${workoutId}` : '/workouts', {
-        state: routeNotice(notice),
-      })
+      const notice = finishSession
+        ? 'Session finished and saved.'
+        : 'Changes saved.'
+      void navigate(
+        finishSession && !isEditing ? '/workouts' : `/workouts/${workoutId}`,
+        { state: routeNotice(notice) },
+      )
     } catch (error: unknown) {
-      // Consent was withdrawn elsewhere while this page was open, and the
-      // server refused the details (contracts/ui.md → Rejected save). Not a
-      // session problem: keep the draft, drop only those details, say so, and
-      // offer the opt-in entry again.
-      if (isOptionalDetailsConsentRequired(error)) {
-        setHeading(dropOptionalDetails)
-        optionalDetails.setStatus('not-allowed')
-        setSaveMessage(
-          'This account no longer allows a title, bodyweight, gym or notes, so they were removed from this page and not saved. The rest of your draft is kept; save again.',
-        )
+      const problem = pageProblemOf(error)
+      if (problem !== null) {
+        setPageProblem(problem)
+        setConfirmingFinish(false)
         return
       }
-      setSaveMessage(
-        workoutId === null
-          ? 'The page could not be saved. Please try again.'
-          : 'The page was started but not fully saved. Your draft is still here; try again.',
-      )
+      if (isOptionalDetailsConsentRequired(error)) {
+        dropWithdrawnDetails()
+      } else {
+        setSaveMessage(
+          savedWorkoutIdRef.current === null
+            ? 'The page could not be saved. Please try again.'
+            : 'The page was started but not fully saved. Your draft is still here; try again.',
+        )
+      }
+      // Autosave picks up again from what the server has.
+      scheduler.resume()
+      if (isInProgress) scheduler.edit()
     } finally {
       setSavingAction(null)
+    }
+  }
+
+  // Cancel on a new page that has already saved itself asks whether to tear
+  // it out (Story 4): the page is on the server, so leaving can't quietly
+  // drop it any more, and Cancel mustn't be able to lose a real session.
+  // Not after a conflict: tearing out would take the other device's sets too.
+  const keepsPageOnCancel =
+    !isEditing && savedWorkoutId !== null && pageProblem === null
+
+  useEffect(() => {
+    if (confirmingTearOut) keepPageRef.current?.focus()
+  }, [confirmingTearOut])
+
+  // Keep: whatever is still waiting is saved first, then on to Sessions,
+  // where the page is in progress. If that save fails the lifter stays, with
+  // the date line saying so, rather than leaving sets behind unknowingly.
+  async function keepPage() {
+    setSavingAction('keep')
+    const flushed = await scheduler.flush()
+    if (!isMounted.current) return
+    setSavingAction(null)
+    if (!flushed) {
+      setConfirmingTearOut(false)
+      if (pageProblemRef.current === null) {
+        setSaveMessage(
+          'The latest sets could not be saved yet. They are kept here; try again in a moment.',
+        )
+      }
+      return
+    }
+    void navigate('/workouts', {
+      state: routeNotice('Page kept. It stays open for more sets.'),
+    })
+  }
+
+  async function tearOutPage() {
+    const workoutId = savedWorkoutIdRef.current
+    if (workoutId === null) return
+    setSavingAction('tear-out')
+    setSaveMessage(null)
+    await scheduler.stop()
+    try {
+      await deleteWorkout(workoutId)
+    } catch (error: unknown) {
+      // Already gone (deleted on another device) is what was asked for.
+      if (!(error instanceof ApiError && error.status === 404)) {
+        setSavingAction(null)
+        setSaveMessage('The page could not be torn out. Please try again.')
+        scheduler.resume()
+        scheduler.edit()
+        return
+      }
+    }
+    isDraftClosed.current = true
+    removeEditorDraft({ kind: 'edit', workoutId })
+    removeEditorDraft({ kind: 'new' })
+    void navigate('/workouts', { state: routeNotice('Page torn out.') })
+  }
+
+  // Reload page, after a conflict (D10): the server's page replaces the
+  // draft, and the sets that existed only here are listed rather than
+  // merged, so nothing vanishes without a trace.
+  async function reloadPage() {
+    const workoutId = savedWorkoutIdRef.current
+    if (workoutId === null) return
+    setSaveMessage(null)
+    try {
+      const workout = await getWorkout(workoutId)
+      if (!isMounted.current) return
+      const draft = createExistingWorkoutDraft(workout, createClientId)
+      // Keep the "last time" lines the blocks already showed.
+      const lastSets = new Map(
+        exercises.map((exercise) => [exercise.exerciseId, exercise.lastSet]),
+      )
+      const reloaded = draft.exercises.map((exercise) =>
+        lastSets.has(exercise.exerciseId)
+          ? { ...exercise, lastSet: lastSets.get(exercise.exerciseId) }
+          : exercise,
+      )
+      const lost = describeUnsavedSets(exercises, draft.exercises)
+
+      serverDraft.current = draft
+      serverRevision.current = workout.revision
+      revisionRef.current = workout.revision
+      const known = describeServerPage(draft)
+      savedHeadingRef.current = known.heading
+      savedExercisesRef.current = known.exercises
+      lastAutosaveTrigger.current = known.trigger
+      setHeading(draft.heading)
+      setEndTime(draft.endTime)
+      setExercises(reloaded)
+      setBaseline(draftFingerprint({ ...draft, exercises: reloaded }))
+      setIsInProgress(draft.endTime === '')
+      setRestoredAt(null)
+      setRemoval(null)
+      setInvalidField(null)
+      setLastSavedAt(null)
+      setPageProblem(null)
+      setUnsavedHere(lost.length === 0 ? null : lost)
+      scheduler.resume()
+    } catch (error: unknown) {
+      if (pageProblemOf(error) === 'gone') {
+        setPageProblem('gone')
+      } else {
+        setSaveMessage('The page could not be reloaded. Please try again.')
+      }
     }
   }
 
@@ -1054,9 +1642,28 @@ function WorkoutEditor() {
   // Shown on the folded heading line only when the account allows it.
   const summaryTitle = detailsAllowed ? heading.title.trim() : ''
 
-  // Still in progress: a new page, or an edit page without a finish time.
-  // This is what offers "Finish session" and makes it the footer's primary.
-  const canFinish = !isEditing || endTime === ''
+  // The save state on the date line (contracts/ui.md), most urgent first.
+  // "Saving…" only once a save has taken a second, so a quick save goes
+  // from one "Saved" time to the next without chatter.
+  const incompleteNotice =
+    incompleteSet !== null && dueIncompleteKey === incompleteKey
+      ? describeIncompleteSet(incompleteSet)
+      : null
+  let saveState: { text: string; isError: boolean } | null = null
+  if (autosaveProblem !== null) {
+    saveState = { text: `Not saved: ${autosaveProblem}`, isError: true }
+  } else if (saveStatus.kind === 'failed') {
+    saveState = { text: 'Not saved — retrying', isError: true }
+  } else if (saveStatus.kind === 'saving' && saveStatus.slow) {
+    saveState = { text: 'Saving…', isError: false }
+  } else if (incompleteNotice !== null) {
+    saveState = { text: incompleteNotice, isError: false }
+  } else if (lastSavedAt !== null) {
+    saveState = {
+      text: `Saved ${formatWorkoutTime(lastSavedAt)}`,
+      isError: false,
+    }
+  }
 
   if (isLoading) {
     return <main className="page workout-editor-state">Opening page…</main>
@@ -1083,6 +1690,20 @@ function WorkoutEditor() {
           ref={cancelRef}
           to={cancelTarget}
           onClick={(event) => {
+            // The page no longer exists: the copy kept for reading has
+            // nowhere to go, so leaving drops it.
+            if (pageProblem === 'gone') {
+              isDraftClosed.current = true
+              if (draftRoute !== null) removeEditorDraft(draftRoute)
+              return
+            }
+            // A new page already on the server asks whether to tear it out.
+            if (keepsPageOnCancel) {
+              event.preventDefault()
+              setConfirmingFinish(false)
+              setConfirmingTearOut(true)
+              return
+            }
             // An unchanged draft leaves silently; a changed one asks first.
             if (isDirty) {
               event.preventDefault()
@@ -1148,6 +1769,14 @@ function WorkoutEditor() {
                 </button>
               </p>
             )}
+            {unsavedHere !== null && (
+              <p className="new-workout-restored" role="status">
+                <span>Not saved here: {unsavedHere.join('; ')}.</span>
+                <button type="button" onClick={() => setUnsavedHere(null)}>
+                  Dismiss
+                </button>
+              </p>
+            )}
             {/* The page heading as one line. Date and start time already say
                 "now", so the fields wait behind the line and the exercises
                 come first (design-fix-plan step 2). */}
@@ -1179,6 +1808,29 @@ function WorkoutEditor() {
                       : 'add details'}
                 </span>
               </button>
+              {/* The save state (contracts/ui.md). Outside the button, so the
+                  button's name stays the date; a polite live region that is
+                  always there, so a change in it is announced. A conflict or
+                  a deleted page needs action and is announced at once. */}
+              {pageProblem === null ? (
+                <p
+                  className={`new-workout-save-state${saveState?.isError === true ? ' is-error' : ''}`}
+                  role="status"
+                >
+                  {saveState?.text}
+                </p>
+              ) : (
+                <p className="new-workout-save-state is-error" role="alert">
+                  {pageProblem === 'conflict'
+                    ? 'This page changed on another device.'
+                    : 'This page no longer exists.'}
+                  {pageProblem === 'conflict' && (
+                    <button type="button" onClick={() => void reloadPage()}>
+                      Reload page
+                    </button>
+                  )}
+                </p>
+              )}
               {isHeadingOpen && (
                 <div className="form-stack" id="page-heading-fields">
                   <div className="new-workout-field-pair">
@@ -1218,7 +1870,10 @@ function WorkoutEditor() {
                       />
                     </div>
                   </div>
-                  {isEditing && (
+                  {/* Only on a finished page: an in-progress one is finished
+                      with Finish session, which saves; a time typed here
+                      would never be. */}
+                  {isEditing && !isInProgress && (
                     <div className="field">
                       <label className="label" htmlFor="endTime">
                         Finished
@@ -1674,7 +2329,30 @@ function WorkoutEditor() {
             {/* The confirmation takes the place of the action buttons rather
                 than stacking above them, so there is only one question and
                 one pair of buttons on screen. */}
-            {confirmingFinish ? (
+            {confirmingTearOut ? (
+              <div className="finish-confirmation" role="alert">
+                <p>{describeTearOut(countDraftSets(exercises))}</p>
+                <div>
+                  <button
+                    ref={keepPageRef}
+                    className="btn btn-ghost"
+                    type="button"
+                    onClick={() => void keepPage()}
+                  >
+                    Keep page
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    onClick={() => void tearOutPage()}
+                  >
+                    {savingAction === 'tear-out'
+                      ? 'Tearing out…'
+                      : 'Tear out page'}
+                  </button>
+                </div>
+              </div>
+            ) : confirmingFinish ? (
               <div className="finish-confirmation" role="alert">
                 {finishAsksTime ? (
                   <>
@@ -1730,32 +2408,27 @@ function WorkoutEditor() {
               </div>
             ) : (
               <div className="new-workout-action-buttons">
-                {/* One primary: Finish session while the session is still in
-                  progress (a new page, or an edit reached by "Continue
-                  logging"), Save changes once it has finished. */}
-                <button
-                  className={
-                    canFinish ? 'btn btn-secondary' : 'btn btn-primary'
-                  }
-                  type="button"
-                  onClick={() => void saveWorkout(false)}
-                >
-                  {savingAction === 'save'
-                    ? 'Saving…'
-                    : isEditing
-                      ? 'Save changes'
-                      : 'Save page'}
-                </button>
-                {canFinish && (
+                {/* One action. In progress: Finish session, with no Save
+                    button, since the page saves itself (owner, 2026-10-07).
+                    Finished: Save changes, as before autosave. */}
+                {isInProgress ? (
                   <button
                     className="btn btn-primary"
                     type="button"
                     id={FINISH_BUTTON_ID}
-                    onClick={openFinishQuestion}
+                    onClick={() => void openFinishQuestion()}
                   >
                     {savingAction === 'finish'
                       ? 'Finishing…'
                       : 'Finish session'}
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => void saveWorkout(false)}
+                  >
+                    {savingAction === 'save' ? 'Saving…' : 'Save changes'}
                   </button>
                 )}
               </div>

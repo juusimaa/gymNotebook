@@ -1699,6 +1699,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         '    })()] }]'
     );
 
+    // Durable logging (specs/003 PR 5), matching the React editor: a page in
+    // progress saves itself, so its footer drops "Save page" and keeps one
+    // full-width "Finish session", and the save state sits under the
+    // dateline ("Saved 07.42"). The static preview shows only the saved
+    // state; the app's other states ("Not saved — retrying", the conflict
+    // line with Reload page) are in docs/ui/README.md → Autosave.
+    replacePolishAnchor(
+      `          <button class="btn btn-secondary" sc-camel-on-click="{{ save }}" style="flex:1;min-height:48px;font-size:15px">Save page</button>
+          <button class="btn btn-primary" sc-camel-on-click="{{ askFinish }}" style="flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px">Finish session</button>`,
+      `          <button class="btn btn-primary" sc-camel-on-click="{{ askFinish }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Finish session</button>`
+    );
+    replacePolishAnchor(
+      `{{ headingAction }}</span>
+          </button>`,
+      `{{ headingAction }}</span>
+          </button>
+          <p role="status" style="margin:-4px 0 0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)">Saved 07.42</p>`
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';
