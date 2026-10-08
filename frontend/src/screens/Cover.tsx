@@ -85,8 +85,15 @@ export default function Cover() {
           Sign out
         </button>
       </div>
+      {/* Always shown: backup isn't part of the privacy feature (specs/004
+          D2). The last-backup date stays on its own screen (plan Q5). */}
+      <p className="cover-line">
+        <Link to="/backup" className="btn btn-ghost">
+          Backup &amp; restore
+        </Link>
+      </p>
       {showPrivacy && (
-        <p className="cover-privacy">
+        <p className="cover-line">
           <Link to="/account/privacy" className="btn btn-ghost">
             Privacy &amp; account
           </Link>

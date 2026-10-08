@@ -1,8 +1,8 @@
-import { ApiError, request, send } from './client'
-import { readCompleteJson } from './download'
+import { ApiError, request } from './client'
 
-// Wire types and calls for the privacy routes (specs/001 user stories 1, 3, 4
-// and 6, contracts/api.md), one per record in backend/GymNotebook.Api.
+// Wire types and calls for the privacy routes (specs/001 user stories 1, 4
+// and 6, contracts/api.md), one per record in backend/GymNotebook.Api. The
+// export (user story 3) moved to api/backup.ts with specs/004.
 //
 // The frontend has no feature flag of its own (plan.md P25): the backend maps
 // these routes only when PRIVACY_LIFECYCLE_ENABLED is "true", so a 404 here
@@ -136,40 +136,6 @@ export function withdrawOptionalDetailsConsent(): Promise<OptionalDetailsWithdra
   return request<OptionalDetailsWithdrawal>(
     '/account/privacy/optional-details-consent',
     { method: 'DELETE' },
-  )
-}
-
-// The export's fixed file name; the server sends the same one in
-// Content-Disposition, which a cross-origin fetch can't read without extra CORS
-// configuration, so the client names the file itself.
-export const EXPORT_FILE_NAME = 'gym-notebook-export.json'
-
-// POST /account/export (user story 3): the whole notebook as one JSON file.
-// Resolves only with a complete file (see readCompleteJson). Rejects with
-// ApiError 400 "password_verification_failed" for a wrong password, 401 when the
-// session no longer works, 429 for too many attempts or "export_in_progress",
-// 503 "temporarily_unavailable"; with fetch's own error when the connection
-// broke; and with an AbortError when `signal` aborts. `onReceiving` fires once
-// the password was accepted and the file has started arriving. The password is
-// sent as typed and kept nowhere, so a retry always asks for it again. The body
-// is read inside send(), so a sign-out anywhere aborts the download too.
-export function exportNotebook(
-  currentPassword: string,
-  options: { signal?: AbortSignal; onReceiving?: () => void } = {},
-): Promise<Blob> {
-  return send(
-    '/account/export',
-    {
-      method: 'POST',
-      body: { currentPassword },
-      signal: options.signal,
-      // A POST that only reads: a 401 here can't have left a half-saved change.
-      changesData: false,
-    },
-    (response) => {
-      options.onReceiving?.()
-      return readCompleteJson(response)
-    },
   )
 }
 

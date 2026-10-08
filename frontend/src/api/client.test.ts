@@ -200,3 +200,32 @@ describe('bodiless success', () => {
     },
   )
 })
+
+// The restore route (specs/004 contracts/api.md): the backup file goes out
+// byte for byte, and a rejection's `reason` reaches the screen.
+describe('restore requests', () => {
+  it('sends a JSON file unchanged, as JSON', async () => {
+    respondWith(200, {})
+    const file = new Blob(['{"formatVersion":1}'])
+
+    await request('/account/restore', { method: 'POST', jsonFile: file })
+
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    expect(init?.body).toBe(file)
+    expect(init?.headers).toMatchObject({ 'Content-Type': 'application/json' })
+  })
+
+  it('reads the reason beside the code of an error body', async () => {
+    respondWith(400, { code: 'backup_invalid', reason: 'unsupported_version' })
+
+    const err = await rejectionOf(
+      request('/account/restore', { method: 'POST', body: {} }),
+    )
+
+    expect(err).toMatchObject({
+      status: 400,
+      code: 'backup_invalid',
+      reason: 'unsupported_version',
+    })
+  })
+})

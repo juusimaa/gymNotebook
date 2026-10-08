@@ -116,7 +116,7 @@ export default function DeleteAccount() {
           sets, and the record of which privacy notice you continued past. Every
           signed-in session loses access. You cannot undo this.
         </p>
-        <Link to="/account/export" className="btn btn-ghost btn-block">
+        <Link to="/backup" className="btn btn-ghost btn-block">
           Export first (optional)
         </Link>
 

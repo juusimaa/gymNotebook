@@ -325,7 +325,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     const coverSignOut = `<div style="text-align:center;margin-top:16px;font-size:13px"><a href="#" sc-camel-on-click="{{ goLogin }}">Sign out</a></div>`;
     const supportLink = `
         <div style="text-align:center;margin-top:28px;font-size:12px;color:var(--color-neutral-600)">Enjoying the notebook? <a href="https://buymeacoffee.com/jouni" target="_blank" rel="noreferrer">Buy me a coffee ↗</a></div>`;
-    template = template.replace(coverSignOut, coverSignOut + supportLink);
+    // Backup & restore (specs/004) gets its own line under Sign out. It is
+    // always shown, not tied to the privacy feature.
+    const coverBackupLink = `
+        <div style="text-align:center;margin-top:14px;font-size:13px"><a href="#" sc-camel-on-click="{{ openBackup }}">Backup &amp; restore</a></div>`;
+    template = template.replace(coverSignOut, coverSignOut + coverBackupLink + supportLink);
 
     // Links are colour-led navigation marks in this editorial system, not
     // underlined web prose. Individual controls may still add their own state.
@@ -347,9 +351,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     noticeSeen: false,
     noticeVersion: 1,
     noticeReturn: "login",
-    exportPassword: "",
-    exportError: "",
-    exportDone: false,
+    backupFormat: "json",
+    backupPassword: "",
+    backupError: "",
+    backupPhase: "idle",
+    backupSavedName: "",
+    backupSavedFormat: "json",
+    lastBackupChecking: false,
+    lastBackupAt: "3 October 2026, 09.42",
+    lastBackupFresh: false,
+    restoreStep: "idle",
+    restoreName: "",
+    restoreSummary: null,
+    restoreError: "",
+    restoreRetry: false,
     deletePassword: "",
     deleteError: "",
     deleteStep: "review",
@@ -390,24 +405,78 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (e) e.preventDefault();
     this.setState((s) => ({ noticeVersion: s.noticeVersion + 1, noticeSeen: false, noticeReturn: "history", screen: "notice" }));
   };
-  openExport = (e) => {
+  // Backup & restore (specs/004 contracts/ui.md) replaces spec 001's Take a
+  // copy. Everything is simulated: timers stand in for the server, the
+  // downloads are built from the sample data, and a chosen restore file is
+  // read in memory only. No request leaves the page. (This code sits inside
+  // a template literal, so it avoids backticks and backslashes.)
+  openBackup = (e) => {
     if (e) e.preventDefault();
-    this.setState({ screen: "accountExport", exportPassword: "", exportError: "", exportDone: false });
+    clearTimeout(this.backupTimer);
+    clearTimeout(this.restoreTimer);
+    this.setState({ screen: "backup", backupPassword: "", backupError: "", backupPhase: "idle", lastBackupChecking: true, lastBackupFresh: false, restoreStep: "idle", restoreError: "" });
+    clearTimeout(this.lastBackupTimer);
+    this.lastBackupTimer = setTimeout(() => this.setState({ lastBackupChecking: false }), 600);
   };
-  setExportPassword = (e) => this.setState({ exportPassword: e.target.value, exportError: "" });
-  failExport = (e) => {
+  chooseBackupFormat = (backupFormat) => () => this.setState({ backupFormat, backupError: "", backupPhase: "idle" });
+  setBackupPassword = (e) => this.setState({ backupPassword: e.target.value, backupError: "" });
+  previewNoBackupYet = (e) => {
     if (e) e.preventDefault();
-    this.setState({ exportError: "The export didn't finish, so no file was saved. Your notebook has not changed. Try again.", exportDone: false });
+    this.setState({ lastBackupAt: null, lastBackupFresh: false, lastBackupChecking: false });
   };
-  downloadSampleExport = (e) => {
+  failBackup = (e) => {
     if (e) e.preventDefault();
-    const password = this.state.exportPassword;
-    if (!password || password === "wrong") {
-      this.setState({ exportError: "Check your current password and try again.", exportDone: false });
+    clearTimeout(this.backupTimer);
+    this.setState({ backupPhase: "idle", backupError: "The backup didn't finish, so no file was saved. Your notebook has not changed. Try again." });
+  };
+  cancelBackup = (e) => {
+    if (e) e.preventDefault();
+    clearTimeout(this.backupTimer);
+    this.setState({ backupPhase: "idle" });
+  };
+  submitBackup = (e) => {
+    if (e) e.preventDefault();
+    const password = this.state.backupPassword;
+    if (!password) {
+      this.setState({ backupError: "Enter your current password.", backupPhase: "idle" });
       return;
     }
-    // Same shape as the real export (format version 1, specs/001 contracts/api.md):
-    // flat arrays linked by ids, with an abbreviated field guide. Sample data only.
+    if (password === "wrong") {
+      this.setState({ backupPassword: "", backupError: "Check your current password and try again.", backupPhase: "idle" });
+      return;
+    }
+    const format = this.state.backupFormat;
+    clearTimeout(this.backupTimer);
+    this.setState({ backupError: "", backupPhase: "checking", lastBackupFresh: false });
+    this.backupTimer = setTimeout(() => {
+      this.setState({ backupPhase: "receiving" });
+      this.backupTimer = setTimeout(() => this.finishBackup(format), 1600);
+    }, 700);
+  };
+  finishBackup = (format) => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const name = "gym-notebook-" + now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) + "." + format;
+    const backup = this.sampleBackup();
+    const body = format === "json" ? JSON.stringify(backup, null, 2) : this.sampleCsv(backup);
+    const url = URL.createObjectURL(new Blob([body], { type: format === "json" ? "application/json" : "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Only a full (JSON) backup moves the last-backup line.
+    const moment = now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) + ", " + pad(now.getHours()) + "." + pad(now.getMinutes());
+    this.setState((s) => ({
+      backupPassword: "", backupError: "", backupPhase: "complete", backupSavedName: name, backupSavedFormat: format,
+      lastBackupAt: format === "json" ? moment : s.lastBackupAt, lastBackupFresh: format === "json"
+    }));
+  };
+  // Same shape as the real backup (format version 1, specs/001 contracts/api.md):
+  // flat arrays linked by ids, with an abbreviated field guide. Sample data only.
+  sampleBackup = () => {
     const sampleExercises = EXERCISES.map((x, i) => ({
       id: i + 1, userId: 1, name: x.name, isBodyweight: x.bodyweight, createdAt: "2026-09-01T10:00:00+00:00"
     }));
@@ -422,11 +491,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       blocks.push({ id: blockId, workoutId: w.id, exerciseId: sampleExercises.find((x) => x.name === b.name).id, position: bi });
       b.sets.forEach((set, si) => sets.push({ id: w.id * 10000 + bi * 100 + si + 1, workoutExerciseId: blockId, setNumber: si + 1, weight: set[0], reps: set[1], isWarmup: set[2] }));
     }));
-    const sample = {
+    return {
       formatVersion: 1,
       snapshotAt: new Date().toISOString(),
       fieldGuide: {
-        about: "Sample export from the design prototype. The real file explains every field; see specs/001 contracts/api.md.",
+        about: "Sample backup from the design prototype. The real file explains every field; see specs/001 contracts/api.md.",
         conventions: ["Instants are ISO-8601 in UTC.", "date is the stored local calendar day (YYYY-MM-DD).", "weight and bodyweightKg are kilograms; null means not recorded.", "Ids link records within this file."]
       },
       account: { id: 1, privacyAccountId: "00000000-0000-4000-8000-000000000001", email: "ann@example.com", emailVerifiedAt: "2026-09-01T10:05:00+00:00", displayName: "Ann", createdAt: "2026-09-01T10:00:00+00:00" },
@@ -444,15 +513,160 @@ document.addEventListener('DOMContentLoaded', async function() {
         optionalDetailsConsent: this.state.detailsConsent ? { statementVersion: "2026-09-28", consentedAt: new Date().toISOString() } : null
       }
     };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "gym-notebook-sample-export.json";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-    this.setState({ exportPassword: "", exportError: "", exportDone: true });
+  };
+  // The spreadsheet: one row per set, the columns of specs/004 contracts/api.md
+  // (comma-separated here; the app picks ";" for comma-decimal locales).
+  sampleCsv = (backup) => {
+    const quote = (v) => {
+      const text = v === null || v === undefined ? "" : String(v);
+      return /[",;]/.test(text) || text.includes(String.fromCharCode(10)) ? '"' + text.split('"').join('""') + '"' : text;
+    };
+    const clock = (iso) => iso ? new Date(iso).toTimeString().slice(0, 5) : "";
+    const rows = [["Date", "Start", "End", "Title", "Gym", "Bodyweight (kg)", "Notes", "Block", "Exercise", "Bodyweight exercise", "Set", "Warm-up", "Weight (kg)", "Reps"]];
+    backup.workouts.forEach((w) => {
+      const page = [w.date, clock(w.startedAt), clock(w.endedAt), w.title, w.location, w.bodyweightKg, w.notes];
+      backup.workoutExercises.filter((b) => b.workoutId === w.id).forEach((b) => {
+        const x = backup.exercises.find((e) => e.id === b.exerciseId);
+        backup.sets.filter((s) => s.workoutExerciseId === b.id).forEach((s) => rows.push(page.concat([b.position + 1, x.name, x.isBodyweight ? "yes" : "no", s.setNumber, s.isWarmup ? "yes" : "no", s.weight, s.reps])));
+      });
+    });
+    const newline = String.fromCharCode(13, 10);
+    return String.fromCharCode(0xfeff) + rows.map((r) => r.map(quote).join(",")).join(newline) + newline;
+  };
+  restoreCopy = {
+    notBackup: "This isn't a Gym Notebook backup. Choose the .json file from Make a backup. Spreadsheets can't be restored.",
+    newerVersion: "This backup was made by a newer version of Gym Notebook. Reload the app and try again.",
+    damaged: "This file is damaged or incomplete, so nothing was restored. Try another backup.",
+    tooLarge: "This file is larger than 25 MB, so it can't be restored here.",
+    running: "A restore is already running for your notebook. Wait for it to finish.",
+    tooMany: "Too many restores. Wait a few minutes and try again.",
+    failed: "The restore didn't finish, so nothing was added. Your notebook has not changed. Try again."
+  };
+  // Restore: the chosen file is read and checked on this device, as the app
+  // does (FR-012), then a timer stands in for the upload.
+  chooseRestoreFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    clearTimeout(this.restoreTimer);
+    const fail = (restoreError) => this.setState({ restoreStep: "failed", restoreError, restoreRetry: false });
+    this.setState({ restoreStep: "reading", restoreName: file.name, restoreError: "" });
+    if (file.size > 25 * 1024 * 1024) return fail(this.restoreCopy.tooLarge);
+    file.text().then((text) => {
+      let data;
+      try { data = JSON.parse(text); } catch (err) {
+        return fail(file.name.toLowerCase().endsWith(".csv") ? this.restoreCopy.notBackup : this.restoreCopy.damaged);
+      }
+      if (!data || !Array.isArray(data.workouts) || !Array.isArray(data.sets)) return fail(this.restoreCopy.notBackup);
+      if (data.formatVersion !== 1) return fail(this.restoreCopy.newerVersion);
+      const dates = data.workouts.map((w) => w.date).filter(Boolean).sort();
+      this.setState({ restoreStep: "summary", restoreSummary: {
+        takenAt: data.snapshotAt ? new Date(data.snapshotAt) : null,
+        pages: data.workouts.length,
+        firstDate: dates[0] || null,
+        lastDate: dates[dates.length - 1] || null,
+        sets: data.sets.length,
+        exercises: (data.exercises || []).length
+      } });
+    });
+  };
+  startRestore = (e) => {
+    if (e) e.preventDefault();
+    clearTimeout(this.restoreTimer);
+    this.setState({ restoreStep: "restoring", restoreError: "" });
+    this.restoreTimer = setTimeout(() => this.setState((s) => ({ restoreStep: s.restoreSummary && s.restoreSummary.pages === 0 ? "nothing" : "done" })), 1800);
+  };
+  restoreAnother = (e) => {
+    if (e) e.preventDefault();
+    clearTimeout(this.restoreTimer);
+    this.setState({ restoreStep: "idle", restoreError: "" });
+  };
+  // Prototype controls: jump straight to a summary, a result or a failure.
+  simulateRestore = (kind) => (e) => {
+    if (e) e.preventDefault();
+    clearTimeout(this.restoreTimer);
+    const sample = { takenAt: new Date(2026, 8, 1, 18, 4), pages: 212, firstDate: "2025-01-03", lastDate: "2026-08-31", sets: 1846, exercises: 19 };
+    const name = kind === "notBackup" ? "gym-notebook-2026-09-01.csv" : kind === "newerVersion" ? "gym-notebook-2027-03-14.json" : "gym-notebook-2026-09-01.json";
+    if (kind === "summary") return this.setState({ restoreStep: "summary", restoreName: name, restoreSummary: sample, restoreError: "" });
+    if (kind === "nothing") return this.setState({ restoreStep: "nothing", restoreName: name, restoreSummary: sample, restoreError: "" });
+    const retry = kind === "running" || kind === "tooMany" || kind === "failed";
+    this.setState({ restoreStep: "failed", restoreName: name, restoreSummary: sample, restoreError: this.restoreCopy[kind], restoreRetry: retry });
+  };
+  // Template values for the Backup & restore screen.
+  backupValues = () => {
+    const s = this.state;
+    const busy = s.backupPhase === "checking" || s.backupPhase === "receiving";
+    const longDate = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const isoLongDate = (iso) => longDate(new Date(iso + "T00:00:00"));
+    const pad = (n) => String(n).padStart(2, "0");
+    const count = (n, word) => n.toLocaleString("en-GB") + " " + word + (n === 1 ? "" : "s");
+    const optionBorder = (on) => on ? "var(--color-accent-700)" : "var(--color-divider)";
+    const optionBackground = (on) => on ? "color-mix(in srgb, var(--color-accent) 7%, transparent)" : "transparent";
+    const summary = s.restoreSummary || { takenAt: null, pages: 0, firstDate: null, lastDate: null, sets: 0, exercises: 0 };
+    const added = Math.min(2, summary.pages);
+    const present = summary.pages - added;
+    return {
+      lastBackupChecking: s.lastBackupChecking,
+      hasLastBackup: !s.lastBackupChecking && !!s.lastBackupAt,
+      noLastBackup: !s.lastBackupChecking && !s.lastBackupAt,
+      lastBackupAt: s.lastBackupAt,
+      // A fresh full backup underlines the new date in gold; otherwise no rule.
+      lastBackupUnderline: s.lastBackupFresh ? "2px solid var(--color-accent)" : "0",
+      isJsonFormat: s.backupFormat === "json",
+      isCsvFormat: s.backupFormat === "csv",
+      jsonOptionBorder: optionBorder(s.backupFormat === "json"),
+      csvOptionBorder: optionBorder(s.backupFormat === "csv"),
+      jsonOptionBackground: optionBackground(s.backupFormat === "json"),
+      csvOptionBackground: optionBackground(s.backupFormat === "csv"),
+      chooseJsonFormat: this.chooseBackupFormat("json"),
+      chooseCsvFormat: this.chooseBackupFormat("csv"),
+      backupBusy: busy,
+      backupPassword: s.backupPassword,
+      setBackupPassword: this.setBackupPassword,
+      backupError: s.backupError,
+      hasBackupError: !!s.backupError,
+      isBackupChecking: s.backupPhase === "checking",
+      isBackupReceiving: s.backupPhase === "receiving",
+      isBackupComplete: s.backupPhase === "complete",
+      backupWhat: s.backupFormat === "json" ? "backup" : "spreadsheet",
+      backupSavedName: s.backupSavedName,
+      backupSavedNote: s.backupSavedFormat === "json" ? "Your notebook has not changed." : "A spreadsheet can't be restored; keep a full backup too.",
+      backupButtonClass: busy ? "btn btn-secondary" : "btn btn-primary",
+      backupButtonAction: busy ? this.cancelBackup : this.submitBackup,
+      backupButtonLabel: busy ? "Cancel" : s.backupPhase === "complete" ? "Download again" : s.backupFormat === "json" ? "Download backup" : "Download spreadsheet",
+      failBackup: this.failBackup,
+      previewNoBackupYet: this.previewNoBackupYet,
+      isRestoreIdle: s.restoreStep === "idle",
+      isRestoreReading: s.restoreStep === "reading",
+      isRestoreSummary: s.restoreStep === "summary",
+      isRestoreRestoring: s.restoreStep === "restoring",
+      isRestoreDone: s.restoreStep === "done",
+      isRestoreNothing: s.restoreStep === "nothing",
+      isRestoreFailed: s.restoreStep === "failed",
+      hasRestoreFileLine: s.restoreStep === "summary" || s.restoreStep === "failed",
+      restoreName: s.restoreName,
+      restoreError: s.restoreError,
+      restoreRetry: s.restoreRetry,
+      hasSummaryTaken: !!summary.takenAt,
+      summaryTaken: summary.takenAt ? longDate(summary.takenAt) + ", " + pad(summary.takenAt.getHours()) + "." + pad(summary.takenAt.getMinutes()) : "",
+      summaryPages: summary.pages.toLocaleString("en-GB"),
+      summaryRange: summary.firstDate && summary.lastDate ? ", " + isoLongDate(summary.firstDate) + " – " + isoLongDate(summary.lastDate) : "",
+      summarySets: summary.sets.toLocaleString("en-GB"),
+      summaryExercises: summary.exercises.toLocaleString("en-GB"),
+      restoredPages: count(added, "page"),
+      restoredSets: count(added === 0 ? 0 : 48, "set"),
+      hasRestorePresentLine: present > 0,
+      restorePresentLine: present === 1 ? "1 page was already in your notebook." : present.toLocaleString("en-GB") + " pages were already in your notebook.",
+      restoreNothingLine: summary.pages === 0 ? "The backup has no pages." : summary.pages === 1 ? "Its one page is already in your notebook." : "All " + summary.pages.toLocaleString("en-GB") + " pages are already in your notebook.",
+      chooseRestoreFile: this.chooseRestoreFile,
+      startRestore: this.startRestore,
+      restoreAnother: this.restoreAnother,
+      restoreSimulations: [
+        ["summary", "File summary"], ["nothing", "Nothing to restore"], ["notBackup", "Not a backup"],
+        ["newerVersion", "Newer version"], ["damaged", "Damaged"], ["tooLarge", "Too large"],
+        ["running", "Already running"], ["tooMany", "Too many restores"], ["failed", "Restore failed"]
+      ].map(([kind, label]) => ({ label, run: this.simulateRestore(kind) }))
+    };
   };
   openAccountDelete = (e) => {
     if (e) e.preventDefault();
@@ -518,7 +732,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   };
   restartPrivacyPreview = (e) => {
     if (e) e.preventDefault();
-    this.setState({ screen: "login", loginMode: "signIn", noticeSeen: false, noticeVersion: 1, exportPassword: "", deletePassword: "", detailsConsent: false, detailsStep: "ask", detailsTransition: false });
+    this.setState({ screen: "login", loginMode: "signIn", noticeSeen: false, noticeVersion: 1, backupPassword: "", deletePassword: "", detailsConsent: false, detailsStep: "ask", detailsTransition: false });
   };`
     );
     // Provisional P1/P2 Article 6(1)(b): describe the core service before the
@@ -620,7 +834,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           <div style="border-top:1px solid var(--color-divider);padding:17px 0 20px">
             <div style="font-family:var(--font-heading);font-size:20px">Export your notebook</div>
             <p style="font-size:12px;color:var(--color-neutral-600);line-height:1.55;margin:5px 0 12px">Get one JSON file with your account, exercises, sessions and sets.</p>
-            <button class="btn btn-ghost" sc-camel-on-click="{{ openExport }}" style="min-height:44px;width:100%">Export my data</button>
+            <button class="btn btn-ghost" sc-camel-on-click="{{ openBackup }}" style="min-height:44px;width:100%">Export my data</button>
           </div>
           <div style="border-top:1px solid var(--color-divider);padding:17px 0 20px">
             <div style="font-family:var(--font-heading);font-size:20px">Delete your account</div>
@@ -637,22 +851,99 @@ document.addEventListener('DOMContentLoaded', async function() {
       </div>
     </sc-if>
 
-    <sc-if value="{{ isAccountExport }}" hint-placeholder-val="{{ false }}">
+    <sc-if value="{{ isBackup }}" hint-placeholder-val="{{ false }}">
       <div style="display:flex;flex-direction:column;height:100%">
-        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider)"><a href="#" sc-camel-on-click="{{ goPrivacy }}" style="font-size:13px">← Privacy &amp; account</a></div>
+        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider)"><a href="#" sc-camel-on-click="{{ goCover }}" style="font-size:13px">← Cover</a></div>
         <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:24px 22px 32px">
-          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Your information</div>
-          <h2 style="font-family:var(--font-heading);font-size:34px;font-weight:400;margin:10px 0 12px">Take a copy</h2>
-          <p style="font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Download one JSON file containing your account details, exercises, sessions, notes and sets. The file explains its fields and keeps each exercise's place in a session.</p>
-          <div style="border-top:1px solid var(--color-accent);margin:22px 0 18px"></div>
-          <label style="display:flex;flex-direction:column;gap:7px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)">Current password
-            <input class="input" type="password" autocomplete="current-password" value="{{ exportPassword }}" sc-camel-on-change="{{ setExportPassword }}" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
-          </label>
-          <p style="font-size:12px;line-height:1.55;color:var(--color-neutral-600);margin:10px 0 20px">The file downloads to your device and contains personal information. Keep it somewhere private. This prototype downloads sample data only.</p>
-          <sc-if value="{{ hasExportError }}" hint-placeholder-val="{{ false }}"><p role="alert" style="font-size:13px;line-height:1.55;color:#9b382b">{{ exportError }}</p></sc-if>
-          <sc-if value="{{ exportDone }}" hint-placeholder-val="{{ false }}"><p role="status" style="font-size:13px;line-height:1.55;color:var(--color-accent-700)">Your file has been saved as gym-notebook-sample-export.json. Your notebook has not changed.</p></sc-if>
-          <button class="btn btn-primary" sc-camel-on-click="{{ downloadSampleExport }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">Download my data</button>
-          <div style="margin-top:18px;font-size:11px;color:var(--color-neutral-600)">Prototype control · <a href="#" sc-camel-on-click="{{ failExport }}">Simulate unavailable export</a></div>
+          <h2 style="font-family:var(--font-heading);font-size:34px;font-weight:400;margin:0 0 8px">Backup &amp; restore</h2>
+          <sc-if value="{{ lastBackupChecking }}" hint-placeholder-val="{{ false }}"><p style="font-size:15px;color:var(--color-neutral-700);margin:0 0 8px">Checking your last backup…</p></sc-if>
+          <sc-if value="{{ hasLastBackup }}" hint-placeholder-val="{{ true }}"><p style="font-size:15px;color:var(--color-neutral-700);margin:0 0 8px">Last full backup: <strong style="font-weight:500;color:var(--color-text);font-variant-numeric:tabular-nums;padding-bottom:1px;border-bottom:{{ lastBackupUnderline }}">{{ lastBackupAt }}</strong></p></sc-if>
+          <sc-if value="{{ noLastBackup }}" hint-placeholder-val="{{ false }}"><p style="font-size:15px;color:var(--color-neutral-700);margin:0 0 8px">No full backup yet.</p></sc-if>
+
+          <div style="border-top:1px solid var(--color-divider);padding-top:17px;margin-top:22px">
+            <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 12px">Make a backup</h3>
+            <fieldset style="border:0;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:9px">
+              <legend style="padding:0;margin-bottom:6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)">Format</legend>
+              <label style="display:grid;grid-template-columns:22px 1fr;gap:2px 12px;align-items:start;min-height:44px;padding:12px;cursor:pointer;border:1px solid {{ jsonOptionBorder }};border-radius:var(--radius-md);background:{{ jsonOptionBackground }}">
+                <input type="radio" name="backupFormat" value="json" checked="{{ isJsonFormat }}" disabled="{{ backupBusy }}" sc-camel-on-change="{{ chooseJsonFormat }}" style="margin:3px 0 0;width:18px;height:18px;accent-color:var(--color-accent-700)">
+                <span style="font-family:var(--font-heading);font-size:18px;line-height:1.25">Full backup <small style="font-family:var(--font-body);font-size:12px;letter-spacing:.06em;color:var(--color-neutral-700);margin-left:4px">JSON</small></span>
+                <span style="grid-column:2;font-size:13px;line-height:1.45;color:var(--color-neutral-700)">Everything in your notebook. This is the file you can restore from.</span>
+              </label>
+              <label style="display:grid;grid-template-columns:22px 1fr;gap:2px 12px;align-items:start;min-height:44px;padding:12px;cursor:pointer;border:1px solid {{ csvOptionBorder }};border-radius:var(--radius-md);background:{{ csvOptionBackground }}">
+                <input type="radio" name="backupFormat" value="csv" checked="{{ isCsvFormat }}" disabled="{{ backupBusy }}" sc-camel-on-change="{{ chooseCsvFormat }}" style="margin:3px 0 0;width:18px;height:18px;accent-color:var(--color-accent-700)">
+                <span style="font-family:var(--font-heading);font-size:18px;line-height:1.25">Spreadsheet <small style="font-family:var(--font-body);font-size:12px;letter-spacing:.06em;color:var(--color-neutral-700);margin-left:4px">CSV</small></span>
+                <span style="grid-column:2;font-size:13px;line-height:1.45;color:var(--color-neutral-700)">One row per set, for Excel or Numbers. It can't be restored.</span>
+              </label>
+            </fieldset>
+            <label style="display:flex;flex-direction:column;gap:7px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-700)">Current password
+              <input class="input" type="password" autocomplete="current-password" value="{{ backupPassword }}" disabled="{{ backupBusy }}" sc-camel-on-change="{{ setBackupPassword }}" style="width:100%;box-sizing:border-box;min-height:46px;font-family:var(--font-body)">
+            </label>
+            <p style="font-size:12px;line-height:1.55;color:var(--color-neutral-600);margin:10px 0 16px">The file contains personal information. Keep it somewhere private. This prototype downloads sample data only.</p>
+            <sc-if value="{{ hasBackupError }}" hint-placeholder-val="{{ false }}"><p role="alert" style="font-size:13px;line-height:1.55;color:#9b382b">{{ backupError }}</p></sc-if>
+            <sc-if value="{{ isBackupChecking }}" hint-placeholder-val="{{ false }}"><p role="status" style="font-size:14px;margin:0 0 12px">Checking your password…</p></sc-if>
+            <sc-if value="{{ isBackupReceiving }}" hint-placeholder-val="{{ false }}"><div role="status" style="margin:0 0 12px"><p style="font-size:14px;margin:0 0 8px">Preparing your {{ backupWhat }}…</p><progress aria-label="Backup progress" style="display:block;width:100%;height:3px;accent-color:var(--color-accent-700)"></progress></div></sc-if>
+            <sc-if value="{{ isBackupComplete }}" hint-placeholder-val="{{ false }}"><p role="status" style="font-size:13px;line-height:1.55;color:var(--color-accent-700)">Saved as <span style="font-variant-numeric:tabular-nums">{{ backupSavedName }}</span>. {{ backupSavedNote }}</p></sc-if>
+            <button class="{{ backupButtonClass }}" sc-camel-on-click="{{ backupButtonAction }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">{{ backupButtonLabel }}</button>
+            <div style="margin-top:14px;font-size:11px;color:var(--color-neutral-600)">Prototype control · <a href="#" sc-camel-on-click="{{ failBackup }}">Simulate unfinished backup</a> · <a href="#" sc-camel-on-click="{{ previewNoBackupYet }}">Show no backup yet</a></div>
+          </div>
+
+          <div style="border-top:1px solid var(--color-divider);padding-top:17px;margin-top:22px">
+            <h3 style="font-family:var(--font-heading);font-size:21px;font-weight:400;margin:0 0 12px">Restore from a backup</h3>
+            <sc-if value="{{ isRestoreIdle }}" hint-placeholder-val="{{ true }}">
+              <p style="font-size:13px;line-height:1.6;margin:0 0 14px">Adds the pages from a backup that aren't in your notebook. Nothing already here is changed or removed.</p>
+              <label class="btn btn-secondary" style="position:relative;min-height:44px;width:100%;box-sizing:border-box">Choose backup file<input type="file" accept=".json,application/json" sc-camel-on-change="{{ chooseRestoreFile }}" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);border:0"></label>
+            </sc-if>
+            <sc-if value="{{ isRestoreReading }}" hint-placeholder-val="{{ false }}"><p role="status" style="font-size:14px;margin:0">Reading {{ restoreName }}…</p></sc-if>
+            <sc-if value="{{ hasRestoreFileLine }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top:1px solid var(--color-accent);margin:4px 0 0">
+                <div style="padding:9px 0;border-bottom:1px solid var(--color-divider);font-family:var(--font-heading);font-size:18px;overflow-wrap:anywhere">{{ restoreName }}</div>
+                <sc-if value="{{ isRestoreSummary }}" hint-placeholder-val="{{ false }}">
+                  <sc-if value="{{ hasSummaryTaken }}" hint-placeholder-val="{{ true }}"><div style="display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:14px"><span style="color:var(--color-neutral-700)">Backup taken</span><span style="text-align:right;font-variant-numeric:tabular-nums">{{ summaryTaken }}</span></div></sc-if>
+                  <div style="display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:14px"><span style="color:var(--color-neutral-700)">Pages</span><span style="text-align:right;font-variant-numeric:tabular-nums"><strong style="font-weight:500">{{ summaryPages }}</strong>{{ summaryRange }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:14px"><span style="color:var(--color-neutral-700)">Sets · exercises</span><span style="text-align:right;font-variant-numeric:tabular-nums">{{ summarySets }} · {{ summaryExercises }}</span></div>
+                </sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{ isRestoreSummary }}" hint-placeholder-val="{{ false }}">
+              <p style="font-size:14px;color:var(--color-neutral-700);margin:14px 0">Pages already in your notebook are skipped.</p>
+              <button class="btn btn-primary" sc-camel-on-click="{{ startRestore }}" style="min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px">Restore missing pages</button>
+            </sc-if>
+            <sc-if value="{{ isRestoreFailed }}" hint-placeholder-val="{{ false }}">
+              <p role="alert" style="font-size:13px;line-height:1.55;color:#9b382b;margin:12px 0">{{ restoreError }}</p>
+              <sc-if value="{{ restoreRetry }}" hint-placeholder-val="{{ false }}"><button class="btn btn-secondary" sc-camel-on-click="{{ startRestore }}" style="min-height:44px;width:100%">Try again</button></sc-if>
+            </sc-if>
+            <sc-if value="{{ hasRestoreFileLine }}" hint-placeholder-val="{{ false }}">
+              <label class="btn btn-ghost" style="position:relative;min-height:44px;width:100%;box-sizing:border-box;margin-top:8px">Choose another file<input type="file" accept=".json,application/json" sc-camel-on-change="{{ chooseRestoreFile }}" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);border:0"></label>
+            </sc-if>
+            <sc-if value="{{ isRestoreRestoring }}" hint-placeholder-val="{{ false }}"><div role="status"><p style="font-size:14px;margin:0 0 8px">Restoring… Keep this page open.</p><progress aria-label="Restore progress" style="display:block;width:100%;height:3px;accent-color:var(--color-accent-700)"></progress></div></sc-if>
+            <sc-if value="{{ isRestoreDone }}" hint-placeholder-val="{{ false }}">
+              <div role="status">
+                <p style="font-size:17px;margin:4px 0 8px">Restored <strong style="font-weight:500">{{ restoredPages }}</strong> and <strong style="font-weight:500">{{ restoredSets }}</strong>.</p>
+                <div style="font-size:14px;line-height:1.55;margin:0 0 16px">
+                  <sc-if value="{{ hasRestorePresentLine }}" hint-placeholder-val="{{ true }}"><div style="padding:3px 0">— {{ restorePresentLine }}</div></sc-if>
+                  <div style="padding:3px 0">— New exercise: Sääriprässi.</div>
+                  <div style="padding:3px 0">— Pull-up kept its current type (Bodyweight).</div>
+                  <sc-if value="{{ detailsHidden }}" hint-placeholder-val="{{ true }}"><div style="padding:3px 0">— Titles, gyms, notes and bodyweight weren't restored, because optional workout details aren't allowed. <a href="#" sc-camel-on-click="{{ openDetailsFromPrivacy }}">Optional workout details</a></div></sc-if>
+                </div>
+              </div>
+              <button class="btn btn-secondary" sc-camel-on-click="{{ goHistory }}" style="min-height:44px;width:100%">Open sessions</button>
+              <button class="btn btn-ghost" sc-camel-on-click="{{ restoreAnother }}" style="min-height:44px;width:100%;margin-top:8px">Restore another file</button>
+            </sc-if>
+            <sc-if value="{{ isRestoreNothing }}" hint-placeholder-val="{{ false }}">
+              <div role="status">
+                <p style="font-size:17px;margin:4px 0 8px">Nothing to restore.</p>
+                <p style="font-size:14px;color:var(--color-neutral-700);margin:0 0 16px">{{ restoreNothingLine }}</p>
+              </div>
+              <button class="btn btn-ghost" sc-camel-on-click="{{ restoreAnother }}" style="min-height:44px;width:100%">Restore another file</button>
+            </sc-if>
+            <div style="margin-top:14px;font-size:11px;line-height:1.7;color:var(--color-neutral-600)">Prototype control · choose any .json file, or show:
+              <div style="display:flex;flex-wrap:wrap;gap:0 12px">
+                <sc-for list="{{ restoreSimulations }}" as="r" hint-placeholder-count="9"><a href="#" sc-camel-on-click="{{ r.run }}">{{ r.label }}</a></sc-for>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:28px;padding-top:14px;border-top:1px solid var(--color-divider);font-size:13px"><a href="#" sc-camel-on-click="{{ goPrivacy }}">Privacy &amp; account</a></div>
         </div>
       </div>
     </sc-if>
@@ -665,7 +956,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Before you leave</div>
           <h2 style="font-family:var(--font-heading);font-size:34px;font-weight:400;margin:10px 0 12px">Delete your account</h2>
           <p style="font-size:13px;line-height:1.6;margin:0 0 18px">This permanently removes your account, exercises, sessions, notes and sets, and the record of which privacy notice you continued past. Every signed-in session loses access. You cannot undo this.</p>
-          <button class="btn btn-ghost" sc-camel-on-click="{{ openExport }}" style="min-height:44px;width:100%">Export first (optional)</button>
+          <button class="btn btn-ghost" sc-camel-on-click="{{ openBackup }}" style="min-height:44px;width:100%">Export first (optional)</button>
           <div style="border-top:1px solid var(--color-accent);margin:22px 0 18px"></div>
           <div style="font-family:var(--font-heading);font-size:21px;margin-bottom:8px">What remains for a limited time</div>
           <p style="font-size:13px;line-height:1.6;margin:0 0 12px">Backup copies may keep your notebook for up to 30 calendar days after the deletion. They can't be used as your notebook.</p>
@@ -718,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-accent-700)">Optional workout details</div>
           <h2 style="font-family:var(--font-heading);font-size:32px;font-weight:400;line-height:1.1;margin:10px 0 12px">Remove optional details?</h2>
           <p style="font-size:13px;line-height:1.6;margin:0 0 12px">The title, location, notes and bodyweight will be permanently removed from every workout. Your workouts, exercises and sets stay as they are. You can allow the details again later; the fields will start empty.</p>
-          <button class="btn btn-ghost" sc-camel-on-click="{{ openExport }}" style="min-height:44px;width:100%;margin-bottom:18px">Export your notebook first (optional)</button>
+          <button class="btn btn-ghost" sc-camel-on-click="{{ openBackup }}" style="min-height:44px;width:100%;margin-bottom:18px">Export your notebook first (optional)</button>
           <div style="display:flex;gap:10px">
             <button class="btn btn-primary" sc-camel-on-click="{{ confirmWithdrawal }}" style="flex:1;min-height:48px">Remove details</button>
             <button class="btn btn-secondary" sc-camel-on-click="{{ cancelWithdrawal }}" style="flex:1;min-height:48px">Cancel</button>
@@ -754,7 +1045,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       `      isNotice: screen === "notice",
       isNoticeGate: screen === "notice" && this.state.noticeReturn === "history",
       isPrivacy: screen === "privacy",
-      isAccountExport: screen === "accountExport",
+      isBackup: screen === "backup",
       isAccountDelete: screen === "accountDelete",
       isAccountDeleted: screen === "accountDeleted",
       isOptionalDetails: screen === "optionalDetails",
@@ -782,10 +1073,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       leaveDetails: this.leaveDetails,
       finishDetails: this.finishDetails,
       noticeVersion: this.state.noticeVersion,
-      exportPassword: this.state.exportPassword,
-      exportError: this.state.exportError,
-      hasExportError: !!this.state.exportError,
-      exportDone: this.state.exportDone,
+      ...this.backupValues(),
       deletePassword: this.state.deletePassword,
       deleteError: this.state.deleteError,
       hasDeleteError: !!this.state.deleteError,
@@ -798,10 +1086,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       continueNotice: this.continueNotice,
       previewRevisedNotice: this.previewRevisedNotice,
       goPrivacy: this.go("privacy"),
-      openExport: this.openExport,
-      setExportPassword: this.setExportPassword,
-      failExport: this.failExport,
-      downloadSampleExport: this.downloadSampleExport,
+      openBackup: this.openBackup,
       openAccountDelete: this.openAccountDelete,
       continueAccountDelete: this.continueAccountDelete,
       setDeletePassword: this.setDeletePassword,
