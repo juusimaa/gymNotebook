@@ -63,7 +63,7 @@ Exercises first. The page heading folds into one dateline under the header — "
 - **Expired token.** Tokens live 30 minutes with no refresh, so a long session's save can meet a 401. When the token's own `exp` has passed, the copy is *held* rather than cleared. It survives the trip to sign-in, and a reload there, and comes back when the same user signs in again. Signing in as another account removes it.
 
 ### 6. Progress — `/progress`
-`GET /exercises/{id}/history?from=&to=`. Header links to Sessions and Exercises. A horizontally scrolling exercise picker (selected one carries the accent stroke; each edge fades while there is more to scroll that way, so a clipped name says the row goes on), then the exercise name and a metric line that states what is plotted and in what unit — **"Best e1RM per session · kg"** (the line is set in capitals, but "e1RM" keeps its own case), or **"Best reps per session · reps"** for a bodyweight exercise. The y-axis label changes with it; nothing else about the screen does.
+`GET /exercises/{id}/history?from=&to=`. Header links to Sessions and Exercises. A horizontally scrolling exercise picker (selected one carries the accent stroke; each edge fades while there is more to scroll that way, so a clipped name says the row goes on), then the exercise name and a metric line that states what is plotted and in what unit — **"Estimated strength trend (e1RM) · best per session · kg"** (the line is set in capitals, but "e1RM" keeps its own case), or **"Best reps per session · reps"** for a bodyweight exercise. The y-axis label changes with it; nothing else about the screen does.
 
 The chart is hand-drawn SVG: hairline gridlines at each y-tick, one accent polyline, hollow points, and HTML axis labels positioned over it (labels are HTML, not `<text>`, deliberately — see Implementation notes). The y-range is the data's own range plus ~12%, snapped outwards to a round step (1, 2 or 5 × 10ⁿ, never under one kg or rep) chosen for about three intervals, so ticks read 58 / 59 / 60 rather than 57.5 / 58.8 / 60, and a plateau reads as a plateau instead of being flattened by a zero baseline. The x-axis labels the first and last dates; when they are the same day it prints that date once, centred.
 
@@ -71,9 +71,9 @@ Under the chart, Latest / Best / Change figures (set in Lora), each with its uni
 
 Three things the screen must say out loud, because they are the plan's e1RM rules made visible:
 
-- A tested single charts as the weight itself, and its row is annotated as a tested single — never an Epley-inflated estimate.
+- A single charts as the weight itself, and its row says “single — weight as logged”. The guidance explains that it may not be a maximum.
 - A bodyweight exercise charts reps, and a line under the chart says so and that belt-loaded sets are not charted here.
-- For loaded exercises that line instead warns that estimates degrade above roughly 12 reps.
+- For loaded exercises, the guidance explains that e1RM is an estimated strength trend from the best working set per session. Compare the same exercise/equipment with similar technique, rep ranges and effort; leaving more reps in reserve can lower the estimate without strength loss. Higher-rep estimates, especially above roughly 12 reps, are less reliable and small changes may not represent strength gains. Loaded source sets above 12 reps carry “High-rep estimate · less certain”. The guidance links [Research on repetitions and maximum strength](https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/). The formula is unchanged for all users.
 
 Two sessions on one date are two points, not one — the Pull-up series in the prototype has such a pair (8 Sep morning and evening).
 

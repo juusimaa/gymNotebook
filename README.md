@@ -122,7 +122,7 @@ Current endpoints:
 | `POST` | `/account/export` | Bearer | Needs `currentPassword`; streams the whole notebook as one JSON attachment |
 | `POST` | `/account/delete` | Bearer | Needs `currentPassword` and `confirmDeletion: true`; deletes the account and notebook |
 
-These privacy routes exist only when `PRIVACY_LIFECYCLE_ENABLED` is `true` (see [Configuration](#configuration)); otherwise they answer 404. Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history?from=&to=`) returns the best qualifying working set per session for the chart: Epley e1RM for loaded exercises (with tested singles unchanged), or reps for unloaded bodyweight sets. Its optional calendar-date bounds are inclusive.
+These privacy routes exist only when `PRIVACY_LIFECYCLE_ENABLED` is `true` (see [Configuration](#configuration)); otherwise they answer 404. Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history?from=&to=`) returns the best qualifying working set per session for the chart: Epley e1RM for loaded exercises (with tested singles unchanged), or reps for unloaded bodyweight sets. Its optional calendar-date bounds are inclusive. The progress screen describes e1RM as an estimated strength trend, explains how to compare similar sets, flags estimates from sets above 12 reps as less certain, and links [research on repetitions and maximum strength](https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/).
 
 ## Configuration
 

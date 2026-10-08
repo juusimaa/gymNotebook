@@ -321,3 +321,8 @@
     gap: 8px;
   }
 }
+
+.progress-caveat a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
