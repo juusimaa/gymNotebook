@@ -56,6 +56,8 @@ As a lifter in a 75-minute session, I'm never sent to the sign-in screen mid-ses
 3. **Given** a session that started more than the renewal cap ago (about 12 hours), **When** renewal is attempted, **Then** it is refused, the current token runs out normally, and I sign in again.
 4. **Given** I changed my password elsewhere, or reset it, **When** this browser tries to renew, **Then** renewal is refused and the session ends here as it does today.
 5. **Given** two tabs open, **When** one renews the token, **Then** the other tab carries on with the new token without reloading. Signing out in one tab still signs out the other.
+6. **Given** the app is open with nothing to save, **When** the token passes half its lifetime, **Then** it is renewed within a minute, without a request of mine.
+7. **Given** I lock the phone or switch away, **When** the token is at least five minutes old, **Then** the app tries to renew it as the tab is hidden, so I come back with close to a full lifetime.
 
 ---
 
@@ -115,7 +117,7 @@ As a lifter who started a page by mistake, I can get rid of it, and I can't lose
 
 - **FR-012**: `POST /auth/token` swaps the caller's valid, unexpired bearer token for a fresh one with the configured lifetime. It is refused if the session started more than `Jwt:RenewalCapHours` ago (default 12), if the token's version claim is stale, if the account is suspended or unconfirmed, and for link tokens (as every bearer route already does).
 - **FR-013**: Sign-in, password change and password reset start a new session: their tokens record the time the password was proven. A renewed token keeps that time, so renewal can't extend a session past the cap. A token issued before this change has no such time and can't be renewed; it runs out normally.
-- **FR-014**: The frontend renews when the token is past half its lifetime, before its next request and when the tab becomes visible. Only one renewal runs at a time per tab.
+- **FR-014**: The frontend renews when the token is past half its lifetime: before its next request, when the tab becomes visible, and on a one-minute check while the tab is visible. As the tab is hidden it also tries to renew any token at least five minutes old, without delaying requests sent on the same event. Only one shared renewal runs at a time per tab.
 - **FR-015**: Another tab replacing the token with one for the same account doesn't reload or sign out this tab. A removed token, or a token for another account, still does (today's behaviour).
 - **FR-016**: Renewal uses the per-IP `auth` rate limit.
 

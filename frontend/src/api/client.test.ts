@@ -3,7 +3,7 @@ import { getToken, setToken } from '../auth/token'
 import {
   abortPendingRequests,
   ApiError,
-  installRenewalOnVisible,
+  installBackgroundRenewal,
   onSessionEnded,
   renewTokenIfDue,
   request,
@@ -361,44 +361,168 @@ describe('token renewal', () => {
     expect(getToken()).toBe('someone-else')
   })
 
-  describe('installRenewalOnVisible', () => {
-    function fakeDocument(visibilityState: DocumentVisibilityState) {
+  describe('installBackgroundRenewal', () => {
+    // A document whose visibility the test flips, and timers whose one interval
+    // the test runs by hand.
+    function fakeDocument(initial: DocumentVisibilityState) {
       const listeners = new Map<string, () => void>()
-      return {
-        visibilityState,
+      const doc = {
+        visibilityState: initial,
         addEventListener: (type: string, listener: () => void) =>
           listeners.set(type, listener),
         removeEventListener: (type: string) => listeners.delete(type),
-        fire: () => listeners.get('visibilitychange')?.(),
+        show: () => {
+          doc.visibilityState = 'visible'
+          listeners.get('visibilitychange')?.()
+        },
+        hide: () => {
+          doc.visibilityState = 'hidden'
+          listeners.get('visibilitychange')?.()
+        },
         has: () => listeners.has('visibilitychange'),
       }
+      return doc
     }
+
+    function fakeTimers() {
+      const timers = {
+        tick: undefined as (() => void) | undefined,
+        every: undefined as number | undefined,
+        setInterval: (callback: () => void, ms: number) => {
+          timers.tick = callback
+          timers.every = ms
+          return 1
+        },
+        clearInterval: () => {
+          timers.tick = undefined
+        },
+      }
+      return timers
+    }
+
+    function install(
+      doc: ReturnType<typeof fakeDocument>,
+      timers: ReturnType<typeof fakeTimers>,
+    ) {
+      return installBackgroundRenewal(
+        doc as unknown as Document,
+        timers as unknown as Pick<
+          typeof globalThis,
+          'setInterval' | 'clearInterval'
+        >,
+      )
+    }
+
+    // Whether the renewal POST asked to outlive the page.
+    const keptAlive = () =>
+      vi
+        .mocked(fetch)
+        .mock.calls.map(([, init]) => (init as RequestInit).keepalive)
 
     it('renews when the tab becomes visible, until uninstalled', async () => {
       setToken(tokenIssued(20, 'visible'))
       const calls = serverRenewingWith(renewedTo('renewed-on-visible'))
-      const doc = fakeDocument('visible')
-      const uninstall = installRenewalOnVisible(doc as unknown as Document)
+      const doc = fakeDocument('hidden')
+      const timers = fakeTimers()
+      const uninstall = install(doc, timers)
 
-      doc.fire()
+      doc.show()
       await renewTokenIfDue()
 
       expect(calls.map((c) => c.path)).toEqual(['/auth/token'])
       expect(getToken()).toBe('renewed-on-visible')
       uninstall()
       expect(doc.has()).toBe(false)
+      expect(timers.tick).toBeUndefined()
     })
 
-    it('does nothing when the tab is hidden', () => {
-      setToken(tokenIssued(20, 'hidden'))
-      const calls = serverRenewingWith(renewedTo('unused'))
-      const doc = fakeDocument('hidden')
-      const uninstall = installRenewalOnVisible(doc as unknown as Document)
+    // A screen left open with nothing to save would otherwise run out.
+    it('checks every minute while visible and renews past half-life', async () => {
+      const doc = fakeDocument('visible')
+      const timers = fakeTimers()
+      const uninstall = install(doc, timers)
+      setToken(tokenIssued(20, 'open-screen'))
+      const calls = serverRenewingWith(renewedTo('renewed-on-check'))
 
-      doc.fire()
+      timers.tick?.()
+      await renewTokenIfDue()
+
+      expect(timers.every).toBe(60_000)
+      expect(calls.map((c) => c.path)).toEqual(['/auth/token'])
+      expect(getToken()).toBe('renewed-on-check')
       uninstall()
+    })
+
+    it('leaves a token in its first half-life alone on the minute check', () => {
+      const doc = fakeDocument('visible')
+      const timers = fakeTimers()
+      const uninstall = install(doc, timers)
+      setToken(tokenIssued(10, 'checked-young'))
+      const calls = serverRenewingWith(renewedTo('unused'))
+
+      timers.tick?.()
 
       expect(calls).toEqual([])
+      uninstall()
+    })
+
+    // A phone locked between exercises sleeps on a nearly fresh token.
+    it('stops checking when hidden and renews a token five minutes old, kept alive', async () => {
+      const doc = fakeDocument('visible')
+      const timers = fakeTimers()
+      const uninstall = install(doc, timers)
+      setToken(tokenIssued(6, 'locked'))
+      const calls = serverRenewingWith(renewedTo('renewed-on-hide'))
+
+      doc.hide()
+      await vi.waitFor(() => expect(getToken()).toBe('renewed-on-hide'))
+
+      expect(timers.tick).toBeUndefined()
+      expect(calls.map((c) => c.path)).toEqual(['/auth/token'])
+      expect(keptAlive()).toEqual([true])
+      uninstall()
+    })
+
+    // The editor flushes unsaved sets on the same event; that save goes first.
+    it('does not hold back a request sent while the hide renewal is pending', async () => {
+      const doc = fakeDocument('visible')
+      const uninstall = install(doc, fakeTimers())
+      const token = tokenIssued(6, 'flush-on-hide')
+      setToken(token)
+      // The page freezes before the renewal answers.
+      const calls = serverRenewingWith(() => new Promise<Response>(() => {}))
+
+      doc.hide()
+      await request('/workouts')
+
+      expect(calls).toEqual([
+        { path: '/auth/token', token },
+        { path: '/workouts', token },
+      ])
+      uninstall()
+      abortPendingRequests()
+    })
+
+    // Switching tabs back and forth mustn't spend the auth rate limit.
+    it('leaves a token under five minutes old alone when hidden', () => {
+      const doc = fakeDocument('visible')
+      const timers = fakeTimers()
+      const uninstall = install(doc, timers)
+      setToken(tokenIssued(4, 'hidden-young'))
+      const calls = serverRenewingWith(renewedTo('unused'))
+
+      doc.hide()
+
+      expect(calls).toEqual([])
+      uninstall()
+    })
+
+    it('does not check while installed on a hidden tab', () => {
+      const timers = fakeTimers()
+      const uninstall = install(fakeDocument('hidden'), timers)
+
+      expect(timers.tick).toBeUndefined()
+      uninstall()
     })
   })
 })

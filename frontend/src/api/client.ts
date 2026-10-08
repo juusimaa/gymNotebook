@@ -1,4 +1,10 @@
-import { getToken, isTokenExpired, setToken, shouldRenew } from '../auth/token'
+import {
+  getToken,
+  isTokenExpired,
+  setToken,
+  shouldRenew,
+  shouldRenewOnHide,
+} from '../auth/token'
 
 // Vite inlines import.meta.env.VITE_* at build time (PLAN.md, "The VITE_API_URL
 // trap"). The strict ImportMetaEnv in vite-env.d.ts makes the *name* a compile
@@ -164,13 +170,31 @@ export function renewTokenIfDue(now: Date = new Date()): Promise<void> {
   if (token === null || token === refusedToken || !shouldRenew(token, now)) {
     return renewal ?? Promise.resolve()
   }
-  renewal ??= renew(token).finally(() => {
+  renewal ??= renew(token, false).finally(() => {
     renewal = null
   })
   return renewal
 }
 
-async function renew(token: string): Promise<void> {
+// The renewal sent as the tab is hidden (see installBackgroundRenewal). Kept out
+// of the shared `renewal` on purpose: the editor flushes its unsaved sets on the
+// same event, and that save must go out at once rather than wait behind a
+// renewal the page may be frozen before finishing. Skipped while a shared
+// renewal is already under way, since that one stores a fresh token anyway.
+function renewOnHide(now: Date): void {
+  const token = getToken()
+  if (
+    renewal !== null ||
+    token === null ||
+    token === refusedToken ||
+    !shouldRenewOnHide(token, now)
+  ) {
+    return
+  }
+  void renew(token, true)
+}
+
+async function renew(token: string, keepalive: boolean): Promise<void> {
   // Tracked like any request, so a sign-out aborts it and no token can be
   // stored after the session ended.
   const controller = new AbortController()
@@ -181,6 +205,8 @@ async function renew(token: string): Promise<void> {
     const response = await fetch(baseUrl + '/auth/token', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
+      // Lets the request outlive a page that is being hidden or frozen.
+      keepalive,
       signal: controller.signal,
     })
     if (response.ok) {
@@ -203,23 +229,59 @@ async function renew(token: string): Promise<void> {
   }
 }
 
-// Renews when the tab comes back into view (D7): a phone woken after 20
-// minutes renews straight away, rather than on its next save. Wired once at
-// startup (main.tsx); returns an uninstall function, for tests.
-export function installRenewalOnVisible(
+// How often the visible tab checks whether its token is due. A minute is far
+// inside the 15 minutes between half-life and expiry, and a check without a
+// renewal is only a localStorage read.
+const VISIBLE_CHECK_MS = 60 * 1000
+
+// Renews without waiting for a request (D7), so neither an open screen nor a
+// locked phone runs out while the session is still wanted:
+// - While the tab is visible, it checks every minute and renews past half-life.
+//   A page left open between sets, with nothing to save, stays signed in.
+// - As the tab is hidden, it renews any token at least five minutes old, so the
+//   phone sleeps on a nearly fresh one. This is best effort: `keepalive` gets the
+//   request out, but a phone that freezes the page at once may never store the
+//   answer. Then the token simply keeps the time it had.
+// - As the tab comes back, it renews past half-life before the next save.
+// Hidden tabs run no check; browsers throttle their timers anyway.
+// Wired once at startup (main.tsx); returns an uninstall function, for tests.
+export function installBackgroundRenewal(
   target: Pick<
     Document,
     'addEventListener' | 'removeEventListener' | 'visibilityState'
   > = document,
+  timers: Pick<typeof globalThis, 'setInterval' | 'clearInterval'> = globalThis,
 ): () => void {
+  let check: ReturnType<typeof setInterval> | undefined
+
+  const startChecking = () => {
+    check ??= timers.setInterval(() => void renewTokenIfDue(), VISIBLE_CHECK_MS)
+  }
+  const stopChecking = () => {
+    if (check !== undefined) {
+      timers.clearInterval(check)
+      check = undefined
+    }
+  }
+
   const onVisibilityChange = () => {
     if (target.visibilityState === 'visible') {
       void renewTokenIfDue()
+      startChecking()
+    } else {
+      stopChecking()
+      renewOnHide(new Date())
     }
   }
+
+  if (target.visibilityState === 'visible') {
+    startChecking()
+  }
   target.addEventListener('visibilitychange', onVisibilityChange)
-  return () =>
+  return () => {
+    stopChecking()
     target.removeEventListener('visibilitychange', onVisibilityChange)
+  }
 }
 
 // The one fetch wrapper every api/*.ts file goes through: base URL, JSON in,

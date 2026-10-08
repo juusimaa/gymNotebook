@@ -58,25 +58,60 @@ export function getTokenSubject(token: string): string | null {
   return typeof sub === 'string' ? sub : null
 }
 
-// Whether to renew before the next request (specs/003 D7): the token is past
-// half its lifetime (`iat` to `exp`) and not yet expired. Half-life means a
-// 30-minute token renews after 15 minutes of use, and a phone left on the bench
-// for up to 15 more still comes back with one that works. An expired token isn't
-// renewable; its request meets the 401 as before. A token without `iat` (issued
-// before renewal existed) never renews and simply runs out.
+// The token's `iat` and `exp` in milliseconds, or null when either is missing:
+// a token issued before renewal existed, which never renews and simply runs out.
+function readLifetime(
+  token: string,
+): { issuedAt: number; expiresAt: number } | null {
+  const claims = readClaims(token)
+  const issuedAt = readTime(claims, 'iat')
+  const expiresAt = readTime(claims, 'exp')
+  return issuedAt === undefined || expiresAt === undefined
+    ? null
+    : { issuedAt, expiresAt }
+}
+
+// Whether to renew while the tab is in use (specs/003 D7): before a request, on
+// the visible tab's minute check, and when the tab comes back into view. The
+// token is past half its lifetime (`iat` to `exp`) and not yet expired, so a
+// 30-minute token in use renews every 15 minutes. An expired token isn't
+// renewable; its request meets the 401 as before.
 //
 // The device's clock is compared with the server's times. A clock running far
 // ahead only skips renewal, and one far behind renews early; neither breaks a
 // request, and the server enforces the real expiry and the 12-hour cap.
 export function shouldRenew(token: string, now: Date = new Date()): boolean {
-  const claims = readClaims(token)
-  const issuedAt = readTime(claims, 'iat')
-  const expiresAt = readTime(claims, 'exp')
-  if (issuedAt === undefined || expiresAt === undefined) {
+  const lifetime = readLifetime(token)
+  if (lifetime === null) {
     return false
   }
-  const halfLife = issuedAt + (expiresAt - issuedAt) / 2
-  return now.getTime() >= halfLife && now.getTime() < expiresAt
+  const halfLife =
+    lifetime.issuedAt + (lifetime.expiresAt - lifetime.issuedAt) / 2
+  return now.getTime() >= halfLife && now.getTime() < lifetime.expiresAt
+}
+
+// How old a token must be before hiding the tab renews it. Below this the
+// renewal would buy almost nothing, and the floor keeps a desktop user flipping
+// between tabs from spending the auth rate limit (10 a minute, shared with
+// sign-in) on it: one hide renewal per five minutes at most.
+const HIDE_RENEWAL_MIN_AGE_MS = 5 * 60 * 1000
+
+// Whether to renew as the tab is hidden (D7): a phone locked between exercises
+// then sleeps on a token with nearly its whole lifetime left, rather than one
+// that may be minutes from expiring. Any token at least five minutes old and
+// not yet expired, so a locked phone has at least 25 minutes.
+export function shouldRenewOnHide(
+  token: string,
+  now: Date = new Date(),
+): boolean {
+  const lifetime = readLifetime(token)
+  if (lifetime === null) {
+    return false
+  }
+  return (
+    now.getTime() >= lifetime.issuedAt + HIDE_RENEWAL_MIN_AGE_MS &&
+    now.getTime() < lifetime.expiresAt
+  )
 }
 
 // Whether the token's own `exp` claim has passed. The server has already said
