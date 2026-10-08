@@ -20,7 +20,7 @@ The workout gains `revision` (integer). The list (`GET /workouts`) doesn't need 
 `PATCH /workouts/{id}`, `PUT /workouts/{id}/exercises`, `POST /workouts/{id}/sets`, `PATCH /workouts/{id}/sets/{setId}` and `DELETE` of a set:
 
 - **Request**: may carry `expectedRevision` (integer, optional) in the body. For a `DELETE`, as the `expectedRevision` query parameter.
-- **Success**: unchanged status; the response's workout (or, for set routes, a new `revision` field) carries the new revision.
+- **Success**: unchanged status; the response's workout (or, for set POST/PATCH, a new `revision` field) carries the new revision. Set DELETE remains 204 with no body; a following GET returns the new revision.
 - **409** `{ "code": "page_changed", "revision": <current> }`: `expectedRevision` was sent and the page has moved on. Nothing is written.
 - **404**: unchanged. A missing page and another user's page are indistinguishable, and that is checked before the revision, so a 409 never reveals another user's page.
 - Without `expectedRevision`, writes behave exactly as today (last write wins) and still increase the revision.

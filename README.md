@@ -106,8 +106,8 @@ Current endpoints:
 | `GET` | `/exercises/{id}/history?from=&to=` | Bearer | Best loaded e1RM or bodyweight reps per session, oldest first |
 | `PATCH` | `/exercises/{id}` | Bearer | Rename (merges onto an existing name) and set/clear `isBodyweight` |
 | `GET` | `/workouts?limit=&before=` | Bearer | Pages newest first; rows carry exercise names, counts and end time |
-| `POST` | `/workouts` | Bearer | Creates a page from its heading fields |
-| `GET` | `/workouts/{id}` | Bearer | One page: heading + blocks (with `isBodyweight`) + sets, in order |
+| `POST` | `/workouts` | Bearer | Creates a page from its heading fields with `revision: 1` |
+| `GET` | `/workouts/{id}` | Bearer | One page: heading + blocks (with `isBodyweight`) + sets and revision, in order |
 | `PATCH` | `/workouts/{id}` | Bearer | Heading fields, including `endedAt` to finish a session |
 | `DELETE` | `/workouts/{id}` | Bearer | Cascades to blocks and sets |
 | `PUT` | `/workouts/{id}/exercises` | Bearer | Replaces the whole session atomically — the "new page" save |
@@ -124,6 +124,8 @@ Current endpoints:
 | `POST` | `/account/export` | Bearer | Needs `currentPassword`; optional `format` defaults to `json` (`csv` also streams JSON for browser conversion); records the last completed full backup |
 | `POST` | `/account/restore` | Bearer | Adds missing pages from a version 1 JSON backup in one transaction; returns added/skipped counts |
 | `POST` | `/account/delete` | Bearer | Needs `currentPassword` and `confirmDeletion: true`; deletes the account and notebook |
+
+Workout heading and set writes accept an optional `expectedRevision` in the JSON body; set DELETE takes it as a query parameter. A stale revision returns 409 `page_changed` with the current revision, while omitted revisions remain accepted. Successful page and set responses include the new revision; set DELETE keeps its 204 response. See the [durable logging API contract](specs/003-durable-logging/contracts/api.md).
 
 Export, backup status and restore are always mapped. The remaining privacy routes exist only when `PRIVACY_LIFECYCLE_ENABLED` is `true` (see [Configuration](#configuration)); otherwise they answer 404. Every route under `/exercises` and `/workouts` answers 404 for anything the caller doesn't own. The progress endpoint (`GET /exercises/{id}/history?from=&to=`) returns the best qualifying working set per session for the chart: Epley e1RM for loaded exercises (with tested singles unchanged), or reps for unloaded bodyweight sets. Its optional calendar-date bounds are inclusive. The progress screen describes e1RM as an estimated strength trend, explains how to compare similar sets, flags estimates from sets above 12 reps as less certain, and links [research on repetitions and maximum strength](https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/).
 

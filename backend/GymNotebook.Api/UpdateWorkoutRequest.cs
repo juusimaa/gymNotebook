@@ -16,6 +16,8 @@ public sealed class UpdateWorkoutRequest
     private string? _location;
     private string? _notes;
 
+    public int? ExpectedRevision { get; init; }
+
     public DateOnly? Date
     {
         get => _date;
