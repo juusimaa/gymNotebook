@@ -192,11 +192,12 @@ backend/
   entrypoint.sh        applies migrations, then starts the app
 frontend/
   src/api/             client.ts (the one fetch wrapper) + one module of wire types and calls per area:
-                       auth, workouts, exercises, privacy; download.ts saves the export file
+                       auth, workouts, exercises, privacy, backup; download.ts saves the backup file
   src/auth/            token.ts (where the JWT lives), requireAuth.ts (route-guard loader), noticeGate.ts + requireNoticeAcknowledged.ts (privacy notice gate)
   src/screens/         one .tsx (+ .css) per screen — Login, Cover, ChangePassword, Sessions, NewWorkout
                        (new and edit), WorkoutDetail, Progress, Exercises, EditExercise, the privacy screens
-                       and ExportData — plus the tested helpers they share (formatting, chart geometry, drafts)
+                       and Backup — plus the tested helpers they share (formatting, chart geometry, drafts,
+                       the backup CSV writer and file pre-check)
   src/styles/          tokens.css (design tokens lifted from the prototype, @font-face rules) + base.css
   src/routes.tsx       route table; main.tsx mounts the RouterProvider
   public/fonts/        self-hosted woff2 files (Cormorant Garamond, Lora) + their OFL licenses

@@ -3,10 +3,10 @@ import { requireAuth } from './auth/requireAuth.ts'
 import { requireNoticeAcknowledged } from './auth/requireNoticeAcknowledged.ts'
 import AccountDeleted from './screens/AccountDeleted.tsx'
 import AccountPrivacy from './screens/AccountPrivacy.tsx'
+import Backup from './screens/Backup.tsx'
 import ChangePassword from './screens/ChangePassword.tsx'
 import Cover from './screens/Cover.tsx'
 import DeleteAccount from './screens/DeleteAccount.tsx'
-import ExportData from './screens/ExportData.tsx'
 import Login from './screens/Login.tsx'
 import NoticeGate from './screens/NoticeGate.tsx'
 import OptionalDetailsConsent from './screens/OptionalDetailsConsent.tsx'
@@ -39,8 +39,8 @@ import EditExercise from './screens/EditExercise.tsx'
 // contracts/ui.md): it runs before any notebook screen renders — and so before
 // any notebook fetch — on "Open the notebook" and on every deep link. It then
 // asks the optional-details transition question, when one is pending. The
-// cover, change-password and privacy screens (export and deletion included)
-// stay outside it, reachable without acknowledging the notice.
+// cover, change-password, backup & restore and privacy screens (deletion
+// included) stay outside it, reachable without acknowledging the notice.
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/privacy', element: <PrivacyNotice /> },
@@ -70,7 +70,11 @@ export const router = createBrowserRouter([
         path: '/account/privacy/optional-details',
         element: <OptionalDetailsConsent />,
       },
-      { path: '/account/export', element: <ExportData /> },
+      // Backup & restore (specs/004), shown whether or not the privacy
+      // feature is on. Outside the notice gate, as the export it replaces was.
+      { path: '/backup', element: <Backup /> },
+      // Spec 001's export screen, now part of /backup; old links still work.
+      { path: '/account/export', element: <Navigate to="/backup" replace /> },
       { path: '/account/delete', element: <DeleteAccount /> },
       {
         id: 'notebook',

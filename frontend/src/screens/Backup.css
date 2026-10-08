@@ -1,0 +1,259 @@
+/* Backup & restore (/backup, specs/004 contracts/ui.md). Builds on Privacy.css:
+   the same reading layout, sections ruled by hairlines rather than boxed. The
+   one new pattern is the format choice. */
+
+/* The last-backup line: a fact about the notebook, read before anything else
+   on the screen. Body size, muted, the date itself in ink. */
+.backup-last {
+  font-size: 15px;
+  margin: 0 0 var(--space-2);
+}
+.backup-last strong {
+  font-weight: 500;
+  color: var(--color-text);
+  /* An underline drawn as a background, so it can grow from the left. */
+  background-image: linear-gradient(var(--color-accent), var(--color-accent));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0 1px;
+  padding-bottom: 1px;
+}
+/* The screen's one moment of motion: after a full backup, a gold rule draws
+   under the new date, then settles to a hairline. */
+.backup-last.is-fresh strong {
+  animation: backup-ink 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes backup-ink {
+  from {
+    background-size: 0 2px;
+  }
+  60% {
+    background-size: 100% 2px;
+  }
+  to {
+    background-size: 100% 1px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .backup-last.is-fresh strong {
+    animation: none;
+    background-size: 100% 1px;
+  }
+}
+
+/* The format choice: two full-width radio rows. The whole row is the label,
+   so the target is the row, not the circle. Selected: an accent-700 ring and
+   a faint gold wash, the primary button's language. */
+.backup-format {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+/* Drawn like a .field's label (base.css), which only styles .field > .label. */
+.backup-format legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+.backup-option {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 2px var(--space-3);
+  align-items: start;
+  min-height: var(--hit-target);
+  padding: var(--space-3);
+  cursor: pointer;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+.backup-option:hover {
+  border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+.backup-option input {
+  appearance: none;
+  margin: 3px 0 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--color-neutral-700);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+.backup-option input::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-700);
+  transform: scale(0);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.backup-option input:checked {
+  border-color: var(--color-accent-700);
+}
+.backup-option input:checked::before {
+  transform: scale(1);
+}
+.backup-option input:focus-visible {
+  outline: 2px solid var(--color-accent-700);
+  outline-offset: 3px;
+}
+.backup-option:has(input:checked) {
+  border-color: var(--color-accent-700);
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+.backup-format:disabled .backup-option {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.backup-option-title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 18px;
+  line-height: 1.25;
+}
+.backup-option-title small {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--color-neutral-700);
+  margin-left: 4px;
+}
+.backup-option-note {
+  grid-column: 2;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--color-neutral-700);
+}
+
+.privacy-block .backup-note {
+  font-size: 13px;
+  margin: 0;
+}
+
+/* Progress and completion lines, and the indeterminate bar (no value, so the
+   browser animates it) drawn as a thin rule. */
+.backup-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.privacy-block .backup-line {
+  font-size: 14px;
+  margin: 0;
+}
+.backup-done {
+  color: var(--color-accent-700);
+}
+.backup-progress {
+  width: 100%;
+  height: 3px;
+  appearance: none;
+  border: 0;
+  border-radius: 2px;
+  background: var(--color-divider);
+  color: var(--color-accent-700);
+  accent-color: var(--color-accent-700);
+}
+.backup-progress::-webkit-progress-bar {
+  background: var(--color-divider);
+}
+.backup-progress::-webkit-progress-value {
+  background: var(--color-accent-700);
+}
+
+/* The file control: the native input stays focusable but hidden; its label is
+   the visible button, and shows the input's focus ring. */
+.backup-file {
+  display: flex;
+  flex-direction: column;
+}
+.backup-file-input:focus-visible + label {
+  outline: 2px solid var(--color-accent-700);
+  outline-offset: 2px;
+}
+
+/* The restore summary: a ruled list, written like a contents page. */
+.backup-summary {
+  margin: var(--space-2) 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-accent);
+}
+.backup-summary li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+}
+.backup-summary li span:first-child {
+  color: var(--color-neutral-700);
+}
+.backup-summary li span:last-child {
+  text-align: right;
+}
+.backup-summary li span.backup-file-name {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 18px;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+/* Focused programmatically when the summary or result appears; not
+   interactive, so no ring. */
+.backup-focus:focus {
+  outline: none;
+}
+
+.privacy-block .backup-result {
+  font-size: 17px;
+  margin: var(--space-2) 0;
+}
+.backup-result-lines {
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+.backup-result-lines li {
+  padding: 3px 0;
+}
+.backup-result-lines li::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 1px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--color-accent);
+}
+
+.backup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.form-message + .backup-actions {
+  margin-top: var(--space-4);
+}
+
+.backup-foot {
+  margin-top: auto;
+  padding-top: var(--space-8);
+  font-size: 13px;
+}

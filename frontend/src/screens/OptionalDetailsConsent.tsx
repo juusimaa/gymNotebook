@@ -261,8 +261,7 @@ export function WithdrawReview({
         details again later; the fields will start empty.
       </p>
       <p>
-        <Link to="/account/export">Export your notebook first</Link> if you want
-        a copy.
+        <Link to="/backup">Export your notebook first</Link> if you want a copy.
       </p>
       {message !== null && (
         <p className="form-message" role="alert">
@@ -557,8 +556,8 @@ export default function OptionalDetailsConsent() {
           your permission. Read what that means below, then choose.
         </p>
         <p>
-          <Link to="/account/export">Export your notebook</Link> first if you
-          want a copy.
+          <Link to="/backup">Export your notebook</Link> first if you want a
+          copy.
         </p>
         <OptionalDetailsChoice
           declineLabel="Don't allow"

@@ -108,7 +108,8 @@
   font-size: 13px;
 }
 
-/* The export screen (/account/export). */
+/* Intro, form and progress lines first drawn for spec 001's export screen,
+   still shared by the deletion screens. Backup & restore has Backup.css. */
 .export-intro {
   font-size: 14px;
   line-height: 1.6;
@@ -118,20 +119,10 @@
   padding-top: var(--space-4);
   margin-top: var(--space-4);
 }
-.export-note,
-.export-progress,
-.export-done {
+.export-progress {
   font-size: 13px;
   line-height: 1.55;
   margin: 0;
-}
-.export-done {
-  color: var(--color-accent-700);
-}
-/* Indeterminate: no value attribute, so the browser animates it. */
-.export-progress-bar {
-  width: 100%;
-  accent-color: var(--color-accent);
 }
 
 /* Optional-details consent (OptionalDetailsConsent.tsx): the statement, then

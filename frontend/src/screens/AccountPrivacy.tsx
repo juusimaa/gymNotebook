@@ -174,7 +174,7 @@ export default function AccountPrivacy() {
         <p>
           Get one JSON file with your account, exercises, sessions and sets.
         </p>
-        <Link to="/account/export" className="btn btn-secondary btn-block">
+        <Link to="/backup" className="btn btn-secondary btn-block">
           Export my data
         </Link>
       </section>

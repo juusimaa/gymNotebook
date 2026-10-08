@@ -1,6 +1,6 @@
 # Tasks: Backup and Restore
 
-**Status**: PR 1 (#131), PR 2 (#132) and PR 3 (#133) merged on 2026-10-08. PR 4 frontend helpers are verified locally and awaiting owner review. AI implements by default; the owner names any task they will write themselves.
+**Status**: PR 1 (#131), PR 2 (#132) and PR 3 (#133) merged on 2026-10-08. PR 4 (#135) merged. PR 5, the Backup & restore screen, is verified locally and awaiting owner review. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
@@ -44,10 +44,12 @@
 
 ## PR 5 — Backup & restore screen
 
-- [ ] T040 `api/backup.ts`: `getLastBackup`, `exportNotebook(password, format)` (moved from `api/privacy.ts`), `restoreBackup(file)`.
-- [ ] T041 `screens/Backup.tsx` and `Backup.css` from `ExportData.tsx`, per contracts/ui.md and the UI draft; dated file names.
-- [ ] T042 Routes: `/backup` under the auth guard, outside the notice gate; `/account/export` redirects; cover link; Privacy & account, the deletion review and the withdrawal review link to `/backup`.
-- [ ] T043 Docs: `docs/ui/README.md` (new screen, replaced export screen, cover), `docs/ui/prototype.html` (the screen and its states, from the draft).
+- [x] T040 `api/backup.ts`: `getLastBackup`, `exportNotebook(password, format)` (moved from `api/privacy.ts`), `restoreBackup(file)`.
+- [x] T041 `screens/Backup.tsx` and `Backup.css` from `ExportData.tsx`, per contracts/ui.md and the UI draft; dated file names.
+- [x] T042 Routes: `/backup` under the auth guard, outside the notice gate; `/account/export` redirects; cover link; Privacy & account, the deletion review and the withdrawal review link to `/backup`.
+- [x] T043 Docs: `docs/ui/README.md` (new screen, replaced export screen, cover), `docs/ui/prototype.html` (the screen and its states, from the draft).
+
+**PR 5 verification (2026-10-08):** frontend typecheck, lint and all 293 Vitest tests pass; the changed files pass Prettier (the repository-wide `format:check` reports only the unrelated `.impeccable/hook.cache.json`). On a fresh local Compose stack, in Chrome: `/account/export` redirects to `/backup`; the cover shows Backup & restore; a wrong password shows the inline error, marks and focuses the field; a full backup saves `gym-notebook-<day>.json` and moves the last-backup line; a spreadsheet saves the Finnish-dialect CSV and leaves the line alone; restoring a modified backup adds the missing page and reports pages already present, the new exercise and the kept type; restoring it again shows Nothing to restore; a CSV, a newer version and a truncated file each show their message with the file name kept. Downloads were captured in the page rather than saved. No backend change, migration or new dependency.
 
 ## PR 6 — Release
 

@@ -33,11 +33,15 @@ export class ApiError extends Error {
   // parameter properties generate an assignment.
   readonly status: number
   readonly code: string | undefined
+  // A finer-grained cause under the same code, for the one route that sends
+  // it: a rejected backup file's `{ "code": "backup_invalid", "reason": ... }`.
+  readonly reason: string | undefined
 
-  constructor(status: number, code?: string) {
+  constructor(status: number, code?: string, reason?: string) {
     super(`API responded ${status}`)
     this.status = status
     this.code = code
+    this.reason = reason
   }
 }
 
@@ -57,27 +61,28 @@ export function isOptionalDetailsConsentRequired(error: unknown): boolean {
   )
 }
 
-// Reads the `code` out of an error response, if it has one. Only a JSON body is
-// parsed, and a body that isn't the expected shape just means "no code" — the
-// status alone is still a complete error.
-async function readErrorCode(response: Response): Promise<string | undefined> {
+// Reads the `code` (and `reason`, when present) out of an error response. Only
+// a JSON body is parsed, and a body that isn't the expected shape just means
+// "no code" — the status alone is still a complete error.
+async function readErrorBody(
+  response: Response,
+): Promise<{ code?: string; reason?: string }> {
   if (!response.headers.get('Content-Type')?.includes('application/json')) {
-    return undefined
+    return {}
   }
   try {
     const body: unknown = await response.json()
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'code' in body &&
-      typeof body.code === 'string'
-    ) {
-      return body.code
+    if (typeof body === 'object' && body !== null) {
+      const fields = body as Record<string, unknown>
+      return {
+        code: typeof fields.code === 'string' ? fields.code : undefined,
+        reason: typeof fields.reason === 'string' ? fields.reason : undefined,
+      }
     }
   } catch {
     // Malformed JSON on an error response: fall back to the status alone.
   }
-  return undefined
+  return {}
 }
 
 interface RequestOptions {
@@ -85,6 +90,9 @@ interface RequestOptions {
   // Anything JSON.stringify can serialise. `unknown` rather than `object` so a
   // caller must mean it; the wire types in api/auth.ts etc. are what give it shape.
   body?: unknown
+  // A body that is already JSON, sent byte for byte instead of `body`: a backup
+  // file being restored, which must reach the server exactly as it was saved.
+  jsonFile?: Blob
   // Lets a caller cancel the request, e.g. a download the user walks away from.
   signal?: AbortSignal
   // Who handles a 401 (specs/001 contracts/ui.md → Invalidation). "session", the
@@ -145,7 +153,7 @@ export async function send<T>(
 
   // Only when there's a body: a GET carrying Content-Type is a "non-simple"
   // request and would cost a preflight for nothing.
-  if (init.body !== undefined) {
+  if (init.body !== undefined || init.jsonFile !== undefined) {
     headers['Content-Type'] = 'application/json'
   }
 
@@ -174,7 +182,9 @@ export async function send<T>(
     const response = await fetch(baseUrl + path, {
       method,
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body:
+        init.jsonFile ??
+        (init.body === undefined ? undefined : JSON.stringify(init.body)),
       signal: controller.signal,
     })
 
@@ -191,7 +201,8 @@ export async function send<T>(
           tokenExpired: isTokenExpired(token),
         })
       }
-      throw new ApiError(response.status, await readErrorCode(response))
+      const { code, reason } = await readErrorBody(response)
+      throw new ApiError(response.status, code, reason)
     }
     return await read(response)
   } finally {
