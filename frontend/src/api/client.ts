@@ -1,4 +1,4 @@
-import { getToken, isTokenExpired } from '../auth/token'
+import { getToken, isTokenExpired, setToken, shouldRenew } from '../auth/token'
 
 // Vite inlines import.meta.env.VITE_* at build time (PLAN.md, "The VITE_API_URL
 // trap"). The strict ImportMetaEnv in vite-env.d.ts makes the *name* a compile
@@ -137,6 +137,91 @@ export function abortPendingRequests(): void {
   }
 }
 
+// Token renewal (specs/003 D4–D7). A session token lives 30 minutes; past half
+// of that, the next request first trades it for a fresh one at POST /auth/token,
+// so a long gym session never meets the sign-in screen. The server stops
+// renewing 12 hours after the password was last entered (403 renewal_refused);
+// the current token then just runs out, and its 401 ends the session as before.
+//
+// Renewal is a convenience, never a reason for the actual request to fail: any
+// problem here — no connection, a 429, a 401 — is swallowed, and the request
+// goes ahead with the token it has. If that token is no good, the request's own
+// 401 is what ends the session, through the one path that already handles it.
+
+// One renewal at a time. A screen that loads three things at once, or a save
+// racing a visibility change, all wait for the same POST.
+let renewal: Promise<void> | null = null
+
+// The token the server refused to renew (the 12-hour cap). Not asked again: it
+// still works until it expires, and asking would only spend the auth rate limit.
+// A new sign-in stores a different token, which renews normally.
+let refusedToken: string | null = null
+
+// Renews the stored token if it's due. Resolves once the stored token is the
+// best one available; never rejects.
+export function renewTokenIfDue(now: Date = new Date()): Promise<void> {
+  const token = getToken()
+  if (token === null || token === refusedToken || !shouldRenew(token, now)) {
+    return renewal ?? Promise.resolve()
+  }
+  renewal ??= renew(token).finally(() => {
+    renewal = null
+  })
+  return renewal
+}
+
+async function renew(token: string): Promise<void> {
+  // Tracked like any request, so a sign-out aborts it and no token can be
+  // stored after the session ended.
+  const controller = new AbortController()
+  inFlight.add(controller)
+  try {
+    // Plain fetch rather than send(): send() would come back here first, and a
+    // 401 on this POST must not end the session by itself (see above).
+    const response = await fetch(baseUrl + '/auth/token', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+    if (response.ok) {
+      const body = (await response.json()) as { token: string }
+      // Only replace the token this renewed. If the user signed out, or signed
+      // in as someone else in another tab, meanwhile, theirs stays.
+      if (getToken() === token) {
+        setToken(body.token)
+      }
+      return
+    }
+    const { code } = await readErrorBody(response)
+    if (response.status === 403 && code === 'renewal_refused') {
+      refusedToken = token
+    }
+  } catch {
+    // Offline or aborted: keep the current token; the next request tries again.
+  } finally {
+    inFlight.delete(controller)
+  }
+}
+
+// Renews when the tab comes back into view (D7): a phone woken after 20
+// minutes renews straight away, rather than on its next save. Wired once at
+// startup (main.tsx); returns an uninstall function, for tests.
+export function installRenewalOnVisible(
+  target: Pick<
+    Document,
+    'addEventListener' | 'removeEventListener' | 'visibilityState'
+  > = document,
+): () => void {
+  const onVisibilityChange = () => {
+    if (target.visibilityState === 'visible') {
+      void renewTokenIfDue()
+    }
+  }
+  target.addEventListener('visibilitychange', onVisibilityChange)
+  return () =>
+    target.removeEventListener('visibilitychange', onVisibilityChange)
+}
+
 // The one fetch wrapper every api/*.ts file goes through: base URL, JSON in,
 // bearer token when there is one, non-2xx turned into a thrown ApiError. `read`
 // turns the response into the result while the request is still tracked (and
@@ -157,13 +242,9 @@ export async function send<T>(
     headers['Content-Type'] = 'application/json'
   }
 
-  const token = getToken()
-  if (token !== null) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
   // Our own controller, so abortPendingRequests() can cancel this request; the
-  // caller's signal, if any, is forwarded to it.
+  // caller's signal, if any, is forwarded to it. Registered before the renewal
+  // below, so a sign-out while this waits for it still cancels the request.
   const controller = new AbortController()
   if (init.signal?.aborted) {
     controller.abort(init.signal.reason)
@@ -179,6 +260,15 @@ export async function send<T>(
 
   const method = init.method ?? 'GET'
   try {
+    // Before reading the token, so the request carries the renewed one.
+    await renewTokenIfDue()
+    // Rejects as fetch would, had it been aborted.
+    controller.signal.throwIfAborted()
+    const token = getToken()
+    if (token !== null) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
     const response = await fetch(baseUrl + path, {
       method,
       headers,

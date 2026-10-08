@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTokenExpired } from './token'
+import { getTokenSubject, isTokenExpired, shouldRenew } from './token'
 
 // A JWT is three base64url parts; only the middle one (the claims) matters
 // here, so the header and signature are placeholders.
@@ -42,5 +42,52 @@ describe('isTokenExpired', () => {
   it('is false without a numeric exp claim', () => {
     expect(isTokenExpired(tokenWithClaims({ sub: '7' }), now)).toBe(false)
     expect(isTokenExpired(tokenWithClaims({ exp: 'soon' }), now)).toBe(false)
+  })
+})
+
+// specs/003 D7: renew past half the token's lifetime, never once it's expired.
+describe('shouldRenew', () => {
+  // A 30-minute token issued `minutesAgo` before now.
+  function issued(minutesAgo: number): string {
+    const iat = nowSeconds - minutesAgo * 60
+    return tokenWithClaims({ sub: '7', iat, exp: iat + 30 * 60 })
+  }
+
+  it('is false in the first half of the lifetime', () => {
+    expect(shouldRenew(issued(0), now)).toBe(false)
+    expect(shouldRenew(issued(14), now)).toBe(false)
+  })
+
+  it('is true from half-life until expiry', () => {
+    expect(shouldRenew(issued(15), now)).toBe(true)
+    expect(shouldRenew(issued(29), now)).toBe(true)
+  })
+
+  it('is false once expired', () => {
+    expect(shouldRenew(issued(30), now)).toBe(false)
+    expect(shouldRenew(issued(45), now)).toBe(false)
+  })
+
+  // Issued before renewal existed: it runs out as tokens always did.
+  it('is false without iat or exp', () => {
+    expect(shouldRenew(tokenWithClaims({ exp: nowSeconds + 60 }), now)).toBe(
+      false,
+    )
+    expect(shouldRenew(tokenWithClaims({ iat: nowSeconds - 60 }), now)).toBe(
+      false,
+    )
+    expect(shouldRenew('not-a-token', now)).toBe(false)
+  })
+})
+
+describe('getTokenSubject', () => {
+  it('reads the sub claim', () => {
+    expect(getTokenSubject(tokenWithClaims({ sub: '7' }))).toBe('7')
+  })
+
+  it('is null when there is no readable string sub', () => {
+    expect(getTokenSubject(tokenWithClaims({ sub: 7 }))).toBeNull()
+    expect(getTokenSubject(tokenWithClaims({}))).toBeNull()
+    expect(getTokenSubject('not-a-token')).toBeNull()
   })
 })

@@ -1,6 +1,6 @@
 # Tasks: Durable Logging
 
-**Status**: Plan merged in #127; PR 2 implementation complete, awaiting review. AI implements by default; the owner names any task they will write themselves.
+**Status**: Plan merged in #127; PR 2 merged in #138; PR 3 implementation complete, awaiting review. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (merged in #127)
 
@@ -15,10 +15,13 @@
 
 ## PR 3 — Token renewal (frontend)
 
-- [ ] T020 `auth/token.ts`: read `sub` and the lifetime from the payload; `shouldRenew(token, now)` (past half-life, not expired).
-- [ ] T021 `api/client.ts`: one shared renewal before a request when `shouldRenew`; on `visibilitychange`; a 403 `renewal_refused` stops renewal for this token.
-- [ ] T022 `auth/invalidation.ts`: a same-`sub` token change doesn't reload (D8).
-- [ ] T023 Vitest for T020–T022; update `editorDraftStorage.ts` and `invalidation.ts` comments that say "30 minutes with no refresh".
+The session token had no `iat`, so its lifetime couldn't be read from the payload; PR 3 adds the claim in `JwtTokenFactory.CreateToken` (asserted in `RenewToken_ValidToken_ReturnsFreshTokenWithSameAuthTime`).
+
+
+- [x] T020 `auth/token.ts`: read `sub` and the lifetime from the payload; `shouldRenew(token, now)` (past half-life, not expired).
+- [x] T021 `api/client.ts`: one shared renewal before a request when `shouldRenew`; on `visibilitychange`; a 403 `renewal_refused` stops renewal for this token.
+- [x] T022 `auth/invalidation.ts`: a same-`sub` token change doesn't reload (D8).
+- [x] T023 Vitest for T020–T022; update `editorDraftStorage.ts` and `invalidation.ts` comments that say "30 minutes with no refresh".
 
 ## PR 4 — Workout revision (backend)
 

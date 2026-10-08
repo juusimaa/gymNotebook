@@ -4,7 +4,7 @@ import './styles/tokens.css'
 import './styles/base.css'
 import { RouterProvider } from 'react-router'
 import { router } from './routes.tsx'
-import { abortPendingRequests } from './api/client'
+import { abortPendingRequests, installRenewalOnVisible } from './api/client'
 import { revokePendingDownloads } from './api/download'
 import { installInvalidation } from './auth/invalidation'
 import { clearToken, getToken } from './auth/token'
@@ -38,6 +38,9 @@ installInvalidation({
   },
   reload: () => window.location.reload(),
 })
+
+// Renews the session token when the tab comes back into view (api/client.ts).
+installRenewalOnVisible()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

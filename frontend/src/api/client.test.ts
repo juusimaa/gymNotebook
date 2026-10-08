@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setToken } from '../auth/token'
+import { getToken, setToken } from '../auth/token'
 import {
   abortPendingRequests,
   ApiError,
+  installRenewalOnVisible,
   onSessionEnded,
+  renewTokenIfDue,
   request,
   type SessionEnded,
 } from './client'
@@ -226,6 +228,177 @@ describe('restore requests', () => {
       status: 400,
       code: 'backup_invalid',
       reason: 'unsupported_version',
+    })
+  })
+})
+
+// Token renewal (specs/003 D7). Each test uses its own token, since the
+// client remembers a refused one for the rest of the module's life.
+describe('token renewal', () => {
+  // A 30-minute token for user 7 issued `minutesAgo` before now; `tag` makes
+  // otherwise identical tokens distinct.
+  function tokenIssued(minutesAgo: number, tag: string): string {
+    const iat = Math.floor(Date.now() / 1000) - minutesAgo * 60
+    const claims = { sub: '7', iat, exp: iat + 30 * 60, tag }
+    const payload = btoa(JSON.stringify(claims))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+    return `header.${payload}.signature`
+  }
+
+  // fetch that answers POST /auth/token with `renewal` and everything else 200,
+  // recording the bearer token each request carried.
+  function serverRenewingWith(renewal: () => Promise<Response>) {
+    const calls: { path: string; token: string | undefined }[] = []
+    const fetchMock = vi.fn((url: string, init: RequestInit) => {
+      const headers = init.headers as Record<string, string>
+      calls.push({
+        path: new URL(url).pathname,
+        token: headers.Authorization?.replace('Bearer ', ''),
+      })
+      return url.endsWith('/auth/token')
+        ? renewal()
+        : Promise.resolve(Response.json({ ok: true }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return calls
+  }
+
+  const renewedTo = (token: string) => () =>
+    Promise.resolve(Response.json({ token }))
+
+  it('leaves a token in its first half-life alone', async () => {
+    const token = tokenIssued(5, 'fresh')
+    setToken(token)
+    const calls = serverRenewingWith(renewedTo('unused'))
+
+    await request('/workouts')
+
+    expect(calls).toEqual([{ path: '/workouts', token }])
+  })
+
+  it('renews a token past half-life before the request, which carries the new one', async () => {
+    const old = tokenIssued(20, 'old')
+    setToken(old)
+    const calls = serverRenewingWith(renewedTo('renewed'))
+
+    await request('/workouts')
+
+    expect(calls).toEqual([
+      { path: '/auth/token', token: old },
+      { path: '/workouts', token: 'renewed' },
+    ])
+    expect(getToken()).toBe('renewed')
+  })
+
+  it('shares one renewal between requests sent together', async () => {
+    setToken(tokenIssued(20, 'shared'))
+    const calls = serverRenewingWith(renewedTo('renewed-once'))
+
+    await Promise.all([request('/workouts'), request('/exercises')])
+
+    expect(calls.filter((c) => c.path === '/auth/token')).toHaveLength(1)
+    expect(calls.filter((c) => c.token === 'renewed-once')).toHaveLength(2)
+  })
+
+  it('stops renewing a token the server refused past the cap', async () => {
+    const capped = tokenIssued(20, 'capped')
+    setToken(capped)
+    const calls = serverRenewingWith(() =>
+      Promise.resolve(
+        Response.json({ code: 'renewal_refused' }, { status: 403 }),
+      ),
+    )
+
+    await request('/workouts')
+    await request('/workouts')
+
+    // The token still works until it expires; it is asked about only once.
+    expect(calls).toEqual([
+      { path: '/auth/token', token: capped },
+      { path: '/workouts', token: capped },
+      { path: '/workouts', token: capped },
+    ])
+    expect(ended).toEqual([])
+  })
+
+  it('lets the request go ahead when renewal fails', async () => {
+    const token = tokenIssued(20, 'offline')
+    setToken(token)
+    const calls = serverRenewingWith(() =>
+      Promise.reject(new TypeError('Failed to fetch')),
+    )
+
+    await request('/workouts')
+
+    expect(calls.at(-1)).toEqual({ path: '/workouts', token })
+    expect(getToken()).toBe(token)
+  })
+
+  // The renewal's own 401 never ends the session; the request's 401 does.
+  it('leaves a 401 on the renewal to the request that follows', async () => {
+    setToken(tokenIssued(20, 'revoked'))
+    serverRenewingWith(() =>
+      Promise.resolve(new Response(null, { status: 401 })),
+    )
+
+    await request('/workouts')
+
+    expect(ended).toEqual([])
+  })
+
+  it('does not overwrite a token that changed while renewing', async () => {
+    setToken(tokenIssued(20, 'replaced'))
+    serverRenewingWith(() => {
+      // Another tab signs in as someone else meanwhile.
+      setToken('someone-else')
+      return Promise.resolve(Response.json({ token: 'renewed' }))
+    })
+
+    await request('/workouts')
+
+    expect(getToken()).toBe('someone-else')
+  })
+
+  describe('installRenewalOnVisible', () => {
+    function fakeDocument(visibilityState: DocumentVisibilityState) {
+      const listeners = new Map<string, () => void>()
+      return {
+        visibilityState,
+        addEventListener: (type: string, listener: () => void) =>
+          listeners.set(type, listener),
+        removeEventListener: (type: string) => listeners.delete(type),
+        fire: () => listeners.get('visibilitychange')?.(),
+        has: () => listeners.has('visibilitychange'),
+      }
+    }
+
+    it('renews when the tab becomes visible, until uninstalled', async () => {
+      setToken(tokenIssued(20, 'visible'))
+      const calls = serverRenewingWith(renewedTo('renewed-on-visible'))
+      const doc = fakeDocument('visible')
+      const uninstall = installRenewalOnVisible(doc as unknown as Document)
+
+      doc.fire()
+      await renewTokenIfDue()
+
+      expect(calls.map((c) => c.path)).toEqual(['/auth/token'])
+      expect(getToken()).toBe('renewed-on-visible')
+      uninstall()
+      expect(doc.has()).toBe(false)
+    })
+
+    it('does nothing when the tab is hidden', () => {
+      setToken(tokenIssued(20, 'hidden'))
+      const calls = serverRenewingWith(renewedTo('unused'))
+      const doc = fakeDocument('hidden')
+      const uninstall = installRenewalOnVisible(doc as unknown as Document)
+
+      doc.fire()
+      uninstall()
+
+      expect(calls).toEqual([])
     })
   })
 })

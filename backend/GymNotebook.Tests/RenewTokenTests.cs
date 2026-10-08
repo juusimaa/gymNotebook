@@ -77,6 +77,9 @@ public class RenewTokenTests(RenewTokenGymNotebookFactory factory) : IClassFixtu
         Assert.Equal(Read(old).Claims.Single(c => c.Type == "tv").Value,
             Read(fresh).Claims.Single(c => c.Type == "tv").Value);
         Assert.True(Read(fresh).ValidTo > Read(old).ValidTo.AddMinutes(15));
+        // The browser times its next renewal from iat (frontend auth/token.ts).
+        Assert.Equal(now.ToUnixTimeSeconds(),
+            long.Parse(Read(fresh).Claims.Single(c => c.Type == JwtRegisteredClaimNames.Iat).Value));
     }
 
     [Fact]

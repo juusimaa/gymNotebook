@@ -56,6 +56,15 @@ function fakeWindow() {
   }
 }
 
+// A JWT whose only readable part is its claims: `sub` and a distinguishing `iat`.
+function tokenFor(sub: string, iat = 0): string {
+  const payload = btoa(JSON.stringify({ sub, iat }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  return `header.${payload}.signature`
+}
+
 beforeEach(() => {
   clearInterruptedWrite()
 })
@@ -120,7 +129,10 @@ describe('handleTokenStorageChange (another tab)', () => {
   it('ends the session when another tab removed the token', () => {
     const env = fakeEnvironment()
 
-    handleTokenStorageChange({ key: TOKEN_KEY, newValue: null }, env)
+    handleTokenStorageChange(
+      { key: TOKEN_KEY, oldValue: 'a-token', newValue: null },
+      env,
+    )
 
     expect(env.clearToken).toHaveBeenCalledOnce()
     expect(env.abortPendingRequests).toHaveBeenCalledOnce()
@@ -133,24 +145,71 @@ describe('handleTokenStorageChange (another tab)', () => {
   it('ends the session when another tab cleared all storage', () => {
     const env = fakeEnvironment()
 
-    handleTokenStorageChange({ key: null, newValue: null }, env)
+    handleTokenStorageChange({ key: null, oldValue: null, newValue: null }, env)
 
     expect(env.showSignedOut).toHaveBeenCalledOnce()
   })
 
-  it('reloads when another tab signed in, possibly as someone else', () => {
+  it('reloads when another tab signed in where this one was signed out', () => {
     const env = fakeEnvironment()
 
-    handleTokenStorageChange({ key: TOKEN_KEY, newValue: 'another-token' }, env)
+    handleTokenStorageChange(
+      { key: TOKEN_KEY, oldValue: null, newValue: tokenFor('7') },
+      env,
+    )
 
     expect(env.reload).toHaveBeenCalledOnce()
     expect(env.clearToken).not.toHaveBeenCalled()
   })
 
+  it('reloads when another tab signed in as someone else', () => {
+    const env = fakeEnvironment()
+
+    handleTokenStorageChange(
+      { key: TOKEN_KEY, oldValue: tokenFor('7'), newValue: tokenFor('8') },
+      env,
+    )
+
+    expect(env.reload).toHaveBeenCalledOnce()
+  })
+
+  // specs/003 D8: a renewal elsewhere must not reload a page being edited.
+  it('does nothing when another tab renewed the same user’s token', () => {
+    const env = fakeEnvironment()
+
+    handleTokenStorageChange(
+      {
+        key: TOKEN_KEY,
+        oldValue: tokenFor('7', 1000),
+        newValue: tokenFor('7', 2000),
+      },
+      env,
+    )
+
+    expect(Object.values(env).every((fn) => fn.mock.calls.length === 0)).toBe(
+      true,
+    )
+  })
+
+  // Unreadable tokens can't prove they belong to the same user.
+  it('reloads when the user of either token cannot be read', () => {
+    const env = fakeEnvironment()
+
+    handleTokenStorageChange(
+      { key: TOKEN_KEY, oldValue: 'not-a-jwt', newValue: 'not-a-jwt-either' },
+      env,
+    )
+
+    expect(env.reload).toHaveBeenCalledOnce()
+  })
+
   it('ignores changes to other keys', () => {
     const env = fakeEnvironment()
 
-    handleTokenStorageChange({ key: 'something-else', newValue: null }, env)
+    handleTokenStorageChange(
+      { key: 'something-else', oldValue: 'x', newValue: null },
+      env,
+    )
 
     expect(Object.values(env).every((fn) => fn.mock.calls.length === 0)).toBe(
       true,
