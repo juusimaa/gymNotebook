@@ -1,6 +1,6 @@
 # Tasks: Backup and Restore
 
-**Status**: PRs 1–5 (#131, #132, #133, #135, #136) merged on 2026-10-08. PR 6, the release, adds the PLAN.md milestone entry and records the owner checks: T051 passed, T050 skipped. AI implements by default; the owner names any task they will write themselves.
+**Status**: Done (2026-10-08). PRs 1–5 (#131, #132, #133, #135, #136) merged; PR 6, the release, adds the PLAN.md milestone entry and records the owner checks: T051 passed, T050 skipped (follow-up). AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
