@@ -42,6 +42,14 @@ The session token had no `iat`, so its lifetime couldn't be read from the payloa
 
 *As built in PR 5:* the save state sits on its own line under the dateline (a live region inside the dateline's button would change its name); the incomplete-row notice names the exercise ("Bench Press set 3 needs reps"); an in-progress edit page has no Finished field; after a conflict, Cancel asks the discard question rather than offering tear-out; and the stored draft gains an optional `revision`, so a restored copy saves against the revision it was made on (contracts/ui.md).
 
+## PR 6 — Renewal while idle (frontend)
+
+The owner test on Azure (2026-10-08) found that renewing only on requests and on visibility signs out after 15–30 idle minutes (D7).
+
+- [x] T047 `auth/token.ts`: `shouldRenewOnHide` (at least five minutes old, not expired).
+- [x] T048 `api/client.ts`: `installBackgroundRenewal` replaces `installRenewalOnVisible`: one-minute check while visible, `keepalive` renewal on hide that requests don't wait for.
+- [x] T049 Vitest for T047–T048; plan D7, spec FR-014, PLAN.md → Token lifetime.
+
 ## Owner checks
 
 - [ ] T050 SC-001 walkthrough on a phone: a 90-minute session with no Save and no sign-in.

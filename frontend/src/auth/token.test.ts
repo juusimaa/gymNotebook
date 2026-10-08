@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getTokenSubject, isTokenExpired, shouldRenew } from './token'
+import {
+  getTokenSubject,
+  isTokenExpired,
+  shouldRenew,
+  shouldRenewOnHide,
+} from './token'
 
 // A JWT is three base64url parts; only the middle one (the claims) matters
 // here, so the header and signature are placeholders.
@@ -89,5 +94,36 @@ describe('getTokenSubject', () => {
     expect(getTokenSubject(tokenWithClaims({ sub: 7 }))).toBeNull()
     expect(getTokenSubject(tokenWithClaims({}))).toBeNull()
     expect(getTokenSubject('not-a-token')).toBeNull()
+  })
+})
+
+// specs/003 D7: hiding the tab renews any token five minutes old, never an
+// expired one, so a locked phone sleeps on a nearly fresh token.
+describe('shouldRenewOnHide', () => {
+  // A 30-minute token issued `minutesAgo` before now.
+  function issued(minutesAgo: number): string {
+    const iat = nowSeconds - minutesAgo * 60
+    return tokenWithClaims({ sub: '7', iat, exp: iat + 30 * 60 })
+  }
+
+  it('is false under five minutes old', () => {
+    expect(shouldRenewOnHide(issued(0), now)).toBe(false)
+    expect(shouldRenewOnHide(issued(4), now)).toBe(false)
+  })
+
+  it('is true from five minutes old until expiry', () => {
+    expect(shouldRenewOnHide(issued(5), now)).toBe(true)
+    expect(shouldRenewOnHide(issued(29), now)).toBe(true)
+  })
+
+  it('is false once expired', () => {
+    expect(shouldRenewOnHide(issued(30), now)).toBe(false)
+  })
+
+  it('is false without iat or exp', () => {
+    expect(
+      shouldRenewOnHide(tokenWithClaims({ exp: nowSeconds + 60 }), now),
+    ).toBe(false)
+    expect(shouldRenewOnHide('not-a-token', now)).toBe(false)
   })
 })
