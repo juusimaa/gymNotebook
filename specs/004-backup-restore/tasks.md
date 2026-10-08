@@ -1,6 +1,6 @@
 # Tasks: Backup and Restore
 
-**Status**: PR 1 (#131) and PR 2 (#132) merged on 2026-10-08. PR 3 backend implementation is verified locally and awaiting owner review. AI implements by default; the owner names any task they will write themselves.
+**Status**: PR 1 (#131), PR 2 (#132) and PR 3 (#133) merged on 2026-10-08. PR 4 frontend helpers are verified locally and awaiting owner review. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
@@ -36,9 +36,11 @@
 
 ## PR 4 — CSV writer and file pre-check (frontend helpers)
 
-- [ ] T030 `screens/backupCsv.ts`: `toCsv(exportFile, { timeZone, decimalComma })` and `prefersDecimalComma(locale)` (D4, D5).
-- [ ] T031 `screens/backupFile.ts`: parse and pre-check a chosen file, and summarise it (FR-012), with typed results for each failure case.
-- [ ] T032 Vitest: dialects, quoting, formula guard, empty pages and blocks, null weight, bodyweight added load, time-zone boundaries around midnight, non-ASCII, the BOM; and every pre-check outcome.
+- [x] T030 `screens/backupCsv.ts`: `toCsv(exportFile, { timeZone, decimalComma })` and `prefersDecimalComma(locale)` (D4, D5).
+- [x] T031 `screens/backupFile.ts`: parse and pre-check a chosen file, and summarise it (FR-012), with typed results for each failure case.
+- [x] T032 Vitest: dialects, quoting, formula guard, empty pages and blocks, null weight, bodyweight added load, time-zone boundaries around midnight, non-ASCII, the BOM; and every pre-check outcome.
+
+**PR 4 verification (2026-10-08):** frontend typecheck, lint and all 289 Vitest tests pass. The four new files pass Prettier. The repository-wide frontend `format:check` reports only the existing, unrelated `.impeccable/hook.cache.json`.
 
 ## PR 5 — Backup & restore screen
 
