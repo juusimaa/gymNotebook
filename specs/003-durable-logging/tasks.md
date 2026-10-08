@@ -1,6 +1,6 @@
 # Tasks: Durable Logging
 
-**Status**: Plan merged in #127; PR 2 merged in #138; PR 3 implementation complete, awaiting review. AI implements by default; the owner names any task they will write themselves.
+**Status**: Plan merged in #127; PR 2 merged in #138; PR 3 merged in #139; PR 4 merged in #140; PR 5 implementation complete, awaiting review. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (merged in #127)
 
@@ -32,13 +32,15 @@ The session token had no `iat`, so its lifetime couldn't be read from the payloa
 
 ## PR 5 — Autosave (frontend)
 
-- [ ] T040 `screens/saveScheduler.ts` (D2) with Vitest on fake timers: debounce, immediate on complete set, single flight, backoff, flush, the 60 s incomplete-row notice.
-- [ ] T041 `persistDraft` extracted from `saveWorkout`; complete sets only (FR-002); sends `expectedRevision`, keeps the returned one.
-- [ ] T042 Editor wiring: autosave on in-progress pages, the date-line status (contracts/ui.md), no Save button on in-progress pages, Finish flushes first.
-- [ ] T043 First save of a new page: create, then replace the address with `/workouts/{id}/edit` and move the draft key (D9).
-- [ ] T044 Cancel on a saved new page: the tear-out confirmation (contracts/ui.md).
-- [ ] T045 409 and 404 handling (D10).
-- [ ] T046 `docs/ui/README.md` session editor, prototype note, PLAN.md milestone 13 entry.
+- [x] T040 `screens/saveScheduler.ts` (D2) with Vitest on fake timers: debounce, immediate on complete set, single flight, backoff, flush, the 60 s incomplete-row notice.
+- [x] T041 `persistDraft` extracted from `saveWorkout`; complete sets only (FR-002); sends `expectedRevision`, keeps the returned one.
+- [x] T042 Editor wiring: autosave on in-progress pages, the date-line status (contracts/ui.md), no Save button on in-progress pages, Finish flushes first.
+- [x] T043 First save of a new page: create, then replace the address with `/workouts/{id}/edit` and move the draft key (D9).
+- [x] T044 Cancel on a saved new page: the tear-out confirmation (contracts/ui.md).
+- [x] T045 409 and 404 handling (D10).
+- [x] T046 `docs/ui/README.md` session editor, prototype note, PLAN.md milestone 13 entry.
+
+*As built in PR 5:* the save state sits on its own line under the dateline (a live region inside the dateline's button would change its name); the incomplete-row notice names the exercise ("Bench Press set 3 needs reps"); an in-progress edit page has no Finished field; after a conflict, Cancel asks the discard question rather than offering tear-out; and the stored draft gains an optional `revision`, so a restored copy saves against the revision it was made on (contracts/ui.md).
 
 ## Owner checks
 

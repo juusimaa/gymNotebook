@@ -8,9 +8,13 @@ import {
   createWorkoutExerciseDraft,
   describeDraftSet,
   describeHeadingWhen,
+  describeIncompleteSet,
+  describeUnsavedSets,
   dropOptionalDetails,
+  findIncompleteSet,
   hasOptionalDetails,
   needsExplicitFinishTime,
+  prepareAutosaveDraft,
   prepareWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
@@ -62,6 +66,7 @@ describe('createExistingWorkoutDraft', () => {
     const draft = createExistingWorkoutDraft(
       {
         id: 12,
+        revision: 3,
         date: '2026-09-15',
         startedAt: new Date(2026, 8, 15, 23, 30).toISOString(),
         endedAt: new Date(2026, 8, 16, 0, 15).toISOString(),
@@ -846,5 +851,198 @@ describe('withLastTime', () => {
 
     expect(first).toBe(newExercise)
     expect(second.lastSet).toBeNull()
+  })
+})
+
+// A block as typed: name, kind and its rows as [weight, reps] pairs.
+function typedBlock(
+  name: string,
+  rows: [string, string][],
+  options: { isBodyweight?: boolean; clientId?: string } = {},
+): WorkoutExerciseDraft {
+  const clientId = options.clientId ?? name
+  return {
+    clientId,
+    exerciseId: null,
+    exerciseName: name,
+    isBodyweight: options.isBodyweight ?? false,
+    isAddedWeightEnabled: false,
+    sets: rows.map(([weight, reps], index) => ({
+      clientId: `${clientId}-${index + 1}`,
+      weight,
+      reps,
+      isWarmup: false,
+    })),
+  }
+}
+
+describe('prepareAutosaveDraft', () => {
+  const heading = createInitialHeadingDraft(new Date(2026, 9, 7, 9, 30))
+
+  it('sends only complete sets and leaves out a block with none', () => {
+    // Arrange
+    const exercises = [
+      typedBlock('Bench Press', [
+        ['80', '5'],
+        ['80', ''],
+      ]),
+      typedBlock('Row', [['60', '']]),
+      typedBlock('Pull-up', [['', '8']], { isBodyweight: true }),
+    ]
+
+    // Act
+    const result = prepareAutosaveDraft(heading, exercises)
+
+    // Assert
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        exercises: {
+          exercises: [
+            {
+              exerciseName: 'Bench Press',
+              sets: [{ weight: 80, reps: 5, isWarmup: false }],
+            },
+            {
+              exerciseName: 'Pull-up',
+              sets: [{ weight: null, reps: 8, isWarmup: false }],
+            },
+          ],
+        },
+      },
+      blockIndexes: [0, 2],
+      setCount: 2,
+    })
+  })
+
+  it('sends an empty list when nothing is complete', () => {
+    // Arrange
+    const exercises = [typedBlock('Bench Press', [['80', '']])]
+
+    // Act
+    const result = prepareAutosaveDraft(heading, exercises)
+
+    // Assert
+    expect(result).toMatchObject({
+      ok: true,
+      value: { exercises: { exercises: [] } },
+      setCount: 0,
+    })
+  })
+
+  it('stops on a heading that cannot be saved', () => {
+    // Arrange
+    const broken = { ...heading, startTime: '' }
+
+    // Act
+    const result = prepareAutosaveDraft(broken, [])
+
+    // Assert
+    expect(result).toEqual({
+      ok: false,
+      message: 'Enter a valid date and start time.',
+    })
+  })
+})
+
+describe('findIncompleteSet', () => {
+  it('finds a weight without reps', () => {
+    // Arrange
+    const exercises = [
+      typedBlock('Bench Press', [
+        ['80', '5'],
+        ['80', '5'],
+        ['82.5', ''],
+      ]),
+    ]
+
+    // Act
+    const found = findIncompleteSet(exercises)
+
+    // Assert
+    expect(found).toEqual({
+      setClientId: 'Bench Press-3',
+      exerciseName: 'Bench Press',
+      setNumber: 3,
+      needs: 'reps',
+    })
+    expect(describeIncompleteSet(found!)).toBe('Bench Press set 3 needs reps')
+  })
+
+  it('finds reps without a weight', () => {
+    // Arrange
+    const exercises = [typedBlock('Squat', [['', '5']])]
+
+    // Act
+    const found = findIncompleteSet(exercises)
+
+    // Assert
+    expect(found?.needs).toBe('weight')
+  })
+
+  it('passes over untouched rows and complete ones', () => {
+    // Arrange
+    const exercises = [
+      typedBlock('Squat', [
+        ['100', '5'],
+        ['', ''],
+      ]),
+      typedBlock('Dip', [['', '']], { isBodyweight: true }),
+    ]
+
+    // Act
+    const found = findIncompleteSet(exercises)
+
+    // Assert
+    expect(found).toBeNull()
+  })
+})
+
+describe('describeUnsavedSets', () => {
+  it('lists the sets only this tab has, numbered as they are here', () => {
+    // Arrange
+    const local = [
+      typedBlock('Bench Press', [
+        ['80', '5'],
+        ['80', '5'],
+        ['80', '5'],
+        ['80', '5'],
+      ]),
+      typedBlock('Row', [['60', '']]),
+    ]
+    const server = [
+      typedBlock('bench press', [
+        ['80', '5'],
+        ['80,0', '5'],
+        ['80', '5'],
+      ]),
+    ]
+
+    // Act
+    const unsaved = describeUnsavedSets(local, server)
+
+    // Assert: three of the four equal sets are there; the half-typed row
+    // never was.
+    expect(unsaved).toEqual([
+      'Bench Press set 4 · 80 kg × 5',
+      'Row set 1 · 60 kg',
+    ])
+  })
+
+  it('lists nothing when the server has every set', () => {
+    // Arrange
+    const sets: [string, string][] = [
+      ['100', '5'],
+      ['', ''],
+    ]
+
+    // Act
+    const unsaved = describeUnsavedSets(
+      [typedBlock('Squat', sets)],
+      [typedBlock('Squat', sets)],
+    )
+
+    // Assert
+    expect(unsaved).toEqual([])
   })
 })

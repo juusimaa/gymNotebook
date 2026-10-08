@@ -60,8 +60,15 @@ export interface StoredEditorDraft extends EditorDraftContent {
   // sign-in, even though there is no token right now.
   heldForSignIn: boolean
   // A new page whose heading POST already succeeded: the retry must update that
-  // workout, not create a second one, even after a reload.
+  // workout, not create a second one, even after a reload. Since autosave
+  // (specs/003 D9) a new page moves to its edit route's key after its first
+  // save, so this is mostly a copy from an older build.
   savedWorkoutId: number | null
+  // The page revision these changes were made on, sent as expectedRevision
+  // when the restored copy saves itself, so a reload can't skip the version
+  // check and overwrite another device's sets. Optional: copies stored before
+  // it existed, and pages never saved, have none.
+  revision?: number | null
 }
 
 // The subset of Storage used here, so the tests can pass a Map-backed fake.
@@ -158,6 +165,9 @@ function isStoredDraft(value: unknown): value is StoredEditorDraft {
     typeof value.heldForSignIn === 'boolean' &&
     (value.savedWorkoutId === null ||
       Number.isSafeInteger(value.savedWorkoutId)) &&
+    (value.revision === undefined ||
+      value.revision === null ||
+      Number.isSafeInteger(value.revision)) &&
     typeof value.endTime === 'string' &&
     isHeading(value.heading) &&
     Array.isArray(value.exercises) &&
@@ -226,6 +236,15 @@ export function describeDiscard(options: {
   return options.partlySaved
     ? `${question} The part already saved stays in your notebook.`
     : question
+}
+
+// Cancel on a new page that has already saved itself (specs/003 Story 4):
+// leaving can no longer just drop a local copy, so it asks whether to tear
+// the page out, naming what goes with it.
+export function describeTearOut(setCount: number): string {
+  return setCount === 0
+    ? 'Tear out this page?'
+    : `Tear out this page? Its ${formatCount(setCount, 'set')} ${setCount === 1 ? 'goes' : 'go'} with it.`
 }
 
 // When the restored copy was last written: just the time on the same local

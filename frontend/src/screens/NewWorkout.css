@@ -171,6 +171,41 @@
   text-underline-offset: 3px;
 }
 
+/* The save state under the dateline: "Saved 09.42", quiet as a margin
+   note; a problem in the error colour. Empty most of the time, and then it
+   takes no room, but it stays in the page so a change is announced. */
+.new-workout-save-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+  margin: calc(-1 * var(--space-2)) 0 0;
+  color: var(--color-neutral-700);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.new-workout-save-state.is-error {
+  color: var(--color-error);
+}
+
+.new-workout-save-state button {
+  min-height: var(--hit-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-700);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.new-workout-save-state button:focus-visible {
+  outline: 2px solid var(--color-accent-700);
+  outline-offset: 2px;
+}
+
 /* Date beside start time, bodyweight beside gym: pairs that are read
    together, as on the prototype's heading. */
 .new-workout-field-pair {

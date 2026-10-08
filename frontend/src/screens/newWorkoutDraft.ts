@@ -4,6 +4,7 @@ import type {
   PutWorkoutExercisesRequest,
   WorkoutDetailResponse,
 } from '../api/workouts'
+import { normalizeExerciseName } from './exerciseFormat'
 import { formatWorkoutDate } from './workoutFormat'
 
 // Form fields stay as strings so empty and partially entered values such as
@@ -479,13 +480,17 @@ export function needsExplicitFinishTime(
   return elapsedMs < 0 || elapsedMs > FINISH_NOW_WINDOW_HOURS * 60 * 60 * 1000
 }
 
-// Validates the complete editor state and converts its string fields into the
-// API's numeric and timestamp types in one place. A failed conversion never
-// produces a partial request for the screen to accidentally submit.
-export function prepareWorkoutDraft(
-  heading: WorkoutHeadingDraft,
-  exerciseDrafts: WorkoutExerciseDraft[],
-): PrepareWorkoutDraftResult {
+type PrepareHeadingResult =
+  | { ok: true; value: CreateWorkoutRequest }
+  | {
+      ok: false
+      at: Extract<DraftFieldRef, { area: 'heading' }>
+      message: string
+    }
+
+// The heading half of a save: date and start time as one instant, the
+// optional texts trimmed to null, bodyweight as a number.
+function prepareHeading(heading: WorkoutHeadingDraft): PrepareHeadingResult {
   const startedAt = createLocalStartedAt(heading.date, heading.startTime)
 
   if (startedAt === null) {
@@ -511,6 +516,59 @@ export function prepareWorkoutDraft(
         message: 'Bodyweight must be a number greater than zero.',
       }
     }
+  }
+
+  return {
+    ok: true,
+    value: {
+      date: heading.date,
+      startedAt,
+      title: optionalText(heading.title),
+      bodyweightKg,
+      location: optionalText(heading.location),
+      notes: optionalText(heading.notes),
+    },
+  }
+}
+
+type PutSetInput =
+  PutWorkoutExercisesRequest['exercises'][number]['sets'][number]
+
+// One set row as the API takes it, or the field that stops it. Reps first:
+// a row is "complete" exactly when this succeeds, which is what autosave
+// sends and what the incomplete-row notice looks for.
+function prepareSet(
+  exercise: Pick<WorkoutExerciseDraft, 'isBodyweight' | 'isAddedWeightEnabled'>,
+  set: WorkoutSetDraft,
+): { ok: true; value: PutSetInput } | { ok: false; field: 'weight' | 'reps' } {
+  const reps = parsePositiveInteger(set.reps)
+  if (reps === null) {
+    return { ok: false, field: 'reps' }
+  }
+
+  let weight: number | null = null
+  if (!exercise.isBodyweight || exercise.isAddedWeightEnabled) {
+    weight = parseNonNegativeDecimal(set.weight)
+    if (weight === null) {
+      return { ok: false, field: 'weight' }
+    }
+  }
+
+  return { ok: true, value: { weight, reps, isWarmup: set.isWarmup } }
+}
+
+// Validates the complete editor state and converts its string fields into the
+// API's numeric and timestamp types in one place. A failed conversion never
+// produces a partial request for the screen to accidentally submit. This is
+// the strict save: Save changes and Finish session, where a half-filled row
+// must be fixed or removed rather than silently left out.
+export function prepareWorkoutDraft(
+  heading: WorkoutHeadingDraft,
+  exerciseDrafts: WorkoutExerciseDraft[],
+): PrepareWorkoutDraftResult {
+  const workout = prepareHeading(heading)
+  if (!workout.ok) {
+    return workout
   }
 
   if (exerciseDrafts.length === 0) {
@@ -547,37 +605,24 @@ export function prepareWorkoutDraft(
       }
     }
 
-    const sets: PutWorkoutExercisesRequest['exercises'][number]['sets'] = []
+    const sets: PutSetInput[] = []
 
     for (let setIndex = 0; setIndex < exercise.sets.length; setIndex += 1) {
-      const set = exercise.sets[setIndex]
+      const set = prepareSet(exercise, exercise.sets[setIndex])
       const setNumber = setIndex + 1
-      const reps = parsePositiveInteger(set.reps)
 
-      if (reps === null) {
+      if (!set.ok) {
         return {
           ok: false,
-          at: { area: 'set', exerciseIndex, setIndex, field: 'reps' },
-          message: `${exercise.exerciseName}, set ${setNumber}: reps must be a whole number greater than zero.`,
+          at: { area: 'set', exerciseIndex, setIndex, field: set.field },
+          message:
+            set.field === 'reps'
+              ? `${exercise.exerciseName}, set ${setNumber}: reps must be a whole number greater than zero.`
+              : `${exercise.exerciseName}, set ${setNumber}: enter a valid weight.`,
         }
       }
 
-      let weight: number | null = null
-      const needsWeight =
-        !exercise.isBodyweight || exercise.isAddedWeightEnabled
-
-      if (needsWeight) {
-        weight = parseNonNegativeDecimal(set.weight)
-        if (weight === null) {
-          return {
-            ok: false,
-            at: { area: 'set', exerciseIndex, setIndex, field: 'weight' },
-            message: `${exercise.exerciseName}, set ${setNumber}: enter a valid weight.`,
-          }
-        }
-      }
-
-      sets.push({ weight, reps, isWarmup: set.isWarmup })
+      sets.push(set.value)
     }
 
     exercises.push({
@@ -588,16 +633,144 @@ export function prepareWorkoutDraft(
 
   return {
     ok: true,
-    value: {
-      workout: {
-        date: heading.date,
-        startedAt,
-        title: optionalText(heading.title),
-        bodyweightKg,
-        location: optionalText(heading.location),
-        notes: optionalText(heading.notes),
-      },
-      exercises: { exercises },
-    },
+    value: { workout: workout.value, exercises: { exercises } },
   }
+}
+
+// What an autosave sends (specs/003 FR-002): the heading, and only the sets
+// that are complete. A row still being typed stays on screen and in the tab's
+// draft, and a block with no complete set yet is left out, so the server
+// never holds half a set. `blockIndexes[i]` is the draft index of the i-th
+// block sent, to match the response's blocks back to the editor's.
+export type PrepareAutosaveResult =
+  | {
+      ok: true
+      value: PreparedWorkoutDraft
+      blockIndexes: number[]
+      setCount: number
+    }
+  | { ok: false; message: string }
+
+export function prepareAutosaveDraft(
+  heading: WorkoutHeadingDraft,
+  exerciseDrafts: WorkoutExerciseDraft[],
+): PrepareAutosaveResult {
+  const workout = prepareHeading(heading)
+  if (!workout.ok) {
+    return { ok: false, message: workout.message }
+  }
+
+  const exercises: PutWorkoutExercisesRequest['exercises'] = []
+  const blockIndexes: number[] = []
+  let setCount = 0
+
+  exerciseDrafts.forEach((exercise, index) => {
+    const name = exercise.exerciseName.trim()
+    const sets = exercise.sets.flatMap((set) => {
+      const prepared = prepareSet(exercise, set)
+      return prepared.ok ? [prepared.value] : []
+    })
+    if (name === '' || sets.length === 0) {
+      return
+    }
+    exercises.push({ exerciseName: name, sets })
+    blockIndexes.push(index)
+    setCount += sets.length
+  })
+
+  return {
+    ok: true,
+    value: { workout: workout.value, exercises: { exercises } },
+    blockIndexes,
+    setCount,
+  }
+}
+
+// A row that has something written in it but can't be saved yet: "a weight
+// but no reps". An untouched row isn't one: there's nothing to lose, and the
+// notice would only nag about the row "+ Add set" just opened.
+export interface IncompleteSet {
+  setClientId: string
+  exerciseName: string
+  setNumber: number
+  needs: 'weight' | 'reps'
+}
+
+export function findIncompleteSet(
+  exercises: WorkoutExerciseDraft[],
+): IncompleteSet | null {
+  for (const exercise of exercises) {
+    const showsWeight = !exercise.isBodyweight || exercise.isAddedWeightEnabled
+    for (let index = 0; index < exercise.sets.length; index += 1) {
+      const set = exercise.sets[index]
+      const isBlank =
+        set.reps.trim() === '' && (!showsWeight || set.weight.trim() === '')
+      if (isBlank) continue
+      const prepared = prepareSet(exercise, set)
+      if (!prepared.ok) {
+        return {
+          setClientId: set.clientId,
+          exerciseName: exercise.exerciseName,
+          setNumber: index + 1,
+          needs: prepared.field,
+        }
+      }
+    }
+  }
+  return null
+}
+
+// "Bench Press set 3 needs reps". The exercise is named because "set 3" alone
+// could be in any block.
+export function describeIncompleteSet(set: IncompleteSet): string {
+  return `${set.exerciseName} set ${set.setNumber} needs ${set.needs}`
+}
+
+// After a conflict (specs/003 D10) the editor reloads the server's page, and
+// whatever existed only in this tab is listed rather than merged: "Bench Press
+// set 4 · 80 kg × 5". A set counts as on the server when the server's page
+// has an equal one (same exercise, figures and warm-up flag) not already
+// matched to another, so two identical sets here need two there.
+export function describeUnsavedSets(
+  local: WorkoutExerciseDraft[],
+  server: WorkoutExerciseDraft[],
+): string[] {
+  const setKey = (
+    exercise: WorkoutExerciseDraft,
+    set: WorkoutSetDraft,
+  ): string | null => {
+    const prepared = prepareSet(exercise, set)
+    if (!prepared.ok) return null
+    const { weight, reps, isWarmup } = prepared.value
+    return JSON.stringify([
+      normalizeExerciseName(exercise.exerciseName),
+      weight,
+      reps,
+      isWarmup,
+    ])
+  }
+
+  const available = new Map<string, number>()
+  for (const exercise of server) {
+    for (const set of exercise.sets) {
+      const key = setKey(exercise, set)
+      if (key !== null) available.set(key, (available.get(key) ?? 0) + 1)
+    }
+  }
+
+  const unsaved: string[] = []
+  for (const exercise of local) {
+    exercise.sets.forEach((set, index) => {
+      const figures = describeDraftSet(exercise, set)
+      if (figures === '') return
+      const key = setKey(exercise, set)
+      const count = key === null ? 0 : (available.get(key) ?? 0)
+      if (key !== null && count > 0) {
+        available.set(key, count - 1)
+        return
+      }
+      unsaved.push(`${exercise.exerciseName} set ${index + 1} · ${figures}`)
+    })
+  }
+  return unsaved
 }
