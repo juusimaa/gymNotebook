@@ -101,6 +101,7 @@ Current endpoints:
 | `POST` | `/auth/password-reset/confirm` | – | Reset link token + new password; returns a JWT and revokes every other session; 400 `expired`/`invalid`, 403 `account_suspended`; 10/hour per IP |
 | `GET` | `/auth/me` | Bearer | The caller's id, display name and email; proves a token is valid and not revoked |
 | `POST` | `/auth/change-password` | Bearer | Invalidates all previously issued tokens, returns a fresh one |
+| `POST` | `/auth/token` | Bearer | Renews a valid session token within 12 hours of sign-in or password change; 403 `renewal_refused` after the cap |
 | `GET` | `/exercises?search=&excludeWorkoutId=` | Bearer | Index/autocomplete, scoped to the caller; results carry `sessionCount`, `lastSet` and `firstSet` (`excludeWorkoutId` leaves the page being edited out of both) |
 | `GET` | `/exercises/{id}/history?from=&to=` | Bearer | Best loaded e1RM or bodyweight reps per session, oldest first |
 | `PATCH` | `/exercises/{id}` | Bearer | Rename (merges onto an existing name) and set/clear `isBodyweight` |
@@ -129,6 +130,11 @@ Export, backup status and restore are always mapped. The remaining privacy route
 ## Configuration
 
 Everything comes from environment variables; [.env.example](.env.example) lists them and the gitignored `.env` holds real values. The full story — including why `ConnectionStrings__Default` has a double underscore — is in [PLAN.md → Configuration](PLAN.md#configuration).
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `Jwt__ExpiryMinutes` | 30 locally and in production | Lifetime of each access token, including a renewed one |
+| `Jwt__RenewalCapHours` | 12 | Maximum time since sign-in, password change or reset during which a valid token may renew; plain setting, not a secret |
 
 `Restore__MaxBytes` optionally overrides the JSON restore upload limit (default `26214400`, 25 MB). `RestoreRateLimit__PermitLimit` and `RestoreRateLimit__WindowSeconds` default to five attempts per ten minutes per signed-in account. Over-limit uploads return 413.
 

@@ -171,7 +171,7 @@ Three rules so the document is worth reading rather than a list of bare paths:
 
 ### Token lifetime and revocation
 
-- **Access tokens live 30 minutes.** No refresh tokens: this is a single-page app used a few times a week, and a refresh-token rotation scheme is a meaningful amount of security-sensitive machinery to hand-write for a first C# project. The frontend re-prompts for login when a call comes back 401.
+- **Access tokens live 30 minutes and can be renewed while valid.** `POST /auth/token` accepts a valid bearer token and returns a new 30-minute token, up to `Jwt:RenewalCapHours` (default 12) from its `auth_time` claim. Sign-in, password change and reset start that clock; renewal copies it. Older tokens without the claim remain valid but cannot renew. There is no refresh credential or rotation scheme. A cap refusal is 403 `renewal_refused`, leaving the current token valid until its expiry; a revoked or expired token still gets 401. See [specs/003-durable-logging/](specs/003-durable-logging/plan.md).
 - **`token_version` is the revocation mechanism** (see the data model). Every token carries the value it was issued under; `POST /auth/change-password` bumps the row, and every token minted before that stops validating on the next request. This is the only lever there is, given tokens are otherwise stateless and unrevokable.
 - **`POST /auth/change-password`** takes the current password and a new one, and returns a freshly minted token so the caller who *did* change the password isn't logged out by their own action.
 - **Logout is client-side** — drop the token. Honest about what a stateless JWT can offer: nothing server-side happens, and pretending otherwise would be theatre. `token_version` is the real answer when a session genuinely must be killed.
@@ -259,6 +259,7 @@ POSTGRES_PASSWORD=devpassword
 ConnectionStrings__Default=Host=db;Database=gymnotebook;Username=postgres;Password=devpassword
 Jwt__Secret=replace-me-with-a-generated-key
 Jwt__ExpiryMinutes=30
+Jwt__RenewalCapHours=12
 CORS_ORIGINS=http://localhost:5173
 PRIVACY_LIFECYCLE_ENABLED=false
 Email__Backend=console
@@ -291,7 +292,7 @@ The variable *names* are identical everywhere — the app reads `Jwt__Secret` an
 |---|---|---|
 | `Jwt__Secret` | `.env` (user-secrets before milestone 2) | Container Apps **secret**, via `secretref` |
 | `ConnectionStrings__Default` | `.env`, points at the `db` service | Container Apps **secret** — it embeds Neon's password |
-| `CORS_ORIGINS`, `Jwt__ExpiryMinutes`, `PRIVACY_LIFECYCLE_ENABLED` | `.env` | plain env value — not sensitive |
+| `CORS_ORIGINS`, `Jwt__ExpiryMinutes`, `Jwt__RenewalCapHours`, `PRIVACY_LIFECYCLE_ENABLED` | `.env` | plain env value — not sensitive; renewal cap defaults to 12 hours in the app |
 | `RESEND_API_KEY` | `.env`, normally empty (the console backend needs none) | Container Apps **secret** (`resend-api-key`), from the `RESEND_API_KEY` GitHub secret |
 | `Email__Backend`, `EMAIL_FROM`, `APP_URL`, `EMAIL_DAILY_CAP` | `.env` (`console`; Compose runs as `Local`, where that is allowed) | plain env values in `container-app-api.bicep` (`resend`, the `mail.gymnotebook.fit` sender, `https://gymnotebook.fit`); the cap uses its default |
 | `TURNSTILE_SECRET_KEY` | `.env`, normally empty (check off) | Container Apps **secret** (`turnstile-secret-key`), from the `TURNSTILE_SECRET_KEY` GitHub secret |

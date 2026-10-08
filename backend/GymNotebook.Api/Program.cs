@@ -42,6 +42,11 @@ ConnectionStringValidation.EnsureValid(connectionString);
 var jwtSecret = builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
 var jwtExpiryMinutes = builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes");
+var jwtRenewalCapHours = builder.Configuration.GetValue("Jwt:RenewalCapHours", 12);
+if (jwtRenewalCapHours <= 0)
+{
+    throw new InvalidOperationException("Jwt:RenewalCapHours must be positive.");
+}
 // A BCrypt hash of a random string nobody knows, computed once at boot. The auth routes
 // verify a password against it when the address has no account, so "no such account"
 // takes as long as "wrong password" — the slow BCrypt check is otherwise the one
@@ -274,6 +279,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 // covers anything that slips past both.
                 if (user.SignInSuspendedAt is not null)
                 {
+                    if (context.Request.Path.Equals("/auth/token", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.HttpContext.Items["renewal_account_suspended"] = true;
+                    }
                     context.Fail("Account sign-in is suspended.");
                     return;
                 }
@@ -285,6 +294,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (user.EmailVerifiedAt is null)
                 {
                     context.Fail("Email address is not confirmed.");
+                }
+            },
+            OnChallenge = async context =>
+            {
+                // Other bearer routes retain their existing bare 401. Renewal has an
+                // explicit suspended-account response in its API contract.
+                if (context.HttpContext.Items.ContainsKey("renewal_account_suspended"))
+                {
+                    context.HandleResponse();
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    context.Response.Headers.CacheControl = "no-store";
+                    await context.Response.WriteAsJsonAsync(new ErrorResponse("account_suspended"));
                 }
             },
         };
@@ -631,7 +652,7 @@ auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, Email
    .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .RequireRateLimiting("auth");
 
-auth.MapPost("/login", async (LoginRequest request, AppDbContext db, CancellationToken ct) =>
+auth.MapPost("/login", async (LoginRequest request, AppDbContext db, TimeProvider clock, CancellationToken ct) =>
 {
     // A blank field can never sign anyone in, and says nothing about accounts.
     var email = AccountInput.NormalizeEmail(request.Email);
@@ -675,7 +696,7 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
         return Results.Json(new ErrorResponse("email_not_verified"), statusCode: StatusCodes.Status403Forbidden);
     }
 
-    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
+    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes, clock.GetUtcNow());
     return Results.Ok(new AuthResponse(token));
 }).WithName("LoginUser")
    .WithSummary("Logs in a user")
@@ -684,6 +705,57 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, Cancellatio
    .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status401Unauthorized)
    .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
+   .RequireRateLimiting("auth");
+
+// The bearer middleware has checked signature, token version and account state. Its
+// clock skew can accept a just-expired token, so this route checks expiry exactly.
+// A token from before auth_time was introduced stays valid but cannot be renewed.
+auth.MapPost("/token", (ClaimsPrincipal caller, TimeProvider clock) =>
+{
+    var now = clock.GetUtcNow();
+    var expiry = caller.FindFirst(JwtRegisteredClaimNames.Exp)?.Value;
+    if (!long.TryParse(expiry, out var expirySeconds) || expirySeconds <= now.ToUnixTimeSeconds())
+    {
+        return Results.Unauthorized();
+    }
+
+    var raw = caller.FindFirst(JwtTokenFactory.AuthTimeClaim)?.Value;
+    if (!long.TryParse(raw, out var seconds))
+    {
+        return Results.Json(new ErrorResponse("renewal_refused"), statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    DateTimeOffset authTime;
+    try
+    {
+        authTime = DateTimeOffset.FromUnixTimeSeconds(seconds);
+    }
+    catch (ArgumentOutOfRangeException)
+    {
+        return Results.Json(new ErrorResponse("renewal_refused"), statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    if (authTime > now || now - authTime > TimeSpan.FromHours(jwtRenewalCapHours))
+    {
+        return Results.Json(new ErrorResponse("renewal_refused"), statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    // These claims passed OnTokenValidated's current-account check above.
+    var userId = int.Parse(caller.FindFirst(JwtRegisteredClaimNames.Sub)!.Value, CultureInfo.InvariantCulture);
+    var tokenVersion = int.Parse(caller.FindFirst("tv")!.Value, CultureInfo.InvariantCulture);
+    return Results.Ok(new AuthResponse(JwtTokenFactory.CreateToken(userId, tokenVersion, jwtSecret, jwtExpiryMinutes, now, authTime)));
+})
+   .RequireAuthorization()
+   .RequireAccountLifecycle()
+   .WithName("RenewToken")
+   .WithTags("Auth")
+   .WithSummary("Renews a valid session token")
+   .WithDescription("Returns a fresh bearer token with the original sign-in time. Refuses tokens without auth_time or sessions past the renewal cap.")
+   .Produces<AuthResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status401Unauthorized)
+   .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
+   .Produces(StatusCodes.Status429TooManyRequests)
+   .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable)
    .RequireRateLimiting("auth");
 
 // Send the confirmation link again (specs/002 FR-012), from the "check your inbox" screen.
@@ -860,7 +932,7 @@ auth.MapPost("/password-reset/confirm", async (ConfirmPasswordResetRequest reque
     }
 
     user.TokenVersion = link.TokenVersion + 1;
-    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
+    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes, clock.GetUtcNow());
     return Results.Ok(new AuthResponse(token));
 }).WithName("ConfirmPasswordReset")
    .WithSummary("Sets a new password from a reset link")
@@ -907,7 +979,7 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
 // Revoking every token is an account-lifecycle operation, so the write goes through
 // PasswordReplacement, which takes *exclusive* access (specs/001 research R4) — and so
 // this endpoint is not under the shared-access LifecycleFilter (see there for why).
-auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, LifecycleOptions lifecycle, HttpContext http, CancellationToken ct) =>
+auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPrincipal caller, AppDbContext db, LifecycleOptions lifecycle, TimeProvider clock, HttpContext http, CancellationToken ct) =>
 {
     // The new password follows the same rules as at signup (AccountInput, specs/002
     // FR-005), including BCrypt's 72-byte bound.
@@ -946,7 +1018,7 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
     // `user` is an untracked copy, so updating it changes nothing in the database; it only
     // lets the token factory mint a token with the version that was just committed.
     user.TokenVersion = tokenVersion + 1;
-    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes);
+    var token = JwtTokenFactory.CreateToken(user, jwtSecret, jwtExpiryMinutes, clock.GetUtcNow());
     return Results.Ok(new AuthResponse(token));
 })
    .RequireAuthorization()

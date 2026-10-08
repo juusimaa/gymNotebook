@@ -28,6 +28,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=postgres;Password=${POSTGRES_PASSWORD}"
       Jwt__Secret: "${Jwt__Secret}"
       Jwt__ExpiryMinutes: "${Jwt__ExpiryMinutes}"
+      Jwt__RenewalCapHours: "${Jwt__RenewalCapHours:-12}"
       CORS_ORIGINS: "${CORS_ORIGINS}"
       PRIVACY_LIFECYCLE_ENABLED: "${PRIVACY_LIFECYCLE_ENABLED:-false}"
       Email__Backend: "${Email__Backend:-console}"
