@@ -131,7 +131,7 @@ public class ExportCoordinationTests(TwoHostGymNotebookFixture db)
     }
 
     [Fact]
-    public async Task Export_TimeLimitReached_AbortsStreamAndReleasesSnapshot()
+    public async Task Export_CutShort_DoesNotStamp()
     {
         // Arrange: a 1.5 s cap, and a barrier that is never released — only the cap can
         // end the paused query.
@@ -151,6 +151,10 @@ public class ExportCoordinationTests(TwoHostGymNotebookFixture db)
         AssertTruncatedBeforeSets(body, error);
         Assert.InRange(stopwatch.Elapsed, TimeSpan.FromMilliseconds(1000), TimeSpan.FromSeconds(10));
         await AssertNothingLeftOpenAsync(userId);
+        using var status = await client.GetAsync("/account/backup");
+        Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+        using var document = JsonDocument.Parse(await status.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("lastBackupAt").ValueKind);
     }
 
     [Fact]
@@ -161,14 +165,24 @@ public class ExportCoordinationTests(TwoHostGymNotebookFixture db)
         await using var host = CreateHost(barrier);
         var userId = await db.SeedUserAsync();
         await db.SeedNotebookAsync(userId, 3, 2, 2);
-        using var client = host.ClientFor(userId);
+        using var authenticated = host.ClientFor(userId);
+        // HttpClient normally drains a disposed response for connection reuse. Disable
+        // that behavior so this test really disconnects while the server is paused.
+        using var client = new HttpClient(new SocketsHttpHandler { MaxResponseDrainSize = 0 })
+        {
+            BaseAddress = authenticated.BaseAddress,
+        };
+        client.DefaultRequestHeaders.Authorization = authenticated.DefaultRequestHeaders.Authorization;
 
         // Act: the client goes away mid-download; then it retries with the password.
         var response = await ExportTestSupport.ExportAsync(client, completion: HttpCompletionOption.ResponseHeadersRead);
         await barrier.Reached.WaitAsync(TimeSpan.FromSeconds(10));
         response.Dispose();
-        barrier.Release();
         await AssertNothingLeftOpenAsync(userId);
+        barrier.Release();
+        using var status = await client.GetAsync("/account/backup");
+        using var statusBody = JsonDocument.Parse(await status.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, statusBody.RootElement.GetProperty("lastBackupAt").ValueKind);
         var retry = await ExportTestSupport.ExportAsync(client);
 
         // Assert: nothing of the first attempt was kept, and the retry is a fresh, whole file.

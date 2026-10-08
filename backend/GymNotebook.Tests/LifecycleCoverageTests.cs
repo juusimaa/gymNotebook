@@ -60,6 +60,7 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
 
         // Assert: spot checks of the routes T020 names.
         Assert.Contains("GET /auth/me", guarded);
+        Assert.Contains("GET /account/backup", guarded);
         Assert.Contains("GET /exercises/", guarded);
         Assert.Contains("GET /workouts/{id:int}", guarded);
         Assert.Contains("PUT /workouts/{id:int}/exercises", guarded);

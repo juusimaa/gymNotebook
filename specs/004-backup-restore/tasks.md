@@ -1,23 +1,27 @@
 # Tasks: Backup and Restore
 
-**Status**: Draft for owner review. Tasks start only after this plan is merged (Principle VII). AI implements by default; the owner names any task they will write themselves.
+**Status**: PR 1 merged (#131, 2026-10-08). PR 2 backend implementation verified locally; awaiting owner review. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
-- [ ] T001 `specs/004-backup-restore/` spec, plan, data model, contracts, UI draft and tasks.
+- [x] T001 `specs/004-backup-restore/` spec, plan, data model, contracts, UI draft and tasks.
 - [x] T002 (owner) Answer plan Q1–Q5; fold the answers into the spec's Clarifications and the plan's decisions.
 
 ## PR 2 — The export leaves the flag, and records the last backup (backend)
 
-- [ ] T010 Map `POST /account/export` regardless of `PRIVACY_LIFECYCLE_ENABLED` (D2). Keep the notice, consent and deletion routes flagged.
-- [ ] T011 `format` on `ExportRequest` (`json` default, `csv`; anything else 400 `invalid_request`).
-- [ ] T012 Migration `AddUserLastBackupAt`; `LastBackupAt` on `User`. Review the generated migration.
-- [ ] T013 In `NotebookExport`, after the closing brace for `format: json`, stamp `last_backup_at` on its own connection under a delivery guard; log a failure without personal data (D6).
-- [ ] T014 `account.lastBackupAt` in the export and its explanation in `ExportFieldGuide.cs`.
-- [ ] T015 `GET /account/backup` → `{ lastBackupAt }`, `Cache-Control: no-store`.
-- [ ] T016 Tests: `Export_FlagOff_Returns200`, `Export_JsonCompletes_StampsLastBackupAt`, `Export_Csv_DoesNotStamp`, `Export_CutShort_DoesNotStamp`, `Export_WrongPassword_DoesNotStamp`, `Export_IncludesPreviousLastBackupAt`, `GetBackup_NoBackup_ReturnsNull`, `DeleteAccount_RemovesLastBackupAt`, `Export_UnknownFormat_Returns400`.
-- [ ] T017 Docs: 001's `contracts/api.md` (the added field, the flag, "No export record" amended), PLAN.md → API.
-- [ ] T018 (owner) Amend `docs/privacy/processing-decision.md` P1 for `LastBackupAt` and P2 for restore, and sign it before PR 6 ships.
+- [x] T010 Map `POST /account/export` regardless of `PRIVACY_LIFECYCLE_ENABLED` (D2). Keep the notice, consent and deletion routes flagged.
+- [x] T011 `format` on `ExportRequest` (`json` default, `csv`; anything else 400 `invalid_request`).
+- [x] T012 Migration `AddUserLastBackupAt`; `LastBackupAt` on `User`. Review the generated migration.
+- [x] T013 In `NotebookExport`, after the closing brace for `format: json`, stamp `last_backup_at` on its own connection under a delivery guard; log a failure without personal data (D6).
+- [x] T014 `account.lastBackupAt` in the export and its explanation in `ExportFieldGuide.cs`.
+- [x] T015 `GET /account/backup` → `{ lastBackupAt }`, `Cache-Control: no-store`.
+- [x] T016 Tests: `Export_FlagOff_Returns200`, `Export_JsonCompletes_StampsLastBackupAt`, `Export_Csv_DoesNotStamp`, `Export_CutShort_DoesNotStamp`, `Export_WrongPassword_DoesNotStamp`, `Export_IncludesPreviousLastBackupAt`, `GetBackup_NoBackup_ReturnsNull`, `DeleteAccount_RemovesLastBackupAt`, `Export_UnknownFormat_Returns400`.
+- [x] T017 Docs: 001's `contracts/api.md` (the added field, the flag, "No export record" amended), PLAN.md → API.
+- [x] T018 (owner) Amend `docs/privacy/processing-decision.md` P1 for `LastBackupAt` and P2 for restore, and sign it **before PR 2 merges/deploys the unflagged export** (approved Q1; see clarification below).
+
+**PR 2 verification (2026-10-08):** all 426 backend tests pass against real PostgreSQL, including flag-off export, omitted/invalid formats, JSON/CSV stamping rules, the previous timestamp, deletion, genuine client disconnect, time-limit truncation, post-flush invalidation and best-effort stamp-write failure. `dotnet format --verify-no-changes` and `git diff --check` pass. Independent review found no code blockers. The generated migration was reviewed: only nullable `users.last_backup_at`, no default or unrelated changes.
+
+**T018 release gate clarification:** approved Q1 requires the signed processing-decision amendment **before the unflagged export ships**. Because `main` deploys automatically, this is a prerequisite to merging/deploying PR 2, superseding T018's original “before PR 6”. The owner approved both amendments on 2026-10-08; the signed decisions are recorded in `docs/privacy/processing-decision.md`. PR 3 must still verify that restore matches the approved description before it ships.
 
 ## PR 3 — Restore (backend)
 

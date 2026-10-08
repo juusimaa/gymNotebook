@@ -8,12 +8,12 @@ tasks.md T041/T042).
 
 | | |
 | --- | --- |
-| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. |
+| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). The specs/004 backup and restore amendments to P1 and P2 were approved and signed by the owner on 2026-10-08 (T018). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. |
 | **Controller** | Jouni Uusimaa, private individual, Finland |
 | **Privacy contact** | jouni.uu@proton.me |
 | **Supervisory authority** | Tietosuojavaltuutetun toimisto (Office of the Data Protection Ombudsman), Finland |
 | **Owner / reviewer** | Jouni Uusimaa |
-| **Version** | draft-2, 2026-09-29 |
+| **Version** | draft-3, 2026-10-08 |
 | **Review date** | Per-purpose dates appear in the Decision lines; final whole-record review pending. |
 
 **What this document is not.** It is not legal advice and does not certify
@@ -62,6 +62,7 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 - `PasswordHash`: a BCrypt hash. The password itself is never stored or logged.
 - `TokenVersion`: revokes old sessions after a password change.
 - `CreatedAt`.
+- `LastBackupAt` (specs/004 T018): nullable UTC time of the last recorded completion of sending a full JSON backup; it is not a record that the browser saved the file. The signed 2026-10-08 amendment below records its purpose and basis.
 - `PrivacyAccountId`: a random UUID used for restore suppression (research R5).
 - `AcknowledgedPrivacyNoticeVersion` and `PrivacyNoticeAcknowledgedAt`: which notice the user has seen. This is not consent (FR-026).
 - `SignInSuspendedAt`: set only when an account deletion's outcome is unknown after a restore (R6 Q2c).
@@ -93,6 +94,10 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 - **Resend** (specs/002 T031): sending domain set up in the EU region, owner-confirmed 2026-10-07. Supplier review completed by the owner 2026-10-07; see [suppliers.md](suppliers.md).
 - **Existing accounts** were deleted by the operator before the email schema deployed (specs/002 FR-022, quickstart): production wipe done 2026-10-07, owner-confirmed; **3** user rows deleted.
 
+**Amendment, 2026-10-08 (specs/004 T018, backup timestamp): signed by the owner.** This adds `LastBackupAt` to P1 without changing the signed 2026-09-28 decision. It is a nullable UTC timestamp on the caller's `users` row. After a full JSON backup finishes sending, the API attempts to replace it with the current time. The operation is best-effort: a failed timestamp write leaves the previous value, and a cancelled or cut-short download and a CSV export do not update it. The timestamp therefore describes the last *recorded completion of sending*, not proof that the browser saved or retained the file. The authenticated caller can read it through `GET /account/backup`; each JSON export includes the value from before that export. It is not a file or a backup history. It is overwritten by the next completed JSON backup and removed with the account row on deletion. It stays in the same Neon database and under the same account access controls as the other P1 fields; no new recipient is introduced.
+
+**Purpose and necessity (owner decision):** show the user when the service last finished sending a full backup, consistently across devices, so they can decide whether to take another copy. A browser-only date would not follow the account to another device. One nullable timestamp is the minimum server record for that display; storing files, a download history or device identifiers is unnecessary. **Article 6 basis (owner decision):** Art. 6(1)(b), as part of the requested backup function. The owner concluded that recording one timestamp is necessary to provide the chosen cross-device last-backup display, applying the [EDPB's contractual-necessity guidance](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines-art_6-1-b-adopted_after_public_consultation_en.pdf). The timestamp does not describe health status and adds no Article 9 condition. **Consent (owner decision):** no separate consent for the timestamp. **Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-10-08. Art. 6(1)(b) for this field; no health data or separate consent. Evidence: owner approval of both T018 amendments in conversation on 2026-10-08, specs/004 plan D6 and PR 2 implementation/tests for the timestamp, export and deletion.
+
 ---
 
 ## P2 — Training log and progress
@@ -102,6 +107,7 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 - **Exercises:** `Name`, `NormalizedName`, `IsBodyweight`, `CreatedAt`.
 - **Sets:** `SetNumber`, `Weight`, `Reps`, `IsWarmup`, and the exercise's position in the workout.
 - **Progress:** the e1RM chart is calculated on request from stored sets (`ProgressMetric`, Epley formula) and never stored.
+- **Restore (specs/004 T018):** a user-chosen JSON backup is read to validate and add missing notebook records; the file itself is not kept by the service. The signed 2026-10-08 amendment below records the limits and basis.
 
 Exercise names are part of P2, including their free-text risk. Optional workout
 title, location, notes and bodyweight are assessed separately in P3.
@@ -139,6 +145,10 @@ title, location, notes and bodyweight are assessed separately in P3.
 
 **Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-09-28. Art. 6(1)(b); not health data in this context, so no Art. 9 condition; consent not required. Residual risk accepted as recorded above.
 - **Article 9 (owner, 2026-09-28):** this conclusion replaces the earlier plan to seek a focused external review.
+
+**Amendment, 2026-10-08 (specs/004 T018, user-initiated restore): signed by the owner.** Restore is a new way for an authenticated user to add their training log from a JSON backup. The API reads the chosen file for that request, validates its version, references and values, and adds missing workout pages, exercises, blocks and sets to that user's notebook in one transaction. Existing pages and exercises are not replaced or removed; repeating the same file adds no duplicate pages. The file is not kept as a separate backup on the server. Added records are held and deleted under the existing P2 rules. Account identity, notice acknowledgements, consent records and file-supplied database IDs are not applied to the receiving account, including when the file came from another account. Optional title, location, notes and bodyweight remain P3 data: with the privacy flag on and no optional-details consent, restore drops those fields rather than importing them. With the flag off, the existing interim rule does not enforce optional-details consent; restore could therefore add those fields without it. The owner approved this described interim flag-off behavior on 2026-10-08; its implementation must be checked before restore ships. A failed validation or transaction adds no records. The request body and its values are not written to application logs or error responses.
+
+**Purpose and necessity (owner decision):** let the user put missing notebook pages back from a copy they chose, using only the P2 values needed to recreate those pages. **Article 6 basis (owner decision):** the existing P2 Art. 6(1)(b) basis, because the processing is requested to provide the notebook's restore function. Restore adds no new kind of P2 information or inference; the signed P2 Article 9 assessment and its recorded risk from long histories and free-text exercise names remain relevant. P3's separate consent requirement still governs optional details. **Consent (owner decision):** no new consent for P2 restore; P3 consent is never taken from the file. This decision covers the planned restore behavior in specs/004; its code and tests are scheduled for PR 3 and must be checked against this description before restore ships. **Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-10-08. Art. 6(1)(b) for user-initiated P2 restore; the signed P2 health-data assessment remains applicable, with its recorded residual risk; no new P2 consent. The owner accepts the described interim flag-off treatment of optional P3 details. Evidence: owner approval of both T018 amendments in conversation on 2026-10-08 and specs/004 plan D7–D10 and FR-017. Release of restore remains conditional on the PR 3 implementation matching this record.
 
 ---
 
@@ -330,8 +340,8 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 
 | Purpose | Proposed consent conclusion | Blocks rollout? |
 | --- | --- | --- |
-| P1 Account administration | Not required: Article 6(1)(b), with 6(1)(c) for acknowledgement and restore safety (signed 2026-09-28) | No |
-| P2 Training log and progress | Not required: Article 6(1)(b), not health data in this context (signed 2026-09-28) | No |
+| P1 Account administration | Not required: Article 6(1)(b), with 6(1)(c) for acknowledgement and restore safety (signed 2026-09-28); the `LastBackupAt` amendment was signed 2026-10-08 under 6(1)(b) | No |
+| P2 Training log and progress | Not required: Article 6(1)(b), not health data in this context (signed 2026-09-28); the user-initiated restore amendment was signed 2026-10-08 | No |
 | P3 Optional workout details | **Required**: Article 6(1)(a) and Article 9(2)(a), owner choices 2026-09-25/28; amendment approved 2026-09-29 | T042 complete; rollout still blocked by other release gates |
 | P4 Logs | Not required: Article 6(1)(f) and 6(1)(c) chosen 2026-09-28, unsigned | Log-content, credential and retention findings block |
 | P5 Browser storage | Not required: strictly necessary, Article 6(1)(b) (signed 2026-09-28; re-signed 2026-10-04 with the editor draft) | No |

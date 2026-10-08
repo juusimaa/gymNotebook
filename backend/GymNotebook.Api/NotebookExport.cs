@@ -24,9 +24,8 @@ namespace GymNotebook.Api;
 //      shared lifecycle access and a fresh token check, released before the bytes are
 //      written. A deletion, password change or token expiry therefore stops the stream at
 //      the next chunk (research R4).
-//   3. Nothing stored. Rows are read in keyset batches and streamed as they are serialized;
-//      no file, row or URL for the export exists anywhere once the request ends
-//      (data-model.md → Export document).
+//   3. No stored file or history. Rows are streamed in keyset batches. Only the latest
+//      completed JSON backup time is kept on User (specs/004 D6), after the final flush.
 //
 // A cut-short stream must never look like a finished file, so the closing brace goes out
 // only with the last chunk, after the last guard, and every failure after the first byte
@@ -48,7 +47,7 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
 
     public async Task<IResult> RunAsync(ExportRequest request, HttpContext http)
     {
-        if (string.IsNullOrEmpty(request.CurrentPassword))
+        if (string.IsNullOrEmpty(request.CurrentPassword) || request.Format is not ("json" or "csv"))
         {
             return Results.BadRequest(new ErrorResponse("invalid_request"));
         }
@@ -134,9 +133,41 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
             return Abort(http, http.RequestAborted.IsCancellationRequested ? "client disconnected" : "export time limit reached");
         }
 
+        // The closing brace has been flushed. Keep the export lock until the separate
+        // write ends, so another export cannot start with a stale last-backup value.
+        // This never writes through the read-only snapshot or changes its file contents.
+        if (request.Format == "json")
+        {
+            await StampLastBackupAsync(connectionString, userId, tokenVersion, expiresAt, ct);
+        }
+
         // Read-only, so committing just ends the snapshot and releases the export lock.
         await snapshot.CommitAsync(CancellationToken.None);
         return Results.Empty;
+    }
+
+    // Best-effort boundary after a valid file: failures here must not turn that file
+    // into an aborted download. Never log the exception, account or SQL parameters.
+    private async Task StampLastBackupAsync(string connectionString, int userId, int tokenVersion, DateTimeOffset expiresAt, CancellationToken ct)
+    {
+        try
+        {
+            await using var guard = await OwnConnectionGuard.OpenAsync(connectionString, userId, tokenVersion, options.SharedLockTimeoutMs, ct);
+            ct.ThrowIfCancellationRequested();
+            if (guard.Outcome != GuardOutcome.Ok || clock.GetUtcNow() >= expiresAt)
+            {
+                logger.LogWarning("Last backup time was not recorded: delivery authorization ended.");
+                return;
+            }
+            await guard.StampLastBackupAsync(userId, ct);
+            await guard.CommitAsync();
+        }
+        catch (Exception)
+        {
+            // This is deliberately a failure boundary: even an unexpected persistence
+            // failure leaves the previous timestamp and the already-sent file intact.
+            logger.LogWarning("Last backup time could not be recorded after a completed export.");
+        }
     }
 
     // Everything in the document, in contracts/api.md's order. Each ChunkedResponse.SendAsync
@@ -156,6 +187,7 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
                 u.EmailVerifiedAt,
                 u.DisplayName,
                 u.CreatedAt,
+                u.LastBackupAt,
                 u.AcknowledgedPrivacyNoticeVersion,
                 u.PrivacyNoticeAcknowledgedAt,
                 u.OptionalDetailsConsentVersion,
@@ -176,6 +208,7 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
         WriteInstant(json, "emailVerifiedAt", account.EmailVerifiedAt);
         json.WriteString("displayName", account.DisplayName);
         WriteInstant(json, "createdAt", account.CreatedAt);
+        WriteInstant(json, "lastBackupAt", account.LastBackupAt);
         json.WriteEndObject();
 
         // Keyset batches rather than OFFSET: each batch starts strictly after the last row
@@ -515,6 +548,14 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
                 await connection.DisposeAsync();
                 throw;
             }
+        }
+
+        public async Task StampLastBackupAsync(int userId, CancellationToken ct)
+        {
+            await using var command = new NpgsqlCommand(
+                "UPDATE users SET last_backup_at = statement_timestamp() WHERE id = @id", _connection, _transaction);
+            command.Parameters.AddWithValue("id", userId);
+            await command.ExecuteNonQueryAsync(ct);
         }
 
         // CancellationToken.None: ending a guard that has done its job must not depend on

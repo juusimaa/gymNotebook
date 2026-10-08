@@ -208,7 +208,7 @@ public class ExportAuthTests(TwoHostGymNotebookFixture db)
     }
 
     [Fact]
-    public async Task Export_FlagOff_Returns404()
+    public async Task Export_FlagOff_Returns200()
     {
         // Arrange: the host's default, PRIVACY_LIFECYCLE_ENABLED=false.
         await using var host = db.CreateHost();
@@ -219,6 +219,6 @@ public class ExportAuthTests(TwoHostGymNotebookFixture db)
         var response = await ExportTestSupport.ExportAsync(client);
 
         // Assert
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 }
