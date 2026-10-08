@@ -1,6 +1,6 @@
 # Tasks: Backup and Restore
 
-**Status**: PR 1 (#131), PR 2 (#132) and PR 3 (#133) merged on 2026-10-08. PR 4 (#135) merged. PR 5, the Backup & restore screen, is verified locally and awaiting owner review. AI implements by default; the owner names any task they will write themselves.
+**Status**: Done (2026-10-08). PRs 1–5 (#131, #132, #133, #135, #136) merged; PR 6, the release, adds the PLAN.md milestone entry and records the owner checks: T051 passed, T050 skipped (follow-up). AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
@@ -53,6 +53,10 @@
 
 ## PR 6 — Release
 
-- [ ] T050 (owner) SC-005: open the CSV in Excel with Finnish and US settings and in Numbers or LibreOffice; record versions and results.
-- [ ] T051 (owner) SC-006: phone and keyboard-only walkthrough; record it.
-- [ ] T052 PLAN.md → Milestones: milestone 14 entry with what it turned out to involve.
+- [ ] T050 (owner, skipped) SC-005: open the CSV in Excel with Finnish and US settings and in Numbers or LibreOffice; record versions and results.
+- [x] T051 (owner) SC-006: phone and keyboard-only walkthrough; record it.
+- [x] T052 PLAN.md → Milestones: milestone 14 entry with what it turned out to involve.
+
+**T050 (SC-005): skipped** by the owner on 2026-10-08. The CSV has not been checked in Excel, Numbers or LibreOffice; the dialect, quoting and formula guard rest on PR 4's Vitest tests alone.
+
+**T051 (SC-006): passed** on 2026-10-08. The owner reports every flow passed (full backup, spreadsheet and restoring two removed pages, on a phone and keyboard-only on desktop). Devices and durations were not recorded.
