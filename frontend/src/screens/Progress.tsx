@@ -258,7 +258,7 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
   const { isBodyweight, points } = history
   const metricLabel = isBodyweight
     ? 'Best reps per session'
-    : 'Best e1RM per session'
+    : 'Estimated strength trend (e1RM), best per session'
   const metricUnit = isBodyweight ? 'reps' : 'kg'
 
   if (points.length === 0) {
@@ -378,7 +378,7 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
           label="Best"
           figure={formatProgressFigure(best.value, isBodyweight)}
           unit={metricUnit}
-          meta={`${formatProgressDate(best.date)}${best.reps === 1 && !isBodyweight ? ' · tested single' : ''}`}
+          meta={`${formatProgressDate(best.date)}${best.reps === 1 && !isBodyweight ? ' · single' : ''}`}
         />
         <ProgressStat
           label="Change"
@@ -407,7 +407,10 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
             <div className="progress-session-set">
               {formatProgressSet(point, isBodyweight)}
               {point.reps === 1 && !isBodyweight && (
-                <span>tested single — weight as logged</span>
+                <span>single — weight as logged</span>
+              )}
+              {point.reps > 12 && !isBodyweight && (
+                <span>High-rep estimate · less certain</span>
               )}
             </div>
             <div className="progress-session-figure">
@@ -423,9 +426,23 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
       </section>
 
       <p className="progress-caveat">
-        {isBodyweight
-          ? 'Bodyweight exercise — the y-axis is reps. Belt-loaded sets are not charted here.'
-          : 'Estimates degrade above roughly 12 reps; high-rep accessory work is drawn but not worth reading closely.'}
+        {isBodyweight ? (
+          'Bodyweight exercise — the y-axis is reps. Belt-loaded sets are not charted here.'
+        ) : (
+          <>
+            Estimated one-rep max (e1RM) uses your best working set each session
+            to show a strength trend. Compare the same exercise and equipment,
+            with similar technique, rep ranges and effort. Leaving more reps in
+            reserve can lower the estimate without a loss of strength. Estimates
+            become less reliable at higher reps, especially above roughly 12;
+            small changes may not reflect strength gains. A single shows the
+            weight lifted, which may not be your maximum.{' '}
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/">
+              Research on repetitions and maximum strength
+            </a>
+            .
+          </>
+        )}
       </p>
     </>
   )
@@ -446,7 +463,8 @@ function ProgressMetric({
         'Best reps per session'
       ) : (
         <>
-          Best <span className="progress-metric-term">e1RM</span> per session
+          Estimated strength trend (
+          <span className="progress-metric-term">e1RM</span>) · best per session
         </>
       )}{' '}
       · {unit}

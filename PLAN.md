@@ -83,13 +83,13 @@ Raw weight isn't comparable across different rep counts (100kg×5 vs 80kg×10 bo
 e1RM = weight × (1 + reps / 30)
 ```
 
-For each exercise, the progress chart plots the **best e1RM among non-warmup sets, per session, over time**. This isn't stored — it's computed on the fly from `weight` and `reps`, so the formula can be revisited later without a migration.
+For each exercise, the progress chart plots the **best e1RM among non-warmup sets, per session, over time**. The UI describes this as an **estimated strength trend** and explains that comparisons need the same exercise/equipment and similar technique, rep ranges and effort. Reps left in reserve can change the estimate without a strength change. The same Epley formula remains in use for everyone: [research on repetitions and maximum strength](https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/) found no clear overall moderation by sex, but does not validate Epley for every individual or exercise. The progress guidance links that research. This isn't stored — it's computed on the fly from `weight` and `reps`, so the formula can be revisited later without a migration.
 
 Three rules the bare formula doesn't cover:
 
 - **`reps == 1` returns `weight` unchanged.** Epley would report a tested 100kg single as 103.3kg — estimating a measurement, and estimating it upward.
 - **Bodyweight exercises chart best reps instead.** Their `weight` is null or holds only added weight, so Epley would either have nothing to multiply or claim a +10kg belt pull-up is a 12kg lift. For `is_bodyweight` exercises the y-axis is reps; belt-loaded sets get charted separately if that ever becomes worth doing.
-- **Epley degrades above roughly 12 reps.** The chart still draws high-rep accessory work; it just isn't a number to read closely.
+- **Epley degrades above roughly 12 reps.** The chart still draws high-rep accessory work, but labels source sets above 12 reps as less certain. This is a practical caution, not a sharp accuracy boundary.
 
 ## REST API
 
