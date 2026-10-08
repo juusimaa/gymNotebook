@@ -96,6 +96,8 @@ var emailLinkWindowSeconds = builder.Configuration.GetValue("EmailLinkRateLimit:
 // attempts per 60 s per account. Same override pattern, so tests can shrink or widen it.
 var sensitivePermitLimit = builder.Configuration.GetValue("SensitiveRateLimit:PermitLimit", 10);
 var sensitiveWindowSeconds = builder.Configuration.GetValue("SensitiveRateLimit:WindowSeconds", 60);
+var restorePermitLimit = builder.Configuration.GetValue("RestoreRateLimit:PermitLimit", 5);
+var restoreWindowSeconds = builder.Configuration.GetValue("RestoreRateLimit:WindowSeconds", 600);
 
 // Lock and write timeouts for account-lifecycle coordination (see AccountLifecycle.cs).
 // The class's defaults are what production runs with; tests shorten them. Validated at
@@ -103,6 +105,9 @@ var sensitiveWindowSeconds = builder.Configuration.GetValue("SensitiveRateLimit:
 var lifecycleOptions = builder.Configuration.GetSection("Lifecycle").Get<LifecycleOptions>() ?? new LifecycleOptions();
 lifecycleOptions.Validate();
 builder.Services.AddSingleton(lifecycleOptions);
+var restoreOptions = builder.Configuration.GetSection("Restore").Get<RestoreOptions>() ?? new RestoreOptions();
+restoreOptions.Validate();
+builder.Services.AddSingleton(restoreOptions);
 
 // The versioned privacy notices embedded from docs/privacy/notices/ (PrivacyNoticeCatalog).
 // Loaded even while the feature flag is off, so a broken or missing notice file fails
@@ -122,6 +127,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 // The notebook export (NotebookExport.cs) and account deletion (AccountDeletion.cs),
 // scoped like the AppDbContext they work through.
 builder.Services.AddScoped<NotebookExport>();
+builder.Services.AddScoped<NotebookRestore>();
 builder.Services.AddScoped<AccountDeletion>();
 
 // Outgoing email (specs/002 plan D6–D8). Loaded and checked here, at boot, like the
@@ -310,6 +316,14 @@ builder.Services.AddRateLimiter(options =>
     // resend budget or the other way round.
     options.AddPolicy("email-request", httpContext => PerClientIp(httpContext, emailRequestPermitLimit, emailRequestWindowSeconds));
     options.AddPolicy("email-link", httpContext => PerClientIp(httpContext, emailLinkPermitLimit, emailLinkWindowSeconds));
+    options.AddPolicy("restore", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = restorePermitLimit,
+            Window = TimeSpan.FromSeconds(restoreWindowSeconds),
+            QueueLimit = 0,
+        }));
 
     // The per-account limit on password-verified account operations (specs/001 P12,
     // research R10), for endpoints marked with SensitiveOperationMetadata. It has to be the
@@ -1424,7 +1438,7 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
 
     foreach (var input in request.Exercises)
     {
-        if (string.IsNullOrWhiteSpace(input.ExerciseName))
+        if (!WorkoutInputValidation.HasExerciseName(input.ExerciseName))
         {
             return Results.BadRequest();
         }
@@ -1492,7 +1506,7 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
     // A blank name isn't a range check — it normalizes to "" and would claim this user's
     // one and only "" slot in the unique (user_id, normalized_name) index with a row no
     // autocomplete could ever offer back. Same reasoning as register's blank-username guard.
-    if (string.IsNullOrWhiteSpace(request.ExerciseName))
+    if (!WorkoutInputValidation.HasExerciseName(request.ExerciseName))
     {
         return Results.BadRequest();
     }
@@ -1610,7 +1624,7 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
 // account deletion (user story 4) and optional-details consent (user story 6).
 // Not mapped at all while the feature flag is off, so the routes 404 (plan.md P25).
 // specs/004: export and backup status are independent of the privacy rollout.
-app.MapBackupEndpoints();
+app.MapBackupEndpoints(restoreOptions, privacyLifecycleEnabled);
 if (privacyLifecycleEnabled)
 {
     app.MapPrivacyEndpoints();

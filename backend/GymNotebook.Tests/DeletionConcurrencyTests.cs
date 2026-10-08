@@ -56,6 +56,14 @@ public class DeletionConcurrencyTests(TwoHostGymNotebookFixture db)
         ["rename exercise"] = new(Kind.Write, (c, n) => c.PatchAsJsonAsync($"/exercises/{n.FirstExerciseId}", new { name = "Renamed during deletion" })),
         // Renaming onto another exercise's name merges the two (PLAN.md).
         ["merge exercise"] = new(Kind.Write, (c, n) => c.PatchAsJsonAsync($"/exercises/{n.SecondExerciseId}", new { name = "Exercise 0" })),
+        ["restore"] = new(Kind.Write, (c, _) => c.PostAsJsonAsync("/account/restore", new
+        {
+            formatVersion = 1,
+            exercises = new[] { new { id = 1, name = "Restored squat", isBodyweight = false } },
+            workouts = new[] { new { id = 2, date = "2030-01-01", startedAt = "2030-01-01T08:00:00Z" } },
+            workoutExercises = new[] { new { id = 3, workoutId = 2, exerciseId = 1, position = 0 } },
+            sets = new[] { new { id = 4, workoutExerciseId = 3, setNumber = 1, weight = 80m, reps = 5, isWarmup = false } },
+        })),
         ["acknowledge notice"] = new(Kind.Write, AcknowledgeAsync),
         ["me"] = new(Kind.Read, (c, _) => c.GetAsync("/auth/me"), Pause: sql => sql.Contains("SELECT u.id, u.display_name, u.email", StringComparison.Ordinal)),
         ["read workouts"] = new(Kind.Read, (c, _) => c.GetAsync("/workouts")),
