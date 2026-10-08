@@ -50,6 +50,11 @@ public static class JwtTokenFactory
             new Claim("tv", tokenVersion.ToString()),
             // Unix seconds are stable across time zones and can be copied on renewal.
             new Claim(AuthTimeClaim, (authTime ?? issuedAt).ToUnixTimeSeconds().ToString()),
+            // "iat" (issued at): with "exp" it gives the browser this token's lifetime, so
+            // it can renew at half-life (frontend auth/token.ts). Unlike auth_time it is
+            // new on every token. JwtSecurityToken's constructor doesn't add it by itself.
+            new Claim(JwtRegisteredClaimNames.Iat, issuedAt.ToUnixTimeSeconds().ToString(),
+                ClaimValueTypes.Integer64),
         };
 
         var token = new JwtSecurityToken(

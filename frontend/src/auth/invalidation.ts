@@ -1,5 +1,5 @@
 import { onSessionEnded, type SessionEnded } from '../api/client'
-import { TOKEN_KEY } from './token'
+import { getTokenSubject, TOKEN_KEY } from './token'
 
 // What happens when this browser learns its session is over (specs/001
 // contracts/ui.md → Invalidation and accessibility): the account was deleted,
@@ -21,9 +21,11 @@ import { TOKEN_KEY } from './token'
 // downloaded stay on the device; nothing here can reach them.
 //
 // One exception: a 401 because the token simply expired *holds* the editor
-// drafts instead of clearing them. Tokens live 30 minutes with no refresh, so
-// that 401 is what a long session's save meets; the draft comes back when the
-// same user signs in again (screens/editorDraftStorage.ts).
+// drafts instead of clearing them. Tokens live 30 minutes and renew while the
+// app is in use (api/client.ts), up to 12 hours from sign-in; a phone left
+// asleep past expiry, or a session past the cap, still meets that 401 on its
+// next save. The draft comes back when the same user signs in again
+// (screens/editorDraftStorage.ts).
 //
 // The browser pieces are passed in (InvalidationEnvironment), so the tests run
 // in plain Node.
@@ -45,6 +47,7 @@ export interface InvalidationEnvironment {
 // The subset of a StorageEvent this needs.
 export interface TokenStorageChange {
   key: string | null
+  oldValue: string | null
   newValue: string | null
 }
 
@@ -92,8 +95,13 @@ export function endSession(
 
 // Another tab changed the token. Removed: that tab signed out or the account is
 // gone, so this one ends its session too (clearing an already-cleared token is
-// harmless). Replaced: someone signed in, possibly as a different account, so
-// what this tab shows may not be theirs — reload and let the guards decide.
+// harmless). Replaced by a token for the same user: that tab renewed it
+// (specs/003 D8), which happens every 15 minutes or so in use, so nothing
+// happens here — reloading would throw away a page being edited, and this tab
+// reads the new token from storage on its next request anyway. Replaced by
+// anything else: someone signed in, possibly as a different account, so what
+// this tab shows may not be theirs — reload and let the guards decide. A token
+// whose user can't be read counts as "anything else", the safer side.
 export function handleTokenStorageChange(
   change: TokenStorageChange,
   env: InvalidationEnvironment,
@@ -104,9 +112,17 @@ export function handleTokenStorageChange(
   // key null: the whole of localStorage was cleared.
   if (change.newValue === null) {
     endSession(env)
-  } else {
+  } else if (!isSameUser(change.oldValue, change.newValue)) {
     env.reload()
   }
+}
+
+function isSameUser(oldToken: string | null, newToken: string): boolean {
+  if (oldToken === null) {
+    return false
+  }
+  const subject = getTokenSubject(newToken)
+  return subject !== null && subject === getTokenSubject(oldToken)
 }
 
 // `persisted` is true only for a back/forward-cache restore; a normal load

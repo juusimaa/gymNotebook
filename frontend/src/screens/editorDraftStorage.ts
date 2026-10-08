@@ -24,10 +24,12 @@ import {
 //   - Tagged with the owner's user id. A copy from another account is never
 //     restored and is removed as soon as someone signs in.
 //   - Cleared when the session ends, with one exception. The token lives 30
-//     minutes with no refresh (PLAN.md → Auth), so a long session's save can be
-//     the request that finds it expired. That 401 *holds* the draft instead,
-//     and it comes back once the same user signs in again. Sign-out, another
-//     tab signing out, account deletion and every other 401 clear it.
+//     minutes and renews while the app is in use, up to 12 hours from sign-in
+//     (PLAN.md → Auth). A phone asleep past expiry, or a session past the cap,
+//     can still meet an expired token on its next save. That 401 *holds* the
+//     draft instead, and it comes back once the same user signs in again.
+//     Sign-out, another tab signing out, account deletion and every other 401
+//     clear it.
 //
 // Storage can be missing or throw (private mode, blocked site data). Every
 // access is wrapped: without storage the editor works exactly as before, it
