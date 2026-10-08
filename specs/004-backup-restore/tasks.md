@@ -1,6 +1,6 @@
 # Tasks: Backup and Restore
 
-**Status**: PRs 1–5 (#131, #132, #133, #135, #136) merged on 2026-10-08. PR 6, the release, adds the PLAN.md milestone entry; the owner checks T050–T051 are recorded below before it merges. AI implements by default; the owner names any task they will write themselves.
+**Status**: PRs 1–5 (#131, #132, #133, #135, #136) merged on 2026-10-08. PR 6, the release, adds the PLAN.md milestone entry and records the owner checks: T051 passed, T050 skipped. AI implements by default; the owner names any task they will write themselves.
 
 ## PR 1 — Plan (this PR)
 
@@ -53,25 +53,10 @@
 
 ## PR 6 — Release
 
-- [ ] T050 (owner) SC-005: open the CSV in Excel with Finnish and US settings and in Numbers or LibreOffice; record versions and results.
-- [ ] T051 (owner) SC-006: phone and keyboard-only walkthrough; record it.
+- [ ] T050 (owner, skipped) SC-005: open the CSV in Excel with Finnish and US settings and in Numbers or LibreOffice; record versions and results.
+- [x] T051 (owner) SC-006: phone and keyboard-only walkthrough; record it.
 - [x] T052 PLAN.md → Milestones: milestone 14 entry with what it turned out to involve.
 
-**T050 record (SC-005)** — owner fills in. For each: app and version, OS and regional setting, and pass/fail for columns split, numbers numeric, non-ASCII intact, no formula evaluated.
+**T050 (SC-005): skipped** by the owner on 2026-10-08. The CSV has not been checked in Excel, Numbers or LibreOffice; the dialect, quoting and formula guard rest on PR 4's Vitest tests alone.
 
-| App and version | OS, regional setting | Columns | Numbers | Non-ASCII | No formulas | Notes |
-|---|---|---|---|---|---|---|
-| Excel … | …, Finnish | | | | | |
-| Excel … | …, English (US) | | | | | |
-| Numbers / LibreOffice … | … | | | | | |
-
-**T051 record (SC-006)** — owner fills in. Each flow under two minutes, excluding download time.
-
-| Flow | Device, browser | Duration | Pass/fail | Notes |
-|---|---|---|---|---|
-| Full backup | Phone … | | | |
-| Spreadsheet (CSV) | Phone … | | | |
-| Restore two torn-out pages | Phone … | | | |
-| Full backup | Desktop, keyboard only … | | | |
-| Spreadsheet (CSV) | Desktop, keyboard only … | | | |
-| Restore two torn-out pages | Desktop, keyboard only … | | | |
+**T051 (SC-006): passed** on 2026-10-08. The owner reports every flow passed (full backup, spreadsheet and restoring two removed pages, on a phone and keyboard-only on desktop). Devices and durations were not recorded.
