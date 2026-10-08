@@ -120,6 +120,10 @@ POST   /workouts/{id}/sets        -- { exerciseName, weight?, reps, isWarmup } a
 PATCH  /workouts/{id}/sets/{setId}
 DELETE /workouts/{id}/sets/{setId}
 
+-- backup (specs/004); always mapped, independently of the privacy flag
+POST   /account/export                    -- { currentPassword, format?: "json" | "csv" }: same JSON snapshot for both formats
+GET    /account/backup                    -- { lastBackupAt }: latest completed full backup, or null
+
 -- privacy (specs/001); mapped only when PRIVACY_LIFECYCLE_ENABLED is exactly "true", otherwise 404
 GET    /privacy/notice                    -- public: the current notice + any announced successor; records nothing
 GET    /account/privacy                   -- current notice version, the caller's acknowledgement, requiresAcknowledgement, optionalDetails
@@ -127,9 +131,10 @@ PUT    /account/privacy/acknowledgement   -- { noticeVersion }: current version 
 GET    /privacy/optional-details-statement      -- public: the consent statement for title, location, notes and bodyweight
 PUT    /account/privacy/optional-details-consent -- { statementVersion }: current version only (409 consent_statement_changed otherwise)
 DELETE /account/privacy/optional-details-consent -- withdraw: clears the consent and every optional detail; returns { clearedWorkouts }
-POST   /account/export                    -- { currentPassword }: the whole notebook as one streamed JSON attachment
 POST   /account/delete                    -- { currentPassword, confirmDeletion: true }: permanent deletion; returns only retention dates
 ```
+
+A completed `json` export (the default when `format` is omitted) best-effort records `User.LastBackupAt` after the final flush, on a separate connection under a fresh lifecycle guard. `csv` still returns JSON for browser conversion and leaves the time unchanged. Other format values, including explicit null, return 400 `invalid_request`. The file contains the **previous** `account.lastBackupAt`; the column is removed with the account. No file or backup history is stored, and completion does not prove the browser saved it. Both backup routes require authentication and use `Cache-Control: no-store`. The owner-signed processing-decision amendment (spec 004 T018/Q1) is required before deploying the unflagged export.
 
 Sets are nested under `/workouts/{id}` since a set only exists in the context of one workout — this also means the "does this workout belong to the caller" authorization check happens once at the parent route. `WorkoutExercise` deliberately does *not* surface as its own `/workouts/{id}/exercises/{blockId}/sets` path: three levels of nesting to express one entity the user never names is a worse API than one the server keeps consistent on their behalf.
 

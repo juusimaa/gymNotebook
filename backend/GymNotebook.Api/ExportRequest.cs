@@ -1,7 +1,6 @@
 namespace GymNotebook.Api;
 
-// Body of POST /account/export (specs/001 contracts/api.md). Only the current password:
-// the account is the caller's own, identified by the bearer token, and a stolen token alone
-// must not be enough to take a copy of the notebook. The value is compared as sent, never
-// trimmed or otherwise transformed.
-public record ExportRequest(string CurrentPassword);
+// The password is compared exactly as sent. Both formats stream the same JSON;
+// CSV is converted by the browser and must not count as a restorable full backup.
+// An omitted format preserves the original export client's behavior.
+public record ExportRequest(string CurrentPassword, string Format = "json");

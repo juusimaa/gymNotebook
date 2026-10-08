@@ -16,7 +16,7 @@ Draft for owner review, 2026-09-24. These routes are proposed, not implemented. 
 - Current password is verified anew for each export/deletion. Apply existing per-IP auth policy plus per-account throttling of 10 attempts per 60 seconds, no queue (approved as P12; in process, with a per-instance bound documented in research R10). Only one export stream per account at a time, enforced across instances by an export-namespace advisory lock on the snapshot transaction (research R10); rejected concurrent exports disclose no data and do not modify the notebook.
 - Specific missing/unowned notebook resources remain 404; foreign/nonexistent pagination cursors remain identical 400s. The notice gate is UI routing, not an ownership or consent authorization rule.
 
-All routes below are mapped only when `PRIVACY_LIFECYCLE_ENABLED` is exactly `true`; otherwise they return 404 ([plan.md → Phase 1](../plan.md#phase-1--design-and-delivery-boundaries), P25). Lifecycle coordination on existing routes applies regardless of the flag.
+Except for `POST /account/export` and `GET /account/backup`, which are always mapped (spec 004 D2), routes below are mapped only when `PRIVACY_LIFECYCLE_ENABLED` is exactly `true`; otherwise they return 404 ([plan.md → Phase 1](../plan.md#phase-1--design-and-delivery-boundaries), P25). Lifecycle coordination on existing routes applies regardless of the flag.
 
 ## Endpoints
 
@@ -28,7 +28,8 @@ All routes below are mapped only when `PRIVACY_LIFECYCLE_ENABLED` is exactly `tr
 | GET /privacy/optional-details-statement | Public, no body | 200 current consent statement document | Amendment 2026-09-25. Same shape as the notice document without `announcedSuccessor`; no account data |
 | PUT /account/privacy/optional-details-consent | Bearer; `{ "statementVersion": "…" }` | 200 `{ statementVersion, consentedAt }` | Current version only, else 409 `consent_statement_changed`; same version idempotent and keeps the timestamp |
 | DELETE /account/privacy/optional-details-consent | Bearer, no body | 200 `{ clearedWorkouts }` | Withdrawal, and "Don't allow" in the transition question. One transaction clears the consent pair and every optional detail; idempotent, so a retry returns `clearedWorkouts: 0`. No password (FR-033) |
-| POST /account/export | Bearer; `{ "currentPassword": "…" }` | 200 JSON attachment stream | Fresh password; stable snapshot; cancellation on invalidation; never 202/public link |
+| GET /account/backup | Bearer, no body | 200 `{ lastBackupAt }` (instant or null) | Always mapped; fresh lifecycle guard; `Cache-Control: no-store` |
+| POST /account/export | Bearer; `{ "currentPassword": "…", "format": "json" }` | 200 JSON attachment stream | Always mapped; format omitted defaults to json, csv returns the same JSON for browser conversion; other values (including null) 400 invalid_request; fresh password; stable snapshot; cancellation on invalidation; never 202/public link |
 | POST /account/delete | Bearer; `{ "currentPassword": "…", "confirmDeletion": true }` | 200 deletion outcome response | Missing/false confirmation fails before mutation; password plus explicit user action |
 
 POST for deletion avoids relying on DELETE request-body handling and allows password plus explicit confirmation. Both sensitive actions require JSON; reject non-JSON with 415 and malformed JSON with 400. Password strings are not trimmed/transformed. Do not auto-retry deletion or export with retained passwords.
@@ -68,7 +69,7 @@ Headers: `Content-Type: application/json; charset=utf-8`, `Content-Disposition: 
 | formatVersion | Integer 1 |
 | snapshotAt | UTC ISO-8601 instant captured with the first snapshot query |
 | fieldGuide | Object documenting every field below, units, nulls, keys/relationships, ordering and date interpretation |
-| account | `{ id: integer, privacyAccountId: UUID string, username: string, createdAt: instant }` |
+| account | `{ id: integer, privacyAccountId: UUID string, email: string, emailVerifiedAt: instant or null, displayName: string, createdAt: instant, lastBackupAt: instant or null }` |
 | exercises | Array of `{ id, userId, name, isBodyweight, createdAt }` |
 | workouts | Array of `{ id, userId, date, startedAt, endedAt, title, location, notes, bodyweightKg, createdAt }` |
 | workoutExercises | Array of `{ id, workoutId, exerciseId, position }` |
@@ -87,7 +88,7 @@ The field guide must state:
 - `optionalDetailsConsent` records the consent for title, location, notes and bodyweight. Null means no current consent; refusals and withdrawals are not recorded.
 - `snapshotAt` identifies the snapshot query boundary; it is not a claim that every row was created then. Empty collections are `[]` and nullable values remain present as null.
 
-Exclude PasswordHash, passwords, TokenVersion, JWTs, secret configuration, derived NormalizedName, other-user records and restricted security control records. A broader access request involving security records gets separate operator review under FR-012, not automatic exclusion by this export contract. No export record/history is persisted. Additional feature-linked personal records cannot be introduced without updating this schema and deletion coverage.
+Exclude PasswordHash, passwords, TokenVersion, JWTs, secret configuration, derived NormalizedName, other-user records and restricted security control records. A broader access request involving security records gets separate operator review under FR-012, not automatic exclusion by this export contract. Spec 004 amendment: only the latest completed full JSON backup time is persisted on `User.LastBackupAt`, after the final flush on a separate connection under a fresh delivery guard. Failure is logged without personal data and leaves the valid file intact; the older timestamp may remain. CSV, rejected and cut-short exports do not stamp it. The export contains the previous value (null until a backup is recorded), explained by its field guide. The timestamp is deleted with the account. No file or export history is persisted. Additional feature-linked personal records cannot be introduced without updating this schema and deletion coverage.
 
 ## Concurrency and failure contract
 

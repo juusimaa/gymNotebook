@@ -480,6 +480,22 @@ if (forwardedHeadersEnabled)
 // metadata), so it must come after routing — which WebApplication adds implicitly ahead
 // of all four of these.
 app.UseCors();
+// An endpoint filter runs too late for 401/429 and JSON-binding errors. Backup's
+// contract requires no-store on those responses too, so use its endpoint metadata
+// after routing but before any of these early exits. Other routes are unaffected.
+app.Use(async (context, next) =>
+{
+    if (context.GetEndpoint()?.Metadata.GetMetadata<BackupNoStoreMetadata>() is not null)
+    {
+        // OnStarting also survives an error handler clearing response headers.
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            return Task.CompletedTask;
+        });
+    }
+    await next(context);
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -1591,8 +1607,10 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, Claim
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 // specs/001: the public notice and the account's acknowledgement state (user story 1), the
-// notebook export (user story 3) and account deletion (user story 4).
+// account deletion (user story 4) and optional-details consent (user story 6).
 // Not mapped at all while the feature flag is off, so the routes 404 (plan.md P25).
+// specs/004: export and backup status are independent of the privacy rollout.
+app.MapBackupEndpoints();
 if (privacyLifecycleEnabled)
 {
     app.MapPrivacyEndpoints();

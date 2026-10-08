@@ -4,8 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GymNotebook.Api;
 
-// The privacy routes of specs/001 (contracts/api.md): the notice (user story 1), export
-// (3), deletion (4) and the optional-details consent (6). Program.cs maps
+// The privacy routes of specs/001 (contracts/api.md): the notice (user story 1),
+// deletion (4) and optional-details consent (6). Export moved to BackupEndpoints
+// in specs/004 and is always mapped. Program.cs maps the remaining privacy routes
 // them only when PRIVACY_LIFECYCLE_ENABLED is exactly "true"; otherwise they don't exist
 // and every one of them is a plain 404, which is also how the frontend detects that the
 // feature is off (plan.md P25).
@@ -214,33 +215,6 @@ public static class PrivacyEndpoints
            .WithDescription("Removes the consent record and clears title, location, notes and bodyweight on every one of the caller's workouts, in one transaction. The rest of the notebook is unchanged. Safe to retry: a repeat returns clearedWorkouts 0.")
            .Produces<OptionalDetailsWithdrawalResponse>(StatusCodes.Status200OK)
            .Produces(StatusCodes.Status401Unauthorized);
-
-        // User story 3: the notebook export. Deliberately *not* under the lifecycle filter
-        // (it's on LifecycleCoverageTests' allow-list): the filter would hold shared access
-        // for the whole download, and deletion must be able to cut in between chunks.
-        // NotebookExport takes its own initialization and per-chunk delivery guards instead.
-        //
-        // Rate limits: the existing per-IP "auth" policy, as for login, plus the per-account
-        // limit that SensitiveOperationMetadata opts into (Program.cs). The body binds only
-        // from JSON: any other Content-Type gets 415 and malformed JSON 400 from Minimal
-        // APIs itself, before the handler runs.
-        app.MapPost("/account/export", (ExportRequest request, NotebookExport export, HttpContext http) =>
-            export.RunAsync(request, http))
-           .RequireAuthorization()
-           .AddEndpointFilter(NoStore)
-           .RequireRateLimiting("auth")
-           .WithMetadata(new SensitiveOperationMetadata())
-           .WithName("ExportNotebook")
-           .WithTags("Privacy")
-           .WithSummary("Downloads a copy of the caller's notebook")
-           .WithDescription("Verifies the current password, then streams the whole notebook as one JSON file (format version 1) read from a single database snapshot, with an embedded field guide. The stream is cut, never completed, if the account is deleted, the password changed or the token expires during the download.")
-           .Accepts<ExportRequest>("application/json")
-           .Produces(StatusCodes.Status200OK, contentType: "application/json")
-           .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
-           .Produces(StatusCodes.Status401Unauthorized)
-           .Produces(StatusCodes.Status415UnsupportedMediaType)
-           .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests)
-           .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
         // User story 4: permanent account deletion. Also on LifecycleCoverageTests'
         // allow-list rather than under the shared filter: AccountDeletion takes exclusive

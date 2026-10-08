@@ -40,6 +40,10 @@ public class User
     // Stamped by the database ("now()" column default, see AppDbContext), never set in C#.
     public DateTimeOffset CreatedAt { get; set; }
 
+    // The latest full JSON backup that finished sending, not proof the browser saved it.
+    // Null until the first completion; removed with this row on account deletion.
+    public DateTimeOffset? LastBackupAt { get; set; }
+
     // The account's permanent privacy identity (specs/001 data-model.md, research R5).
     // Integer ids can be reallocated after a point-in-time restore rewinds the sequence,
     // and email addresses can be registered again after a deletion, so neither can identify
