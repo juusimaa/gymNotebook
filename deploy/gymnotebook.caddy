@@ -1,0 +1,30 @@
+# Gym Notebook's site blocks for the tracker's Caddy, the only process on the
+# server's ports 80/443. Copied to /opt/edge/sites/ on the server, where the
+# tracker's Caddyfile imports /etc/caddy/sites/*.caddy (research R4). The
+# behavior it promises is contracts/edge-http.md.
+#
+# Changing it is an admin step, never a deploy: copy the file and run the
+# tracker's `caddy reload`, which validates the whole config first and keeps
+# the old one if this file is broken, so a mistake here cannot take the
+# tracker down.
+#
+# Upstreams are resolved when Caddy dials, over the `edge` network, so a
+# stopped gym-api gives 502 on our hostnames only.
+#
+# No `trusted_proxies`, on purpose: Caddy then replaces any client
+# X-Forwarded-For with the TCP peer, which gym-api trusts as the client
+# address for rate limits (FORWARDED_HEADERS_ENABLED in compose.prod.yml,
+# research R5). If Cloudflare's proxy is ever turned on, this and the privacy
+# inventory change first.
+#
+# No `log` directive either: no per-request access line for our hostnames,
+# keeping the decision behind `access_log off` in frontend/nginx.conf (plan
+# D10). Caddy's error log stays on.
+
+gymnotebook.fit {
+	reverse_proxy gym-web:80
+}
+
+api.gymnotebook.fit {
+	reverse_proxy gym-api:8080
+}
