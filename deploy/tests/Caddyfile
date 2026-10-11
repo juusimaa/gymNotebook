@@ -1,0 +1,9 @@
+# CI-only wrapper for `caddy validate` on deploy/gymnotebook.caddy, standing
+# in for the tracker's Caddyfile that imports it on the server.
+{
+	# Caddy's internal CA instead of Let's Encrypt, so validating never needs
+	# the real hostnames to resolve here.
+	local_certs
+}
+
+import /deploy/gymnotebook.caddy

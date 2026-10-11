@@ -87,6 +87,9 @@ checked during provisioning and written back here.
 - **Verified 2026-10-11 (T002)**: `upadmin` via psql on the Developer plan
   can `CREATE ROLE … LOGIN` and `CREATE DATABASE … OWNER` that role; a
   throwaway `t002_probe` role and database were created and dropped again.
+- **Verified 2026-10-11 (before T019)**: `upadmin` can also
+  `GRANT pg_read_all_stats` (probe role created, granted, dropped), so the
+  tracker's size alert can read `gymnotebook`'s size without `CONNECT` on it.
 
 ## R3. PostgreSQL 18
 
@@ -128,8 +131,12 @@ checked during provisioning and written back here.
   simplest, but every Gym Notebook hostname or header change becomes a tracker
   PR. (b) a separate edge repository: cleanest, more moving parts than two
   apps justify.
-- **(verify)**: an `import` glob that matches nothing only logs a warning, so
-  the tracker change can merge before our file exists.
+- **Verified 2026-10-11 (T015)** on `caddy:2.11.7` with `caddy validate`: an
+  `import` glob that matches nothing (empty or missing `/etc/caddy/sites`)
+  exits 0 with one warning, `No files matching import glob pattern`, so the
+  tracker change can merge before our file exists. A valid site file is
+  included; a broken one fails validation (exit 1), which is what makes
+  `caddy reload` keep the old config.
 
 ## R5. Real client address
 

@@ -32,3 +32,64 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+
+  # Checks the files in deploy/ that run on the UpCloud server, so a broken
+  # Compose file, site file, deploy script or copy check fails here instead of
+  # during a deploy or the cutover (specs/005-upcloud-migration, FR-024).
+  # Modelled on the tracker's deploy-config job.
+  deploy-config:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      # ENV_FILE points gym-api's env_file at the fake values instead of
+      # /etc/gymnotebook/.env, which only exists on the server; --env-file
+      # supplies IMAGE_TAG and TURNSTILE_SITE_KEY for interpolation. The path
+      # is relative to deploy/, the Compose project directory.
+      - name: Validate the Compose file
+        env:
+          ENV_FILE: tests/sample.env
+        run: docker compose -f deploy/compose.prod.yml --env-file deploy/tests/sample.env config -q
+
+      # Same pinned Caddy as the tracker's edge. deploy/tests/Caddyfile
+      # imports our site file the way the tracker's Caddyfile does on the
+      # server, with local_certs so nothing reaches Let's Encrypt.
+      - name: Validate the Caddy site file
+        run: >-
+          docker run --rm -v "$PWD/deploy:/deploy:ro"
+          caddy:2.11.7 caddy validate --config /deploy/tests/Caddyfile --adapter caddyfile
+
+      # shellcheck is used when the runner image has it; bash -n always runs.
+      - name: Check the shell scripts
+        run: |
+          bash -n deploy/bin/deploy.sh deploy/tests/deploy-guard.sh
+          if command -v shellcheck >/dev/null; then
+            shellcheck deploy/bin/deploy.sh deploy/tests/deploy-guard.sh
+          fi
+
+      - name: Run the deploy guard test
+        run: bash deploy/tests/deploy-guard.sh
+
+      # verify-copy.sql against the real schema on the production Postgres
+      # major, so a SQL error or a schema change it can't handle fails here.
+      # The schema comes from the EF migrations; psql runs inside the
+      # container, so the runner needs no Postgres client.
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Run the copy check against the migrated schema
+        # `dotnet ef` builds the app's host, which refuses to start without
+        # these. Placeholders: generating the script never connects or signs.
+        env:
+          ConnectionStrings__Default: Host=unused.invalid;Database=unused
+          Jwt__Secret: placeholder-not-a-secret-placeholder-not-a-secret
+          CORS_ORIGINS: http://localhost
+        run: |
+          docker run -d --name verify-pg -e POSTGRES_PASSWORD=ci postgres:18
+          (cd backend && dotnet tool restore && dotnet restore GymNotebook.Api && dotnet ef migrations script --project GymNotebook.Api -o "$RUNNER_TEMP/schema.sql")
+          # Over TCP: during first-start initdb the image runs a temporary
+          # server on the Unix socket only, which a socket check would catch.
+          until docker exec verify-pg pg_isready -h 127.0.0.1 -U postgres -q; do sleep 1; done
+          docker exec -i verify-pg psql -q -U postgres -v ON_ERROR_STOP=1 < "$RUNNER_TEMP/schema.sql"
+          docker exec -i verify-pg psql -XAt -U postgres -v ON_ERROR_STOP=1 < deploy/bin/verify-copy.sql | tee "$RUNNER_TEMP/verify.txt"
+          grep -q '^migration|' "$RUNNER_TEMP/verify.txt"

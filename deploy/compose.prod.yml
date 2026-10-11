@@ -1,0 +1,121 @@
+# Gym Notebook's production stack on the UpCloud server it shares with the
+# Subscription Tracker: the two images CI publishes to GHCR, and nothing else.
+# The database is UpCloud's managed PostgreSQL (shared service, our own
+# database and role), and TLS is the tracker's Caddy, which reaches these
+# containers over the external `edge` network using deploy/gymnotebook.caddy.
+#
+# Lives at /opt/gymnotebook/compose.prod.yml on the server and is always run
+# with two env files (deploy/README.md § Environment):
+#
+#   docker compose -p gymnotebook -f /opt/gymnotebook/compose.prod.yml \
+#     --env-file /etc/gymnotebook/.env \
+#     --env-file /var/lib/gymnotebook/image-tag.env  up -d --wait
+#
+# deploy/bin/deploy.sh is the normal way to run it. The local-development
+# stack is ../docker-compose.yml; nothing here is used by it.
+
+# Fixed, so container names (gymnotebook-gym-api-1) don't depend on the
+# directory the file sits in. deploy.sh passes -p gymnotebook as well.
+name: gymnotebook
+
+# Docker's default json-file driver keeps logs forever. Capped at 3 × 10 MB
+# per container, so retention is bounded by size (research R11, the privacy
+# retention note).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # The service names must stay gym-api and gym-web, never backend/frontend.
+  # Docker registers every service name as an alias on each network the
+  # container joins, and the tracker's Caddy (also on `edge`) proxies to
+  # `backend:8000` and `frontend:80`. Same names here would let Caddy resolve
+  # the tracker's upstreams to our containers (research R4, plan D2).
+  gym-api:
+    # The exact commit CI built, from image-tag.env. `:?` makes a missing tag
+    # an error at `up` instead of a silent pull of `latest`.
+    image: ghcr.io/juusimaa/gymnotebook-backend:${IMAGE_TAG:?IMAGE_TAG must be set (image-tag.env)}
+    # Back after a crash, an OOM kill or a reboot without anyone logging in,
+    # but not after a deliberate `docker compose stop`.
+    restart: unless-stopped
+    # Hard caps, because the tracker's containers have none: without them the
+    # kernel's OOM killer picks a victim host-wide and that could be the
+    # tracker. With them, only this container is killed and restarted. .NET
+    # sizes its GC heap from the container limit, so no heap setting is
+    # needed (research R1).
+    mem_limit: 512m
+    cpus: 0.75
+    # Every app variable (contracts/server-env.md). A variable only so CI can
+    # point it at deploy/tests/sample.env; on the server it is the default.
+    env_file:
+      - ${ENV_FILE:-/etc/gymnotebook/.env}
+    environment:
+      # Set here, not in the env file, because it is only true of this stack:
+      # Caddy replaces any client X-Forwarded-For with the TCP peer and no
+      # port is published, so the last entry is always the real client and
+      # rate limits key on it (contracts/edge-http.md, research R5). Copied
+      # into a setup without Caddy in front, it would let clients pick their
+      # own rate-limit key.
+      FORWARDED_HEADERS_ENABLED: "true"
+    # The database's CA, at the path the connection string's Root Certificate
+    # names. Only this file, not /etc/gymnotebook, so the container never sees
+    # the env file as a file. It is root:gymdeploy 0640 on the host, readable
+    # here because the backend image runs as root; if the image ever gets a
+    # non-root USER, this file's mode must change with it.
+    volumes:
+      - /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro
+    networks:
+      - default
+      - edge
+    # No `ports:`. The only way in is Caddy over `edge`; a published port
+    # would let a client skip Caddy and send its own X-Forwarded-For.
+    healthcheck:
+      # The aspnet image has no curl or wget, so bash's /dev/tcp sends the
+      # request (research R7). /health checks the database too, so "healthy"
+      # means the API can reach it. `up --wait` in deploy.sh relies on this.
+      test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && head -n 1 <&3 | grep -q " 200 "']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # entrypoint.sh applies migrations before the app starts listening;
+      # failures in that window don't count against the retries.
+      start_period: 60s
+    logging: *logging
+
+  gym-web:
+    image: ghcr.io/juusimaa/gymnotebook-frontend:${IMAGE_TAG:?IMAGE_TAG must be set (image-tag.env)}
+    restart: unless-stopped
+    # nginx serving static files needs little; capped for the same reason as
+    # gym-api (research R1).
+    mem_limit: 64m
+    cpus: 0.25
+    # Not env_file: runtime-config.sh needs two public values and none of the
+    # secrets.
+    environment:
+      API_URL: https://api.gymnotebook.fit
+      # The public half of the Turnstile key pair, interpolated from the env
+      # file at `up` time. Empty leaves the widget off.
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+    networks:
+      - default
+      - edge
+    # No `ports:`, for the same reason as gym-api.
+    healthcheck:
+      # `up --wait` only waits for services with a healthcheck, and a frontend
+      # that fails to start should fail the deploy too. nginx:alpine has
+      # busybox wget (research R7).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging: *logging
+
+networks:
+  # Created once on the server (`docker network create edge`, tracker
+  # deploy/README.md § Provision). External, so neither project's `down`
+  # removes the network the other one uses.
+  edge:
+    external: true
