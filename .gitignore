@@ -29,6 +29,8 @@ logs/
 # Build output
 bin/
 obj/
+# Not build output: the deploy scripts that run on the server (deploy/README.md).
+!deploy/bin/
 
 # User secrets
 secrets.json
