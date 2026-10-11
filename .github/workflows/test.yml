@@ -80,7 +80,7 @@ jobs:
       - name: Run the copy check against the migrated schema
         run: |
           docker run -d --name verify-pg -e POSTGRES_PASSWORD=ci postgres:18
-          (cd backend && dotnet tool restore && dotnet ef migrations script --project GymNotebook.Api -o "$RUNNER_TEMP/schema.sql")
+          (cd backend && dotnet tool restore && dotnet restore GymNotebook.Api && dotnet ef migrations script --project GymNotebook.Api -o "$RUNNER_TEMP/schema.sql")
           # Over TCP: during first-start initdb the image runs a temporary
           # server on the Unix socket only, which a socket check would catch.
           until docker exec verify-pg pg_isready -h 127.0.0.1 -U postgres -q; do sleep 1; done
