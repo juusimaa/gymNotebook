@@ -31,7 +31,7 @@ reviewing and approving changes.
 
 ## Stack and code rules
 
-.NET 10 / ASP.NET Core Minimal APIs, EF Core 10 + Npgsql, PostgreSQL 17,
+.NET 10 / ASP.NET Core Minimal APIs, EF Core 10 + Npgsql, PostgreSQL 18,
 BCrypt/JWT auth; React + TypeScript + Vite, hand-written CSS, no component library.
 Dockerfiles per service; Compose for local dev; GitHub Actions checks pushes/PRs.
 Rules apply to implementation and review.

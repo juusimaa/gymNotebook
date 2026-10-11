@@ -30,7 +30,7 @@ public class GymNotebookFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     // One throwaway Postgres in Docker per factory instance. The tag must match
     // docker-compose.yml so tests and the local stack run the same server version.
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18").Build();
 
     // Overrides configuration before the host builds. UseSetting writes into the same
     // IConfiguration Program.cs reads, at higher priority than appsettings.json, so the

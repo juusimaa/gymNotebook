@@ -5,7 +5,7 @@
 ### I. Preserve the Established Architecture
 
 Changes MUST preserve the existing .NET 10 ASP.NET Core Minimal API application,
-EF Core 10 with Npgsql, PostgreSQL 17, and React + TypeScript with Vite. Keep the
+EF Core 10 with Npgsql, PostgreSQL 18, and React + TypeScript with Vite. Keep the
 existing API and test projects; do not introduce controllers or an
 Application/Domain/Infrastructure split. EF entities retain bare foreign keys
 without upward navigation properties. Reuse existing utilities and patterns;
@@ -19,6 +19,8 @@ These choices keep the learning project understandable at its established size.
 
 Sources: `AGENTS.md` — Stack, Code conventions; `PLAN.md` — Stack, Folder structure;
 `README.md` — Stack; `docs/ui/README.md` — Visual direction; `docker-compose.yml`.
+Amended in 3.1.0 (owner, 2026-10-11): PostgreSQL 17 → 18, because the shared
+managed service on UpCloud runs 18 (`specs/005-upcloud-migration`, research R3).
 
 ### II. Make Focused, Reviewable Changes
 
@@ -58,7 +60,7 @@ Backend integration tests MUST use xUnit, `WebApplicationFactory`, and real
 PostgreSQL through Testcontainers, with migrations applied. Do not substitute
 EF InMemory or SQLite: foreign keys, uniqueness, cascades, and transactions are
 part of what the tests must prove. Keep the test database version aligned with
-Compose. Review generated migrations for unintended schema changes before applying
+Compose and production (PostgreSQL 18). Review generated migrations for unintended schema changes before applying
 them. Tests MUST be deterministic and independent, follow Arrange/Act/Assert and
 `MethodName_Scenario_ExpectedResult`, and MUST NOT be weakened merely to pass.
 
@@ -93,7 +95,8 @@ password.
 Never log secrets, tokens, or connection strings, commit real secrets, or expose
 exception details in API responses. Keep local secrets in the established
 gitignored environment file or .NET user-secrets, and production secrets in
-Container Apps secrets through `secretref`. Generate production values separately
+the server's `/etc/gymnotebook/.env` (`root:gymdeploy`, mode `0640`), never in
+images or the repository. Generate production values separately
 from development values. Emailed links are credentials: never log them outside
 local development, and never accept them as bearer tokens. Preserve
 development-only OpenAPI/Scalar exposure.
@@ -110,6 +113,9 @@ Milestone 3; `README.md` — API documentation, Configuration;
 Amended in 3.0.0 (owner, 2026-10-06): the invite-code gate is replaced by email
 confirmation and the open-signup protections of `specs/002-email-login`, and email
 collection is allowed for that purpose only.
+Amended in 3.1.0 (owner, 2026-10-11): production secrets move from Container Apps
+`secretref` to a root-owned server env file, as Container Apps goes away
+(`specs/005-upcloud-migration`).
 
 ### VI. Keep Behavior and Its Documentation Aligned
 
@@ -264,4 +270,4 @@ and patch for non-semantic clarification. Version 1.0.0 was the initial draft;
 ratification records the owner's adoption of this constitution, not an
 application release.
 
-**Version**: 3.0.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-10-06
+**Version**: 3.1.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-10-11
