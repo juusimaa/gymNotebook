@@ -27,7 +27,7 @@ description: "Task list for moving Gym Notebook's hosting from Azure + Neon to U
 **Purpose**: confirm the shared resources fit before anything is written or moved (FR-002).
 
 - [x] T001 (owner) Gate G1: measure server memory, disk, load, database connections, sizes and Neon's version per quickstart § G1; record in `specs/005-upcloud-migration/research.md` R1/R2. **Passed 2026-10-11**; found the tracker connecting as `upadmin`, so the tracker-only role (T014) is required.
-- [ ] T002 (owner) Confirm that `upadmin` can `CREATE ROLE` and `CREATE DATABASE` on the Developer plan (research R2 "(verify)") with a throwaway role/database that is dropped again; write the result into `specs/005-upcloud-migration/research.md` R2. Stop and re-plan if it cannot.
+- [x] T002 (owner) Confirm that `upadmin` can `CREATE ROLE` and `CREATE DATABASE` on the Developer plan (research R2 "(verify)") with a throwaway role/database that is dropped again; write the result into `specs/005-upcloud-migration/research.md` R2. Stop and re-plan if it cannot. **Passed 2026-10-11**.
 
 **Checkpoint**: G1 passed and role creation confirmed. Nothing in production has changed.
 
