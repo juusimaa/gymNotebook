@@ -24,17 +24,21 @@ checked during provisioning and written back here.
 - **Budget**: Gym Notebook may use at most ~576 MB. That fits if the tracker
   stack plus the OS uses under ~900 MB, leaving the 20% the existing memory
   alert expects.
-- **Not measured yet (gate)**. Reads from this session were refused, so G1 is a
-  manual step for the owner:
+- **Measured (G1, owner, 2026-10-11): pass.** Command in
+  [quickstart § G1](quickstart.md#g1-capacity-gate-before-any-change).
 
-  ```sh
-  ssh admin@<server> 'nproc; free -m; df -h /; uptime;
-    docker stats --no-stream --format "{{.Name}} {{.MemUsage}} {{.CPUPerc}}"'
-  ```
+  | Check | Pass rule | Measured |
+  |---|---|---|
+  | CPUs | — | 1 |
+  | Memory `available` | ≥ 900 MB | 1256 MB of 1855 MB (used 598, no swap) |
+  | Disk free | ≥ 5 GB | 14 GB of 20 GB (5.2 GB used) |
+  | Load average | < 0.5 | 0.01 / 0.03 / 0.02 |
+  | Tracker containers | — | backend 80 MB, caddy 13 MB, frontend 3 MB; CPU < 1% |
 
-  **Pass**: `available` ≥ 900 MB, disk free ≥ 5 GB, load average under 0.5.
-  **Fail**: stop and decide between Premium/Starter 4 GB (price to be read from
-  the console) or dropping the plan.
+  With Gym Notebook at its full 576 MB cap, about 680 MB (≈37%) would remain
+  available, above the 30% idle target that G2 measures (SC-006).
+  A fail would have meant stopping to decide between Premium/Starter 4 GB or
+  dropping the plan.
 - **G2 (gate, after rehearsal deploy)**: with both stacks idle, `available` is
   ≥ 30% of memory (SC-006). Then restore the 100,000-set reference backup and
   run its export through `api.gymnotebook.fit`; `gym-api` must not be
@@ -56,19 +60,23 @@ checked during provisioning and written back here.
   - The database is owned by `gymnotebook`. In PostgreSQL 15+ the `public`
     schema belongs to `pg_database_owner`, so EF migrations can create tables
     with no further grants.
-- **Gate (G1)**: which role does the tracker's `DATABASE_URL` use? If it is the
-  service's admin role (`upadmin`), it can read every database and FR-004
-  cannot hold. Then a tracker-only role comes first, in the tracker repo
-  (plan § Tracker repository changes).
+- **Gate (G1): the tracker connects as `upadmin`.** Measured 2026-10-11: five
+  idle `upadmin` connections to `defaultdb` from the server's private address
+  `10.0.0.3` (matching the tracker's `pool_size=5`), and no other application
+  role. The tracker's data lives in `defaultdb`. Because `upadmin` can read
+  every database, FR-004 cannot hold, so a tracker-only role is **required**
+  first, in the tracker repo (plan § Tracker repository changes, item 5).
 - **Connections**: `max_connections` is 50 (tracker R2). The tracker's pool is
   `pool_size=5, max_overflow=10`, at most 15. Npgsql's default
   `Maximum Pool Size` is 100, so ours is set to **10** in the connection string.
   Together 25, leaving room for the admin, backups, `pg_dump` and psql.
-  Gate (G1): `SELECT count(*) FROM pg_stat_activity` to see real use.
+  G1 (2026-10-11): 20 rows in `pg_stat_activity`, including service background
+  processes; 20 + our 10 = 30 ≤ 40, a pass.
 - **TLS**: as the tracker (tracker R4): private network only, non-default port,
   `SSL Mode=VerifyFull;Root Certificate=/etc/gymnotebook/upcloud-ca.pem`.
-- **Storage**: 10 GiB shared. Gate (G1): tracker size and Neon size
-  (`SELECT pg_size_pretty(pg_database_size(current_database()))` on each).
+- **Storage**: 10 GiB shared. G1 (2026-10-11): tracker `defaultdb` 8.7 MB;
+  the service's other databases (`_updb`, templates) about 8 MB each. Neon
+  7968 kB. Tracker + Neon ≈ 17 MB, far under 8 GiB, a pass.
 - **Backups**: the service's daily backups (3 days, tracker R3) cover both
   databases. UpCloud restores a whole service into a **new** service, so a
   Gym Notebook-only restore is: restore into a new service, `pg_dump` the
@@ -89,7 +97,8 @@ checked during provisioning and written back here.
   (`db_data_18`) so the old 17 cluster is never opened by 18. Local data in the
   old volume is not migrated (dev data; take an app backup first if wanted).
 - The copy from Neon uses `pg_dump` from the `postgres:18` image, which can dump
-  both 17 and 18 servers. Gate (G1): Neon's `SELECT version()`, for the record.
+  both 17 and 18 servers. G1 (2026-10-11): Neon runs PostgreSQL 17.11
+  (aarch64).
 - Sources: https://hub.docker.com/_/postgres (PGDATA change in 18),
   https://www.postgresql.org/docs/18/app-pgdump.html
 

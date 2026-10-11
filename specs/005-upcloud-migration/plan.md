@@ -4,7 +4,7 @@
 
 **Input**: Feature specification from `specs/005-upcloud-migration/spec.md`
 
-**Status**: Draft for owner review (Principle VII). Decisions D1–D10 are proposals until this plan is merged; D2, D3 and D5 were confirmed by the owner on 2026-10-11 (§ Resolved questions). **Gate G1 has not run**: the capacity numbers below are a budget, not a measurement (see [research R1](research.md#r1-capacity-on-the-shared-server)).
+**Status**: Draft for owner review (Principle VII). Decisions D1–D10 are proposals until this plan is merged; D2, D3 and D5 were confirmed by the owner on 2026-10-11 (§ Resolved questions). **Gate G1 ran on 2026-10-11 and passed for server capacity, connections and storage** ([research R1](research.md#r1-capacity-on-the-shared-server), [R2](research.md#r2-sharing-the-managed-postgresql-service)). It found the tracker connecting as `upadmin`, so the tracker-only role (§ Tracker repository changes, item 5) is required.
 
 ## Summary
 
@@ -142,8 +142,8 @@ before G2:
    Reading another database's size needs `pg_read_all_stats` granted to the
    check's role (verify; otherwise a second read-only URL).
 4. `deploy/README.md` § Provision: create the `edge` network before `up`.
-5. Only if G1 finds the tracker connecting as `upadmin`: a tracker-only role
-   first, since FR-004 cannot hold otherwise.
+5. A tracker-only role owning `defaultdb`, applied first. G1 found the tracker
+   connecting as `upadmin`, and FR-004 cannot hold otherwise.
 
 ## Delivery sequence
 
