@@ -84,8 +84,9 @@ checked during provisioning and written back here.
   `gym-api` stopped, delete the temporary service. The tracker's restore took
   about 17 minutes (tracker T038). The temporary service bills hourly while it
   exists: cents, and only during a restore.
-- **(verify)**: that the UpCloud console (or `upadmin` via psql) can create
-  extra roles and databases on the Developer plan.
+- **Verified 2026-10-11 (T002)**: `upadmin` via psql on the Developer plan
+  can `CREATE ROLE … LOGIN` and `CREATE DATABASE … OWNER` that role; a
+  throwaway `t002_probe` role and database were created and dropped again.
 
 ## R3. PostgreSQL 18
 

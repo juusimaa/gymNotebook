@@ -30,7 +30,7 @@ public sealed class TwoHostGymNotebookFixture : IAsyncLifetime
 {
     public const string Password = "lifecycle-test-password";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18").Build();
 
     public string ConnectionString => _postgres.GetConnectionString();
 
