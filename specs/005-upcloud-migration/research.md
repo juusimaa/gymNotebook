@@ -128,8 +128,12 @@ checked during provisioning and written back here.
   simplest, but every Gym Notebook hostname or header change becomes a tracker
   PR. (b) a separate edge repository: cleanest, more moving parts than two
   apps justify.
-- **(verify)**: an `import` glob that matches nothing only logs a warning, so
-  the tracker change can merge before our file exists.
+- **Verified 2026-10-11 (T015)** on `caddy:2.11.7` with `caddy validate`: an
+  `import` glob that matches nothing (empty or missing `/etc/caddy/sites`)
+  exits 0 with one warning, `No files matching import glob pattern`, so the
+  tracker change can merge before our file exists. A valid site file is
+  included; a broken one fails validation (exit 1), which is what makes
+  `caddy reload` keep the old config.
 
 ## R5. Real client address
 
