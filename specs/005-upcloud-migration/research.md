@@ -87,6 +87,9 @@ checked during provisioning and written back here.
 - **Verified 2026-10-11 (T002)**: `upadmin` via psql on the Developer plan
   can `CREATE ROLE … LOGIN` and `CREATE DATABASE … OWNER` that role; a
   throwaway `t002_probe` role and database were created and dropped again.
+- **Verified 2026-10-11 (before T019)**: `upadmin` can also
+  `GRANT pg_read_all_stats` (probe role created, granted, dropped), so the
+  tracker's size alert can read `gymnotebook`'s size without `CONNECT` on it.
 
 ## R3. PostgreSQL 18
 
