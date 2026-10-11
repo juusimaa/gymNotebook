@@ -2,9 +2,7 @@
   "permissions": {
     "allow": [
       "ClaudeInChromeDomain(localhost:55173)",
-      "ClaudeInChromeDomain(localhost:55180)",
-      "ClaudeInChromeDomain(127.0.0.1:8799)",
-      "ClaudeInChromeDomain(localhost:8471)"
+      "ClaudeInChromeDomain(localhost:55180)"
     ]
   }
 }
