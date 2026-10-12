@@ -253,7 +253,7 @@ Check it:
 - `systemctl list-timers gymnotebook-log-trim.timer` shows the next run.
 - `sudo systemctl start gymnotebook-log-trim.service`, then
   `systemctl status gymnotebook-log-trim.service` → `status=0/SUCCESS`.
-  `journalctl -u gymnotebook-log-trim.service` lists only the files it
+  `sudo journalctl -u gymnotebook-log-trim.service` lists only the files it
   trimmed, with line counts; on young containers it prints nothing.
 - `gn logs --no-log-prefix --timestamps gym-api | head -1`, and the same for
   `gym-web`, shows no line older than 30 days.
