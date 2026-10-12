@@ -8,8 +8,9 @@ tracker's Caddy, which imports our site file. The design is
 [specs/005-upcloud-migration/](../specs/005-upcloud-migration/); this file is
 how to run it.
 
-Until the cutover, Azure + Neon is still production and the server serves
-only `api.gymnotebook.fit` (rehearsal). § Cutover moves `gymnotebook.fit`.
+Since the cutover on 2026-10-12 this server is production for both
+`gymnotebook.fit` and `api.gymnotebook.fit`. Azure + Neon stay as the
+rollback (§ Rollback) until spec task T056 deletes them.
 
 | File | On the server | What it is |
 |---|---|---|
@@ -357,13 +358,15 @@ signed and merged (T047). No data is copied before T023 passes in full. There is
 user and simply stops logging for the duration.
 
 `NEON_URL` is Neon's **unpooled** connection string with `sslmode=require`
-(Neon advises against dumping through the pooler). `GN_URL` is the
+(Neon advises against dumping through the pooler): its host has no
+`-pooler` in it. `GN_URL` is the
 `gymnotebook` role in libpq form:
 `postgresql://gymnotebook:<pw>@<host>:<port>/gymnotebook?sslmode=verify-full&sslrootcert=/etc/gymnotebook/upcloud-ca.pem`.
 Set both with `read -rs` so they stay out of the shell history.
 
 **A day before**: at Cloudflare, lower the `gymnotebook.fit` record's TTL to
-60 s.
+60 s. Not needed if it is on Auto (300 s): stale lookups then reach Azure for
+at most 5 minutes, and only read, because Neon is frozen.
 
 **1. Freeze.** Stop logging. In Neon's SQL editor, so Neon stays an exact
 rollback copy:
@@ -384,6 +387,10 @@ gn stop gym-api
 cd /tmp
 docker run --rm -e NEON_URL -v "$PWD:/work" postgres:18 \
   sh -c 'pg_dump -Fc --no-owner --no-privileges -f /work/neon.dump "$NEON_URL"'
+# Before restoring: list everything but data. Expect only our tables,
+# sequences, keys, indexes and defaults. An EXTENSION, SCHEMA or COMMENT
+# entry could fail under --exit-on-error; stop and look at it first.
+docker run --rm -v "$PWD:/work" postgres:18 pg_restore -l /work/neon.dump | grep -iv "TABLE DATA\|SEQUENCE SET"
 docker run --rm -e GN_URL -v "$PWD:/work" -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
   sh -c 'psql "$GN_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" \
     && pg_restore --no-owner --no-privileges --exit-on-error -d "$GN_URL" /work/neon.dump \
