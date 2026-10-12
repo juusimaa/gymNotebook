@@ -7,7 +7,7 @@ namespace GymNotebook.Tests;
 // specs/001 user story 6 (tasks.md T097, quickstart §6a step 7): the operator's transition
 // clearing SQL, exactly as docs/privacy/retention.md prints it, run against real
 // PostgreSQL. The blocks are read from the document between their markers rather than
-// copied here, so the SQL the operator pastes into the Neon console on the deadline is the
+// copied here, so the SQL the operator runs with psql on the deadline is the
 // SQL this test proved.
 [Collection("Lifecycle")]
 public class TransitionClearingSqlTests(TwoHostGymNotebookFixture db)
@@ -89,7 +89,7 @@ public class TransitionClearingSqlTests(TwoHostGymNotebookFixture db)
     }
 
     // The clearing block holds BEGIN; SET LOCAL; the counting statement; COMMIT — sent as one
-    // multi-statement command, as the Neon SQL editor would. Only the SELECT returns rows.
+    // multi-statement command, as `psql -c` would. Only the SELECT returns rows.
     private static async Task<(long Accounts, long Workouts)> RunClearingAsync(string connectionString, string sql)
     {
         await using var connection = new NpgsqlConnection(connectionString);

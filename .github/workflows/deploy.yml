@@ -10,7 +10,8 @@ on:
     types:
       - completed
 
-  # Retain a deliberate way to deploy a previously published immutable image.
+  # A deliberate way to deploy a previously published immutable image: the
+  # rollback in deploy/README.md § Deploy.
   workflow_dispatch:
     inputs:
       # No default: an old default would silently redeploy a stale image, and
@@ -19,130 +20,20 @@ on:
         description: Immutable GHCR tag to deploy, main-<40 hex sha>
         required: true
         type: string
-      # Lets the UpCloud rehearsal deploy a deliberately bad image (spec 005
-      # T034) without it reaching Azure, which is production until cutover.
-      # PR 5 removes this input together with the Azure job.
-      target:
-        description: Where to deploy (upcloud skips the Azure job)
-        required: true
-        default: both
-        type: choice
-        options:
-          - both
-          - upcloud
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: gymnotebook-production-deploy
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  deploy-upcloud:
     # A failed image build must never roll out a partial or missing image set.
     if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.target != 'upcloud') ||
+      github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-26.04
-    environment: production
-    env:
-      RESOURCE_GROUP: rg-gymnotebook-prod
-      DEPLOYMENT_NAME: gymnotebook-infrastructure
-      API_APP: ca-gymnote-prod-58dd-api
-      BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/gymnotebook-backend
-      FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/gymnotebook-frontend
-      # workflow_run supplies the commit whose images just finished publishing;
-      # workflow_dispatch keeps the explicit rollback/redeploy image tag.
-      IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || format('main-{0}', github.event.workflow_run.head_sha) }}
-    steps:
-      - name: Check out the deployment template
-        uses: actions/checkout@v7
-        with:
-          # Deploy the infrastructure definition that belongs to the images,
-          # even if another commit reaches main while this job is queued.
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-
-      # This exchanges GitHub's short-lived OIDC token for Azure access. The Entra
-      # app registration is configured separately; no Azure client secret is stored
-      # in GitHub.
-      - name: Sign in to Azure with OIDC
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      # The first pass creates/reconciles both apps. The frontend gets its API URL
-      # from the Bicep output; the API's browser-origin allow-list cannot be known
-      # until Azure has assigned the frontend its FQDN.
-      - name: Deploy infrastructure and immutable images
-        id: first-deploy
-        uses: azure/cli@v3
-        with:
-          inlineScript: |
-            set -eu
-            frontend_fqdn=$(az deployment group create \
-              --name "$DEPLOYMENT_NAME" \
-              --resource-group "$RESOURCE_GROUP" \
-              --template-file infra/main.bicep \
-              --parameters @infra/main.parameters.json \
-                apiContainerImage="$BACKEND_IMAGE:$IMAGE_TAG" \
-                frontendContainerImage="$FRONTEND_IMAGE:$IMAGE_TAG" \
-                corsOrigins='https://localhost.invalid' \
-                neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
-                jwtSecret='${{ secrets.JWT_SECRET }}' \
-                turnstileSecretKey='${{ secrets.TURNSTILE_SECRET_KEY }}' \
-                turnstileSiteKey='${{ vars.TURNSTILE_SITE_KEY }}' \
-                resendApiKey='${{ secrets.RESEND_API_KEY }}' \
-              --query properties.outputs.frontendFqdn.value \
-              --output tsv)
-            echo "frontend_fqdn=$frontend_fqdn" >> "$GITHUB_OUTPUT"
-
-      # Reconcile the API with the real browser origin. This is deliberately a
-      # second Bicep deployment instead of an imperative env-var mutation, keeping
-      # the deployed state reproducible from infra/main.bicep.
-      - name: Set the production CORS origin
-        uses: azure/cli@v3
-        with:
-          inlineScript: |
-            set -eu
-            az deployment group create \
-              --name "$DEPLOYMENT_NAME" \
-              --resource-group "$RESOURCE_GROUP" \
-              --template-file infra/main.bicep \
-              --parameters @infra/main.parameters.json \
-                apiContainerImage="$BACKEND_IMAGE:$IMAGE_TAG" \
-                frontendContainerImage="$FRONTEND_IMAGE:$IMAGE_TAG" \
-                corsOrigins="https://${{ steps.first-deploy.outputs.frontend_fqdn }},https://gymnotebook.fit" \
-                neonConnectionString='${{ secrets.NEON_CONNECTION_STRING }}' \
-                jwtSecret='${{ secrets.JWT_SECRET }}' \
-                turnstileSecretKey='${{ secrets.TURNSTILE_SECRET_KEY }}' \
-                turnstileSiteKey='${{ vars.TURNSTILE_SITE_KEY }}' \
-                resendApiKey='${{ secrets.RESEND_API_KEY }}'
-
-      - name: Verify the API health endpoint
-        uses: azure/cli@v3
-        with:
-          inlineScript: |
-            set -eu
-            api_fqdn=$(az containerapp show \
-              --name "$API_APP" \
-              --resource-group "$RESOURCE_GROUP" \
-              --query properties.configuration.ingress.fqdn \
-              --output tsv)
-            curl --fail --show-error --retry 12 --retry-all-errors --retry-delay 5 \
-              "https://$api_fqdn/health"
-
-  # Runs beside the Azure job until cutover (spec 005); PR 5 removes the Azure
-  # job. Skipped until the owner sets the repository variable
-  # UPCLOUD_DEPLOY_ENABLED=true, so merging this is a no-op for production.
-  deploy-upcloud:
-    if: >-
-      vars.UPCLOUD_DEPLOY_ENABLED == 'true' &&
-      (github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-26.04
     environment: production
     env:

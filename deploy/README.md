@@ -9,8 +9,7 @@ tracker's Caddy, which imports our site file. The design is
 how to run it.
 
 Since the cutover on 2026-10-12 this server is production for both
-`gymnotebook.fit` and `api.gymnotebook.fit`. Azure + Neon stay as the
-rollback (§ Rollback) until spec task T056 deletes them.
+`gymnotebook.fit` and `api.gymnotebook.fit` (§ Cutover).
 
 | File | On the server | What it is |
 |---|---|---|
@@ -68,15 +67,15 @@ value from a laptop `.env`, and never paste one into a PR, issue or chat.
 | Variable | Where the value comes from |
 |---|---|
 | `ConnectionStrings__Default` | the `gymnotebook` role from § Provision: `Host=<private host>;Port=<port>;Database=gymnotebook;Username=gymnotebook;Password=<pw>;SSL Mode=VerifyFull;Root Certificate=/etc/gymnotebook/upcloud-ca.pem;Maximum Pool Size=10` |
-| `Jwt__Secret` | **from Azure**, unchanged, so signed-in sessions survive the move |
+| `Jwt__Secret` | **carried over**: copy it from the current env file so signed-in sessions survive a move; a new one (`openssl rand -base64 48`) signs everyone out |
 | `Jwt__ExpiryMinutes` | `30` |
 | `CORS_ORIGINS` | `https://gymnotebook.fit` |
 | `PRIVACY_LIFECYCLE_ENABLED` | `false` |
 | `Email__Backend` | `resend` |
 | `EMAIL_FROM` | `Gym Notebook <no-reply@mail.gymnotebook.fit>` |
 | `APP_URL` | `https://gymnotebook.fit` |
-| `RESEND_API_KEY` | **from Azure**, unchanged |
-| `TURNSTILE_SECRET_KEY` | **from Azure**, unchanged |
+| `RESEND_API_KEY` | **carried over** from the current env file, or a new sending key from Resend |
+| `TURNSTILE_SECRET_KEY` | **carried over** from the current env file, or from the Turnstile widget at Cloudflare |
 | `TURNSTILE_HOSTNAMES` | `gymnotebook.fit` |
 | `TURNSTILE_SITE_KEY` | the GitHub variable of the same name (public); read by `gym-web` |
 
@@ -161,15 +160,9 @@ the UpCloud console (the port is not 5432).
    `id -nG | grep -w gymdeploy` confirms it.
 
 4. **Fill the env file** per § Environment with `sudo -e /etc/gymnotebook/.env`.
-   The three **from Azure** values are read once, from your machine, while
-   the Container App still exists:
-
-   ```sh
-   az containerapp secret list -g rg-gymnotebook-prod -n <api app> --show-values \
-     --query "[?name=='jwt-secret' || name=='resend-api-key' || name=='turnstile-secret-key'].{name:name,value:value}" -o table
-   ```
-
-   Paste each value straight into the editor; don't save them anywhere else.
+   On a new server, the three **carried over** values come from the old
+   server's env file (`sudo cat /etc/gymnotebook/.env` there). Paste each
+   value straight into the editor; don't save them anywhere else.
 
 5. **State directory and first tag.** The tag is the current `main` build,
    `main-<40 hex sha>` (GHCR, or the last `deploy` run on GitHub):
@@ -196,15 +189,16 @@ the UpCloud console (the port is not 5432).
    A "Caddyfile input is not formatted" warning is about the tracker's
    file and harmless.
 
-7. **DNS.** At Cloudflare, a **grey-cloud** (DNS only) A record for
-   `api.gymnotebook.fit` pointing at the server's public IPv4. Leave
-   `gymnotebook.fit` on Azure until § Cutover.
+7. **DNS.** At Cloudflare, **grey-cloud** (DNS only) A records for
+   `api.gymnotebook.fit` and `gymnotebook.fit` pointing at the server's
+   public IPv4. While another server still serves production, point only
+   `api` here and move `gymnotebook.fit` last, as § Cutover did.
 
    Caddy then gets the certificate on its own. Until `gym-api` runs,
    `curl https://api.gymnotebook.fit/health` gives **502 with a valid
    certificate**; that is the pass for this step. `tlsv1 alert internal
    error` means no certificate yet. Errors for `gymnotebook.fit` in Caddy's
-   log are expected until § Cutover (the name still points at Azure). If
+   log are expected while that name still points elsewhere. If
    the `api` attempt hangs, typically on ZeroSSL after Let's Encrypt failed
    before the record existed, start a fresh one with `caddy reload --force`
    (command above), or `restart caddy` in the tracker's stack if a stale
@@ -237,7 +231,7 @@ Docker caps each container's log at 3 × 10 MB but never by age, and the
 privacy retention schedule allows 30 days at most
 (`docs/privacy/retention.md`, signed decision T047). A daily timer runs
 `bin/trim-logs.sh`, which removes older lines from `gym-api`'s and
-`gym-web`'s logs. Install once, before § Cutover, from a checkout of `main`:
+`gym-web`'s logs. Install once per server, from a checkout of `main`:
 
 ```sh
 rsync -r deploy/bin deploy/systemd admin@<server>:/tmp/gn/
@@ -322,9 +316,8 @@ command the client asks for (contract:
 4. In GitHub, environment `production`: secrets `UPCLOUD_DEPLOY_SSH_KEY`
    (the private key file), `UPCLOUD_DEPLOY_HOST` (the server's IPv4) and
    `UPCLOUD_KNOWN_HOSTS` (`ssh-keyscan -t ed25519 <server>`, checked against
-   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server). Then
-   the repository variable `UPCLOUD_DEPLOY_ENABLED=true`. Delete the private
-   key from your machine.
+   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server). Delete
+   the private key from your machine.
 
 **What a deploy does**: refuse anything but `main-<40 hex>`; take a lock;
 remember the running tag; pull the new images; `up -d --wait`; check
@@ -340,8 +333,7 @@ failure, put the previous tag back. It only touches project `gymnotebook`.
 | 75 | image pull failed; nothing changed | GHCR or network; re-run the job |
 
 **Rolling back by hand**: run the `deploy` workflow with `workflow_dispatch`
-and an older `main-<40 hex>` tag from GHCR. Until cutover, `target: upcloud`
-leaves Azure alone; `both` (the default) deploys the tag there too. If CI itself is the problem, on
+and an older `main-<40 hex>` tag from GHCR. If CI itself is the problem, on
 the server:
 
 ```sh
@@ -351,100 +343,14 @@ gn up -d --wait
 
 ## Cutover
 
-The one-time move from Azure + Neon (quickstart § Cutover, FR-011).
-Preconditions: G2 passed (tasks T045), which includes every isolation check
-(T023, so the tracker runs on its own role), and the privacy amendment is
-signed and merged (T047). No data is copied before T023 passes in full. There is no maintenance page: the owner is the only active
-user and simply stops logging for the duration.
-
-`NEON_URL` is Neon's **unpooled** connection string with `sslmode=require`
-(Neon advises against dumping through the pooler): its host has no
-`-pooler` in it. `GN_URL` is the
-`gymnotebook` role in libpq form:
-`postgresql://gymnotebook:<pw>@<host>:<port>/gymnotebook?sslmode=verify-full&sslrootcert=/etc/gymnotebook/upcloud-ca.pem`.
-Set both with `read -rs` so they stay out of the shell history.
-
-**A day before**: at Cloudflare, lower the `gymnotebook.fit` record's TTL to
-60 s. Not needed if it is on Auto (300 s): stale lookups then reach Azure for
-at most 5 minutes, and only read, because Neon is frozen.
-
-**1. Freeze.** Stop logging. In Neon's SQL editor, so Neon stays an exact
-rollback copy:
-
-```sql
-ALTER DATABASE <db> SET default_transaction_read_only = on;
-SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-WHERE datname = '<db>' AND pid <> pg_backend_pid();
-```
-
-**2. Copy**, on the server. `gym-api` is stopped so nothing writes to the
-target, which must be empty apart from the migrations (§ Emptying the
-database after rehearsal, if the rehearsal used it):
-
-```sh
-read -rs NEON_URL; read -rs GN_URL; export NEON_URL GN_URL
-gn stop gym-api
-cd /tmp
-docker run --rm -e NEON_URL -v "$PWD:/work" postgres:18 \
-  sh -c 'pg_dump -Fc --no-owner --no-privileges -f /work/neon.dump "$NEON_URL"'
-# Before restoring: list everything but data. Expect only our tables,
-# sequences, keys, indexes and defaults. An EXTENSION, SCHEMA or COMMENT
-# entry could fail under --exit-on-error; stop and look at it first.
-docker run --rm -v "$PWD:/work" postgres:18 pg_restore -l /work/neon.dump | grep -iv "TABLE DATA\|SEQUENCE SET"
-docker run --rm -e GN_URL -v "$PWD:/work" -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
-  sh -c 'psql "$GN_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" \
-    && pg_restore --no-owner --no-privileges --exit-on-error -d "$GN_URL" /work/neon.dump \
-    && psql "$GN_URL" -c ANALYZE'
-```
-
-Dropping and recreating `public` as `gymnotebook` clears the tables the
-first start's migrations created, so the restore lands in an empty schema
-owned by our role.
-
-**3. Verify.** Both outputs must be identical (SC-002); `diff` prints nothing:
-
-```sh
-docker run --rm -e NEON_URL -v /opt/gymnotebook/bin:/bin-gn:ro postgres:18 \
-  sh -c 'psql -XAt -v ON_ERROR_STOP=1 -f /bin-gn/verify-copy.sql "$NEON_URL"' > neon.txt
-docker run --rm -e GN_URL -v /opt/gymnotebook/bin:/bin-gn:ro \
-  -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
-  sh -c 'psql -XAt -v ON_ERROR_STOP=1 -f /bin-gn/verify-copy.sql "$GN_URL"' > upcloud.txt
-diff neon.txt upcloud.txt && cat upcloud.txt
-```
-
-Keep `upcloud.txt`: the final Neon archive is checked against it. If `diff`
-prints anything, stop: § Rollback.
-
-**4. Start and switch.** `gn up -d --wait`. At Cloudflare, point the
-`gymnotebook.fit` A record (grey cloud) at the server. Watch Caddy obtain the
-certificate: `docker compose logs -f caddy | grep -i gymnotebook.fit`
-(tracker's project).
-
-**5. Smoke test** (T049):
-
-- No certificate warning on `gymnotebook.fit` and `api.gymnotebook.fit`.
-- Sign in with the existing password (or an existing session still works).
-- Notebook, chart and last-backup date unchanged; log one set; take a JSON
-  backup.
-- With a second address: signup → confirm email → sign in → password reset.
-  The Turnstile widget appears.
-
-Any failure: § Rollback. Otherwise delete `/tmp/neon.dump` once the final
-archive is made (spec task T050), and in any case by cutover + 30 days
-(retention.md; the archive has the same deadline).
-
-## Rollback
-
-Valid only while Azure and Neon still exist, that is, until spec task T056
-deletes them.
-
-1. At Cloudflare, point `gymnotebook.fit` back to `20.240.228.206`.
-2. In Neon: `ALTER DATABASE <db> SET default_transaction_read_only = off;`
-3. Anything written on UpCloud after step 4 of § Cutover is re-entered by
-   hand on Azure. The window is minutes and the owner is the only writer.
-
-The UpCloud stack can keep running on `api.gymnotebook.fit` while the cause
-is found.
+Done on 2026-10-12: Neon was frozen read-only, copied with `pg_dump` /
+`pg_restore`, checked with `bin/verify-copy.sql` on both sides, and
+`gymnotebook.fit` moved here. The record is in
+[tasks T048–T050](../specs/005-upcloud-migration/tasks.md). Neon was
+deleted the same day, so there is no rollback to the old hosting. The
+runbook as it was run, with § Rollback, is in commit `9cbfdd8`
+(`git show 9cbfdd8:deploy/README.md`): the starting point if Gym Notebook
+ever moves again.
 
 ## Restore
 
@@ -480,12 +386,21 @@ while it exists: cents. Users' long-term copy remains the in-app JSON backup
    docker run --rm -e GN_URL -v "$PWD:/work" -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
      sh -c 'pg_restore --clean --if-exists --no-owner --no-privileges -d "$GN_URL" /work/restore.dump \
        && psql "$GN_URL" -c ANALYZE'
-   gn up -d --wait
    ```
 
-4. Check the site, run `verify-copy.sql` (§ Cutover step 3, with `GN_URL`)
-   against the counts you expect, then delete the temporary service and
-   `/tmp/restore.dump`.
+   Before starting `gym-api` again, remove every account deleted since the
+   backup was taken, as [docs/privacy/restore.md](../docs/privacy/restore.md)
+   says; otherwise the restore brings deleted accounts back. Then
+   `gn up -d --wait`.
+
+4. Check the counts against what you expect, then delete the temporary
+   service and `/tmp/restore.dump`:
+
+   ```sh
+   docker run --rm -e GN_URL -v /opt/gymnotebook/bin:/bin-gn:ro \
+     -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
+     sh -c 'psql -XAt -v ON_ERROR_STOP=1 -f /bin-gn/verify-copy.sql "$GN_URL"'
+   ```
 
 ## Emptying the database after rehearsal
 

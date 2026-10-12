@@ -21,9 +21,10 @@ namespace GymNotebook.Api;
 //     wait for in-flight requests to finish and block new ones until they commit.
 //
 // Transaction-level locks (pg_advisory_xact_lock*) rather than session-level ones: they
-// release automatically when the transaction ends, and they stay correct through Neon's
-// transaction-mode connection pooler, where a session lock could outlive the request on a
-// pooled server connection. Database-wide locks, rather than anything in process, because
+// release automatically when the transaction ends. A session-level lock would stay with the
+// physical connection, and Npgsql's pool hands that connection to the next request, so a
+// lock left by a failed request could outlive it; a transaction-mode pooler such as
+// PgBouncer (production used one until specs/005) would make that worse. Database-wide locks, rather than anything in process, because
 // two app replicas must see each other's locks.
 
 // Lock and write timeouts, bound from the "Lifecycle" configuration section. The defaults
@@ -158,9 +159,10 @@ public static class AccountLifecycle
     {
         await using var batch = new NpgsqlBatch(connection, transaction);
 
-        // SET LOCAL, never SET: production goes through Neon's transaction-mode pooler,
-        // where a session-level SET would leak to whichever client gets this server
-        // connection next. SET can't take a bind parameter, which is fine for an int.
+        // SET LOCAL, never SET: a session-level SET would stay on the physical connection
+        // after it returns to Npgsql's pool and change the next request's lock timeout.
+        // (It would leak across clients too behind a transaction-mode pooler, which
+        // production no longer uses since specs/005.) SET can't take a bind parameter, which is fine for an int.
         batch.BatchCommands.Add(new NpgsqlBatchCommand($"SET LOCAL lock_timeout = {lockTimeoutMs}"));
 
         var lockCommand = new NpgsqlBatchCommand($"SELECT {lockFunction}(@ns, @id)");

@@ -46,7 +46,7 @@ Example: a justified identifying line collected 20 days before account deletion 
 
 **When:** once, on the transition deadline: 30 calendar days after `PRIVACY_LIFECYCLE_ENABLED` was switched on in production (tasks.md T084), counted as UTC dates. The dated step in [release-checklist.md](release-checklist.md) holds the exact date once T084 is done. Run it on that day, not later. An account's details must not outlive the deadline because the step was late.
 
-**Who and where:** the operator, in the Neon SQL editor against the production branch. No API route or admin screen exists for this, by design (data-model.md → Transition clearing), like the suspension marker's manual SQL.
+**Who and where:** the operator, with psql as the `gymnotebook` role against the production database, from the server in a `postgres:18` container as in `deploy/README.md` § Cutover (Neon's SQL editor until specs/005). No API route or admin screen exists for this, by design (data-model.md → Transition clearing), like the suspension marker's manual SQL.
 
 **Records:** only the two numbers the statement returns, plus the follow-up query's result, in release-checklist.md. No account ids, usernames or cleared values.
 
@@ -105,6 +105,6 @@ The result must be `0` (SC-008). Record it. If it isn't `0`, run step 1 again an
 
 ### Copies outside the live database
 
-The cleared values stay in Neon's point-in-time history until it ages out. They are never restored into a notebook: a restore follows the restore runbook (restore.md, tasks.md T072), and its reconciliation must re-run step 1 if the restore point is earlier than this clearing. The general backup limit and its evidence belong to the schedule above (T071).
+The cleared values stay in the database service's daily backups until they age out (3 days on UpCloud). They are never restored into a notebook: a restore follows the restore runbook (restore.md, tasks.md T072), and its reconciliation must re-run step 1 if the restore point is earlier than this clearing. The general backup limit and its evidence belong to the schedule above (T071).
 
 The SQL blocks above are run against real PostgreSQL in CI by `TransitionClearingSqlTests`, which reads them from this file between the `transition-*-sql` markers. Edit them here, and the test runs the new text.
