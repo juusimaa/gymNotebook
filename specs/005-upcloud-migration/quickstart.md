@@ -42,8 +42,11 @@ Pass when:
 
 ## Rehearsal and G2
 
-1. Copy Neon → `gymnotebook` without freezing (a dry run), and time it. Both
-   `verify-copy.sql` outputs match, apart from rows written since.
+1. ~~Copy Neon → `gymnotebook` without freezing (a dry run), and time it.~~
+   **Skipped** (owner decision 2026-10-12): the only user is the owner, so
+   the freeze length does not matter, and the cutover checks the copy with
+   `verify-copy.sql` before DNS moves. A failed cutover copy is retried with
+   Neon unfrozen and Azure still serving.
 2. Restore the 100,000-set reference backup through the app on a test
    account, then export it. `docker inspect -f '{{.State.OOMKilled}}'
    gymnotebook-gym-api-1` → `false`. `free -m` stays under 80%. The tracker's
@@ -60,7 +63,7 @@ Pass when:
 7. Delete the test account and empty the `gymnotebook` database before
    cutover.
 
-**G2 pass** = all of the above.
+**G2 pass** = all of the above except the skipped step 1.
 
 ## Cutover (PR 4 merged and the amendment signed)
 

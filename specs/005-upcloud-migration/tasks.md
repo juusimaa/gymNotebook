@@ -140,9 +140,9 @@ description: "Task list for moving Gym Notebook's hosting from Azure + Neon to U
 
 ### Rehearsal and G2 (owner, after PR 3)
 
-- [ ] T043 [US1] (owner) Rehearsal step 1: dry-run copy Neon → `gymnotebook` without freezing per T038; time it; `verify-copy.sql` outputs match apart from rows written since. Record the time in `specs/005-upcloud-migration/research.md` R9.
+- [x] T043 [US1] (owner) Rehearsal step 1: dry-run copy Neon → `gymnotebook` without freezing per T038; time it; `verify-copy.sql` outputs match apart from rows written since. Record the time in `specs/005-upcloud-migration/research.md` R9.**Skipped by owner decision 2026-10-12**: the only user is the owner, so the copy time (the freeze length) does not matter; the cutover's own `verify-copy.sql` diff runs before DNS moves, and a failed copy is retried with Neon unfrozen and Azure still serving. Accepted cost: runbook mistakes in § Cutover surface at T048 instead of here. T044 still runs; it protects the tracker, not our data.
 - [ ] T044 [US1] (owner) Rehearsal steps 2–3 (G2 capacity): restore the 100,000-set reference backup on a test account at `api.gymnotebook.fit`, then export it. `docker inspect -f '{{.State.OOMKilled}}' gymnotebook-gym-api-1` → `false`, `free -m` stays under 80%, tracker `/health` under 1 s throughout; then with both stacks idle `available` ≥ 30% (SC-006). Record in `specs/005-upcloud-migration/research.md` R1.
-- [ ] T045 [US1] (owner) Rehearsal step 7: delete the test account and empty the database per T041. **G2 passes** only when T023–T025, T033–T035, T043 and T044 all passed; otherwise stop (FR-002).
+- [ ] T045 [US1] (owner) Rehearsal step 7: delete the test account and empty the database per T041. **G2 passes** only when T023–T025, T033–T035 and T044 all passed (T043 skipped, see there); otherwise stop (FR-002).
 
 ### Privacy docs (PR 4, before cutover)
 
@@ -151,7 +151,7 @@ description: "Task list for moving Gym Notebook's hosting from Azure + Neon to U
 
 ### Cutover (owner)
 
-- [ ] T048 [US1] (owner) Run § Cutover (T038): freeze, copy, `ANALYZE`, `verify-copy.sql` identical on both sides (SC-002, FR-008); switch the apex A record; Caddy issues the certificate.
+- [ ] T048 [US1] (owner) Run § Cutover (T038): freeze, copy, `ANALYZE`, `verify-copy.sql` identical on both sides (SC-002, FR-008); switch the apex A record; Caddy issues the certificate. This is the first real copy (T043 was skipped): expect to fix § Cutover where it differs, and if the copy or the `diff` fails, turn Neon's read-only off and retry another day.
 - [ ] T049 [US1] (owner) Smoke test: no certificate warning on `gymnotebook.fit` and `api.gymnotebook.fit`; sign in with the existing password (or an existing session survives, FR-010); notebook, chart and last-backup date unchanged; log one set; take a JSON backup; signup → confirmation email → sign in → password reset with a second address; Turnstile widget appears. On failure run § Rollback (T039). Record the outcome in this file.
 
 **Checkpoint**: UpCloud is production; Azure and Neon still exist as the rollback.

@@ -200,7 +200,9 @@ checked during provisioning and written back here.
   rollback copy.
 - Check: `deploy/bin/verify-copy.sql` (row count per table, plus
   `__EFMigrationsHistory`'s last migration) on both sides; outputs must be
-  identical. The rehearsal copy into the empty database measures the time.
+  identical. The rehearsal copy was meant to measure the time; it was skipped
+  (2026-10-12) because with one user the freeze length does not matter. The
+  cutover copy is the first one.
 
 ## R10. Cost
 
