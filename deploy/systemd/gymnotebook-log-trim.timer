@@ -1,0 +1,13 @@
+# Starts gymnotebook-log-trim.service daily.
+
+[Unit]
+Description=Trim Gym Notebook container logs daily
+
+[Timer]
+OnCalendar=daily
+# A run missed while the server was off happens at the next boot, so a line
+# is never more than about a day past its 30 days.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -61,14 +61,20 @@ jobs:
 
       # shellcheck is used when the runner image has it; bash -n always runs.
       - name: Check the shell scripts
+        # `bash -n` checks only its first file (the rest are arguments), so
+        # loop over them.
         run: |
-          bash -n deploy/bin/deploy.sh deploy/tests/deploy-guard.sh
+          scripts="deploy/bin/deploy.sh deploy/tests/deploy-guard.sh deploy/bin/trim-logs.sh deploy/tests/trim-logs-test.sh"
+          for f in $scripts; do bash -n "$f"; done
           if command -v shellcheck >/dev/null; then
-            shellcheck deploy/bin/deploy.sh deploy/tests/deploy-guard.sh
+            shellcheck $scripts
           fi
 
       - name: Run the deploy guard test
         run: bash deploy/tests/deploy-guard.sh
+
+      - name: Run the log trim test
+        run: bash deploy/tests/trim-logs-test.sh
 
       # verify-copy.sql against the real schema on the production Postgres
       # major, so a SQL error or a schema change it can't handle fails here.

@@ -17,6 +17,8 @@ only `api.gymnotebook.fit` (rehearsal). § Cutover moves `gymnotebook.fit`.
 | `gymnotebook.caddy` | `/opt/edge/sites/gymnotebook.caddy` | our site blocks, imported by the tracker's Caddyfile |
 | `bin/deploy.sh` | `/opt/gymnotebook/bin/deploy.sh` | the deploy key's forced command |
 | `bin/verify-copy.sql` | `/opt/gymnotebook/bin/verify-copy.sql` | row counts per table, to compare two databases |
+| `bin/trim-logs.sh` | `/opt/gymnotebook/bin/trim-logs.sh` | removes container log lines older than 30 days (§ Log time limit) |
+| `systemd/gymnotebook-log-trim.*` | `/etc/systemd/system/` | runs `trim-logs.sh` daily as root |
 | `tests/` | — | CI only: fake env file, Caddy wrapper, deploy guard test (`deploy-config` job in `.github/workflows/test.yml`) |
 
 ## Server layout
@@ -228,12 +230,45 @@ Run once after provisioning (quickstart § Provision):
 - `stat -c '%U:%G %a' /etc/gymnotebook/.env` → `root:gymdeploy 640`.
 - `docker ps --filter name=gymnotebook` shows no published ports.
 
+### Log time limit
+
+Docker caps each container's log at 3 × 10 MB but never by age, and the
+privacy retention schedule allows 30 days at most
+(`docs/privacy/retention.md`, signed decision T047). A daily timer runs
+`bin/trim-logs.sh`, which removes older lines from `gym-api`'s and
+`gym-web`'s logs. Install once, before § Cutover, from a checkout of `main`:
+
+```sh
+rsync -r deploy/bin deploy/systemd admin@<server>:/tmp/gn/
+ssh admin@<server>
+sudo install -o root -g root -m 0755 /tmp/gn/bin/trim-logs.sh /opt/gymnotebook/bin/trim-logs.sh
+sudo install -o root -g root -m 0644 /tmp/gn/systemd/gymnotebook-log-trim.service /tmp/gn/systemd/gymnotebook-log-trim.timer /etc/systemd/system/
+rm -rf /tmp/gn
+sudo systemctl daemon-reload
+sudo systemctl enable --now gymnotebook-log-trim.timer
+```
+
+Check it:
+
+- `systemctl list-timers gymnotebook-log-trim.timer` shows the next run.
+- `sudo systemctl start gymnotebook-log-trim.service`, then
+  `systemctl status gymnotebook-log-trim.service` → `status=0/SUCCESS`.
+  `journalctl -u gymnotebook-log-trim.service` lists only the files it
+  trimmed, with line counts; on young containers it prints nothing.
+- `gn logs --no-log-prefix --timestamps gym-api | head -1`, and the same for
+  `gym-web`, shows no line older than 30 days.
+
+The script must stay root-owned and not writable by `gymdeploy`: it runs as
+root. The tracker's Caddy log is the tracker's and isn't trimmed here.
+
 ## Removing Gym Notebook
 
 Takes Gym Notebook off the server without touching the tracker:
 
 ```sh
 gn down
+sudo systemctl disable --now gymnotebook-log-trim.timer
+sudo rm /etc/systemd/system/gymnotebook-log-trim.service /etc/systemd/system/gymnotebook-log-trim.timer
 sudo rm /opt/edge/sites/gymnotebook.caddy
 docker compose exec -w /etc/caddy caddy caddy reload    # tracker's project
 ```
@@ -388,7 +423,8 @@ certificate: `docker compose logs -f caddy | grep -i gymnotebook.fit`
   The Turnstile widget appears.
 
 Any failure: § Rollback. Otherwise delete `/tmp/neon.dump` once the final
-archive is made (spec task T050).
+archive is made (spec task T050), and in any case by cutover + 30 days
+(retention.md; the archive has the same deadline).
 
 ## Rollback
 
