@@ -8,7 +8,7 @@ tasks.md T041/T042).
 
 | | |
 | --- | --- |
-| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). The specs/004 backup and restore amendments to P1 and P2 were approved and signed by the owner on 2026-10-08 (T018). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. The specs/005 hosting amendment (UpCloud, Helsinki) is drafted and **pending owner signature** (T047), which cutover waits for. |
+| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). The specs/004 backup and restore amendments to P1 and P2 were approved and signed by the owner on 2026-10-08 (T018). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. The specs/005 hosting amendment (UpCloud, Helsinki) was signed by the owner on 2026-10-12 (T047). |
 | **Controller** | Jouni Uusimaa, private individual, Finland |
 | **Privacy contact** | jouni.uu@proton.me |
 | **Supervisory authority** | Tietosuojavaltuutetun toimisto (Office of the Data Protection Ombudsman), Finland |
@@ -347,7 +347,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 
 ## Amendment, 2026-10-12: hosting moves to UpCloud (specs/005)
 
-**Pending owner review and signature (T047). Cutover (T048) must not start before it is signed** (specs/005 FR-023).
+**Signed by the owner on 2026-10-12 (T047)**; decision at the end of this section. Cutover (T048) also waits for the log time limit chosen in point 1 (specs/005 T061).
 
 **What changes.** Only where the data lives and who processes it. No field, purpose, lawful basis, consent or retention maximum changes. At the cutover the database is copied from Neon (AWS `eu-central-1`, Frankfurt) into a database `gymnotebook` on UpCloud's managed PostgreSQL 18 service, and the API and frontend move from Azure Container Apps (Sweden Central) to Docker containers on an UpCloud server. Both are in UpCloud's `fi-hel1` data centre in Helsinki, Finland, on the owner's personal UpCloud account, which already runs the owner's Subscription Tracker. Azure and Neon stay as the rollback target until a passed smoke test (T049), and are deleted in T056.
 
@@ -369,7 +369,7 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 
 **Notice.** The candidate's recipients paragraph is updated to UpCloud in Helsinki ([notice-candidate.json](notice-candidate.json)); it stays a candidate under the existing publication gates.
 
-**Decision:** _(owner, date, answers to the three points)_
+**Decision:** **Signed** by the owner, Jouni Uusimaa, 2026-10-12. The hosting change is approved as described; P1–P3 bases, health-data conclusions and consent are unchanged. Answers: (1) **add a time limit**: a daily job removes Gym Notebook's container log lines older than 30 days, in place before the cutover (specs/005 T061); (2) **yes**: `/tmp/neon.dump` and the T050 archive are destroyed by cutover + 30 calendar days and the date recorded (T050); (3) **accept** ToS §1.2 on the personal account, since the DPA applies either way; recheck if UpCloud raises it or its terms change. P4 stays unsigned on its existing findings. Evidence: owner approval in conversation on 2026-10-12, PR #156.
 
 ## Consent summary (T042)
 

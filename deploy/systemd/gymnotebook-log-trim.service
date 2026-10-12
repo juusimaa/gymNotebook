@@ -1,0 +1,15 @@
+# Removes log lines older than 30 days from Gym Notebook's container logs
+# (/opt/gymnotebook/bin/trim-logs.sh, specs/005 T061). Started daily by
+# gymnotebook-log-trim.timer. Runs as root: Docker's log files are root-only.
+
+[Unit]
+Description=Trim Gym Notebook container logs to 30 days
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gymnotebook/bin/trim-logs.sh
+# The script's temp file holds log lines for a moment; keep it out of the
+# shared /tmp and gone when the run ends.
+PrivateTmp=yes

@@ -147,7 +147,8 @@ description: "Task list for moving Gym Notebook's hosting from Azure + Neon to U
 ### Privacy docs (PR 4, before cutover)
 
 - [x] T046 [P] [US1] Update `docs/privacy/suppliers.md` (UpCloud added as processor in Helsinki, Finland; Azure Container Apps/Log Analytics and Neon marked as ending at cutover; reuse the tracker's UpCloud DPA review if one exists), `docs/privacy/retention.md` (server logs: Docker `json-file` 3 × 10 MB per container, size-bounded; Caddy writes no access log for our hosts, errors only; provider backups 3 days), `docs/privacy/notice-candidate.json` (location/processor text), and draft the P1/P2 "Where it lives" amendment in `docs/privacy/processing-decision.md` for the owner (R11, FR-023). **Drafted 2026-10-12**: no tracker UpCloud DPA review existed, so UpCloud's Terms of Service and DPA (effective 2026-07-03) were read in the browser and reviewed in `suppliers.md` (processor; no subprocessors for EU data centres). Three open points go to the owner with the T047 signature: Docker's size-bounded logs can outlive the 30-day maximum; the cutover dump and T050 archive need destroying by cutover +30 days; and ToS §1.2's business-use clause against a personal account.
-- [ ] T047 [US1] (owner) Review and sign the `docs/privacy/processing-decision.md` amendment; merge PR 4. Cutover must not start before this.
+- [x] T047 [US1] (owner) Review and sign the `docs/privacy/processing-decision.md` amendment; merge PR 4. Cutover must not start before this. **Signed 2026-10-12** (PR #156 merged): (1) a daily job trims Gym Notebook's container logs to 30 days, added as T061 and required before cutover; (2) `/tmp/neon.dump` and the T050 archive are destroyed by cutover + 30 days; (3) ToS §1.2 accepted on the personal account.
+- [ ] T061 [US1] Add a daily job that removes lines older than 30 days from `gym-api`'s and `gym-web`'s Docker logs on the server (retention.md, signed T047 decision 1); runbook step in `deploy/README.md`; owner installs it before T048. **Implemented 2026-10-12**: `deploy/bin/trim-logs.sh` plus `deploy/systemd/gymnotebook-log-trim.{service,timer}`, tested by `deploy/tests/trim-logs-test.sh` in the `deploy-config` CI job; § Log time limit in `deploy/README.md`. Open: the owner installs it and runs that section's checks, then ticks this.
 
 ### Cutover (owner)
 
@@ -166,7 +167,7 @@ description: "Task list for moving Gym Notebook's hosting from Azure + Neon to U
 
 ### Before PR 5 (owner, same day as cutover)
 
-- [ ] T050 [US4] (owner) Archive a final Neon `pg_dump -Fc`; check it by restoring into a throwaway `postgres:18` and comparing `verify-copy.sql` output to the cutover output; keep the archive offline.
+- [ ] T050 [US4] (owner) Archive a final Neon `pg_dump -Fc`; check it by restoring into a throwaway `postgres:18` and comparing `verify-copy.sql` output to the cutover output; keep the archive offline, and destroy it and `/tmp/neon.dump` by cutover + 30 calendar days, recording the date (signed T047 decision 2).
 
 ### PR 5 — UpCloud is production
 
@@ -201,7 +202,7 @@ description: "Task list for moving Gym Notebook's hosting from Azure + Neon to U
 - **Foundational (Phase 2)**: PR 1 (T003–T008) merges first. PR 2's shared files (T009–T013) go in one PR together with T020–T021, T026–T030 and T036–T042.
 - **US2 (Phase 3)**: tracker PR (T014–T019) must be applied on the server before provisioning (T022). T014 is applied before anything else in that PR.
 - **US3 (Phase 4)**: needs PR 2 merged and the server provisioned (T022). PR 3 (T031–T032) after PR 2.
-- **US1 (Phase 5)**: G2 (T045) needs T023–T025 and T033–T035. Cutover (T048) needs G2 and PR 4 signed and merged (T047).
+- **US1 (Phase 5)**: G2 (T045) needs T023–T025 and T033–T035. Cutover (T048) needs G2, PR 4 signed and merged (T047), and the log trim job installed (T061).
 - **US4 (Phase 6)**: needs a passed smoke test (T049). T050 (archive) → PR 5 merged (T051–T055) → T056 (delete Azure, Neon and secrets). T057 any time after cutover.
 - **Polish (Phase 7)**: after cutover; T060 at +30 days.
 
