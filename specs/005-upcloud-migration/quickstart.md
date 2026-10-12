@@ -49,7 +49,8 @@ Pass when:
    gymnotebook-gym-api-1` → `false`. `free -m` stays under 80%. The tracker's
    `/health` answers in under 1 s throughout.
 3. Idle both stacks, then check `free -m`: `available` ≥ 30% (SC-006).
-4. Deploy a known-bad tag through `workflow_dispatch` → exit 1, the previous
+4. Deploy a known-bad tag through `workflow_dispatch` with `target: upcloud`
+   (Azure is still production) → exit 1, the previous
    tag still serves, and the tracker's containers are not recreated
    (`docker ps` uptime unchanged).
 5. `docker stop gymnotebook-gym-api-1` → our API answers 502, and

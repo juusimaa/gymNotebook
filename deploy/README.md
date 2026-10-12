@@ -304,7 +304,8 @@ failure, put the previous tag back. It only touches project `gymnotebook`.
 | 75 | image pull failed; nothing changed | GHCR or network; re-run the job |
 
 **Rolling back by hand**: run the `deploy` workflow with `workflow_dispatch`
-and an older `main-<40 hex>` tag from GHCR. If CI itself is the problem, on
+and an older `main-<40 hex>` tag from GHCR. Until cutover, `target: upcloud`
+leaves Azure alone; `both` (the default) deploys the tag there too. If CI itself is the problem, on
 the server:
 
 ```sh
