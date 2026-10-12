@@ -79,4 +79,5 @@ Run 2026-09-28 on local macOS arm64, branch `docs/t079-t080-privacy-validation` 
 
 | Step | Due (UTC date) | Owner | Done on | Evidence | Status |
 | --- | --- | --- | --- | --- | --- |
+| Destroy the cutover's Neon dump and any T050 archive, [retention.md](retention.md) Neon row (specs/005, signed T047 decision 2) | 2026-11-11 (cutover 2026-10-12 + 30 calendar days) | Operator | 2026-10-12 | `/tmp/neon.dump` and the copy-check files removed from the server; T050 archive never made (owner decision); Neon project `dawn-pine-04463679` deleted, with its history | Done |
 | Optional-details transition clearing, [retention.md → Optional-details transition clearing](retention.md#optional-details-transition-clearing-fr-035), steps 1 and 2 | T084 flag-on date + 30 calendar days: fill in when T084 is done | Operator | | `accounts_cleared` = , `workouts_cleared` = , follow-up count = (must be 0) | Not due |
