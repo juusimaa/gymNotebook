@@ -44,6 +44,11 @@ checked during provisioning and written back here.
   run its export through `api.gymnotebook.fit`; `gym-api` must not be
   OOM-killed (`docker inspect -f '{{.State.OOMKilled}}'`), memory stays below
   80%, and tracker `/health` answers under 1 s throughout.
+  **Passed 2026-10-12 (T044)**: before the load `available` was 59%. Under
+  the load (export 2.1 s, restore 27.3 s, export 1.3 s) memory peaked at 57%
+  used, the tracker's slowest `/health` was 0.12 s, and `OOMKilled` stayed
+  `false`. Idle afterwards: at least 48% `available`. The figure was read as
+  48%, and taking it as either `used` or `available` still clears 30%.
 - **Disk**: tracker used 3.2 GB of 20 GB at first start (tracker R1). The two
   Gym Notebook images add under 1 GB. The tracker's weekly
   `image-prune.service` runs `docker image prune -a` host-wide, so it already
