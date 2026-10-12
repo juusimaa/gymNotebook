@@ -114,7 +114,7 @@ description: "Task list for moving Gym Notebook's hosting from Azure + Neon to U
 
 ### Owner setup and checks
 
-- [ ] T033 [US3] (owner) Create `gymdeploy` and its key per T030; add the three secrets to the `production` environment; set `UPCLOUD_DEPLOY_ENABLED=true`. Check `ssh gymdeploy@<server> 'id; ls'` → `refused`, exit 64, and no shell (FR-006).
+- [x] T033 [US3] (owner) Create `gymdeploy` and its key per T030; add the three secrets to the `production` environment; set `UPCLOUD_DEPLOY_ENABLED=true`. Check `ssh gymdeploy@<server> 'id; ls'` → `refused`, exit 64, and no shell (FR-006). **Passed 2026-10-12**: host-key fingerprint from `ssh-keyscan` matched the server's `ssh_host_ed25519_key.pub`; `ssh … 'id; ls'` → `deploy: refused; expected an image tag like main-<40 hex sha>`, exit 64, no shell; secrets and `UPCLOUD_DEPLOY_ENABLED=true` set on 2026-10-12, after PR #150's merge run (where `deploy-upcloud` was skipped); sending the running tag `main-7fddd33…` by hand with the key pulled both images and exited 0 (`is live`), so the key, forced command, GHCR pull and health check work end to end. CI has not yet reached the server; T034/T035 are the first runs that do.
 - [ ] T034 [US3] (owner) Rehearsal step 4: `workflow_dispatch` with a known-bad tag (an image whose `/health` fails) → job fails with exit 1, the previous tag still serves, `docker ps` uptime of the tracker's containers unchanged (FR-005, FR-017).
 - [ ] T035 [US3] (owner) Merge a trivial change and time it from merge to the new tag serving at `https://api.gymnotebook.fit/health` and `gymnotebook.fit` (rehearsal hostnames): ≤ 15 minutes with no manual step (SC-004). Record it in this file.
 
