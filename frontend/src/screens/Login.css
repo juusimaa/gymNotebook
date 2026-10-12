@@ -59,6 +59,18 @@
   font-size: 13px;
 }
 
+/* The data-location line, last on the screen. Same type as the notice link;
+   a smaller gap when the link is shown above it. */
+.login-location {
+  margin: var(--space-6) 0 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.login-privacy + .login-location {
+  margin-top: var(--space-2);
+}
+
 /* The Turnstile widget (Turnstile.tsx) on Create account and Forgot. Cloudflare
    draws it into this box once its script has loaded; the min-height holds the
    flexible widget's 65px so the button below doesn't jump when it appears.

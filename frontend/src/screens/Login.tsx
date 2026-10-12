@@ -488,6 +488,12 @@ export default function Login() {
           </Link>
         </p>
       )}
+
+      {/* Where the notebook lives (specs/005: UpCloud fi-hel1). Always shown,
+          unlike the notice link, so it's visible before an account exists. */}
+      <p className="muted login-location">
+        Your data is stored in the EU (Helsinki, Finland).
+      </p>
     </main>
   )
 }

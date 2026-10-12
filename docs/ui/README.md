@@ -28,6 +28,8 @@ One route with three modes and two result states, switched in place rather than 
 - **Reset sent:** "Check your inbox" — "If there's an account for *address*, we've sent a link to choose a new password. It works for one hour." — and "Back to sign in". Focus moves to its heading.
 - **Check your inbox:** names the address, says the link lasts 48 hours, "Send the link again" (`POST /auth/verification` with the email and password still held in the screen's memory; leaving the screen drops the password), "Back to sign in". Focus moves to its heading when it appears.
 
+Last on the screen, in every mode, a muted 13px line: "Your data is stored in the EU (Helsinki, Finland)." It sits under the "Privacy notice" link when that is shown, and is shown even without a notice.
+
 Email fields are `type="email"`, `inputmode="email"`, `autocomplete="username"`, with auto-capitalisation, auto-correct and spell-check off. Rate-limit rejections (429) show an inline message under the button, not a toast.
 
 ### 1a. Confirm email — `/verify-email#token=…`
