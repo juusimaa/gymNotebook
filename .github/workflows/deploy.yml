@@ -13,10 +13,11 @@ on:
   # Retain a deliberate way to deploy a previously published immutable image.
   workflow_dispatch:
     inputs:
+      # No default: an old default would silently redeploy a stale image, and
+      # deploy.sh on UpCloud refuses anything but the full 40-hex form.
       image_tag:
-        description: Immutable GHCR tag to deploy to both apps
+        description: Immutable GHCR tag to deploy, main-<40 hex sha>
         required: true
-        default: main-5177bdc
         type: string
 
 permissions:
@@ -122,3 +123,43 @@ jobs:
               --output tsv)
             curl --fail --show-error --retry 12 --retry-all-errors --retry-delay 5 \
               "https://$api_fqdn/health"
+
+  # Runs beside the Azure job until cutover (spec 005); PR 5 removes the Azure
+  # job. Skipped until the owner sets the repository variable
+  # UPCLOUD_DEPLOY_ENABLED=true, so merging this is a no-op for production.
+  deploy-upcloud:
+    if: >-
+      vars.UPCLOUD_DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-26.04
+    environment: production
+    env:
+      # deploy.sh accepts only main-<40 hex>; head_sha is always the full sha.
+      IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || format('main-{0}', github.event.workflow_run.head_sha) }}
+    steps:
+      # The server's authorized_keys line forces deploy.sh for this key, so the
+      # only thing the job can send is the tag (contracts/deploy-interface.md).
+      # The pinned host key means a changed or spoofed server fails the job
+      # instead of receiving the connection.
+      - name: Deploy to UpCloud over the forced-command key
+        env:
+          SSH_KEY: ${{ secrets.UPCLOUD_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.UPCLOUD_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.UPCLOUD_DEPLOY_HOST }}
+        run: |
+          set -eu
+          umask 077
+          key="$RUNNER_TEMP/deploy_key"
+          known="$RUNNER_TEMP/known_hosts"
+          trap 'rm -f "$key" "$known"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$known"
+          # A non-zero exit from deploy.sh (1, 2, 64, 75) fails this step;
+          # deploy/README.md § Deploy says what each one means.
+          ssh -i "$key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known" \
+            "gymdeploy@$DEPLOY_HOST" "$IMAGE_TAG"

@@ -213,11 +213,14 @@ frontend/
   runtime-config.sh    writes config.js from API_URL at container start
   eslint.config.js     typescript-eslint (type-checked) + react-hooks + prettier
 infra/                 Bicep for the Azure deployment: Container Apps environment, the two apps, Log Analytics
+deploy/                UpCloud deployment beside the Subscription Tracker (spec 005): Compose file, Caddy site,
+                       deploy.sh; runbook and GitHub secrets in deploy/README.md
 docs/privacy/          versioned privacy notices (notices/, embedded into the API image) + the processing decision
 docs/ui/               UI specification and a clickable HTML prototype
 specs/                 Spec Kit feature specs, plans and task lists (001: privacy and account lifecycle)
 .specify/memory/       Spec Kit project constitution (the rest of .specify/ is regenerated locally)
-.github/workflows/     test.yml (format checks + tests), build-and-push.yml (images to GHCR), deploy.yml (to Azure)
+.github/workflows/     test.yml (format checks + tests), build-and-push.yml (images to GHCR), deploy.yml (to Azure, and to UpCloud
+                       over SSH once UPCLOUD_DEPLOY_ENABLED is true)
 .githooks/             pre-commit formatter (dotnet format + prettier)
 docker-compose.yml     frontend + backend + postgres for local dev
 PLAN.md                design, decisions and milestone log
