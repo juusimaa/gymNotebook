@@ -8,12 +8,12 @@ tasks.md T041/T042).
 
 | | |
 | --- | --- |
-| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). The specs/004 backup and restore amendments to P1 and P2 were approved and signed by the owner on 2026-10-08 (T018). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. |
+| **Status** | **Partly decided.** P1, P2 and P5 were signed by the owner on 2026-09-28. P3's consent amendment was approved on 2026-09-29 (T042 complete). The specs/004 backup and restore amendments to P1 and P2 were approved and signed by the owner on 2026-10-08 (T018). P7's basis is recorded; P4 and P6 have blocking operational/provider findings. T041 and T043 remain open. The specs/005 hosting amendment (UpCloud, Helsinki) is drafted and **pending owner signature** (T047), which cutover waits for. |
 | **Controller** | Jouni Uusimaa, private individual, Finland |
 | **Privacy contact** | jouni.uu@proton.me |
 | **Supervisory authority** | Tietosuojavaltuutetun toimisto (Office of the Data Protection Ombudsman), Finland |
 | **Owner / reviewer** | Jouni Uusimaa |
-| **Version** | draft-3, 2026-10-08 |
+| **Version** | draft-4, 2026-10-12 |
 | **Review date** | Per-purpose dates appear in the Decision lines; final whole-record review pending. |
 
 **What this document is not.** It is not legal advice and does not certify
@@ -72,6 +72,8 @@ _Ryneš_). This document assumes GDPR and the Finnish Data Protection Act
 
 **Where it lives:** the `users` table in Neon PostgreSQL (`aws-eu-central-1`). Only the operator has database access. The API issues a signed JWT holding the user id and `TokenVersion`, valid for 30 minutes (`Jwt__ExpiryMinutes`).
 
+*From the cutover, see the [2026-10-12 hosting amendment](#amendment-2026-10-12-hosting-moves-to-upcloud-specs005).*
+
 **Necessity:** an identifier and a password are the minimum needed for a private notebook that follows the user across devices. Since specs/002 the identifier is an email address rather than a username: an address the person has shown they control is what lets signup open without an invite code (only someone who reads the inbox can activate the account), and it is the only way to give back access to someone who has forgotten their password. The display name is what the cover shows; it could be left as any short text. `TokenVersion`, `PrivacyAccountId`, acknowledgement and suspension each exist to meet another requirement: revocation, erasure surviving a restore, FR-026, and R6 fail-closed handling. No real name, phone number or date of birth is collected, and the address is used for nothing but sign-in, confirmation and password reset: no newsletters, no notifications, no tracking in the emails.
 
 **Lawful basis (owner decision, 2026-09-28):**
@@ -113,6 +115,8 @@ Exercise names are part of P2, including their free-text risk. Optional workout
 title, location, notes and bodyweight are assessed separately in P3.
 
 **Where it lives:** Neon PostgreSQL, one row set per user, scoped by `UserId`. Every `/workouts` and `/exercises` route returns 404 for another user's data.
+
+*From the cutover, see the [2026-10-12 hosting amendment](#amendment-2026-10-12-hosting-moves-to-upcloud-specs005).*
 
 **Necessity:** this is the service itself, a digital copy of a paper gym log. Nothing is derived beyond what the user asks to see.
 
@@ -157,6 +161,8 @@ title, location, notes and bodyweight are assessed separately in P3.
 **Information:** optional workout `Title`, `Location`, `Notes` and `BodyweightKg`. Exercise `Name` is required and assessed with the core notebook in P2; its free-text risk is discussed below. Nothing prompts the user for health information.
 
 **Where it lives:** Neon PostgreSQL, like P2.
+
+*From the cutover, see the [2026-10-12 hosting amendment](#amendment-2026-10-12-hosting-moves-to-upcloud-specs005).*
 
 **Necessity:** optional context the paper log also had, such as where and how the session went. The service works without them.
 
@@ -221,6 +227,8 @@ remaining short free-text fields, or B for notes only.
 
 **Where it lives:** Azure Log Analytics workspace `log-gymnote-prod-58dd`, with 30-day settings on the console/system tables that hold rows. Effective customer-side RBAC includes the operator and the GitHub deployment service principal, which inherits resource-group Contributor. The owner accepted that automation access on 2026-09-29, with the GitHub `production` environment restricted to protected branches as described below.
 
+*From the cutover, see the [2026-10-12 hosting amendment](#amendment-2026-10-12-hosting-moves-to-upcloud-specs005).*
+
 **Necessity:** error logs are needed to run the service. The deletion lines make an erasure survive a restore; without them the fallback path can't work.
 
 **Lawful basis (owner choice, 2026-09-28; signed only once the findings below are resolved):**
@@ -284,8 +292,9 @@ evidence.
 
 | Recipient | Role and data | Location | Evidence still needed |
 | --- | --- | --- | --- |
-| **Neon / Databricks** | Processor: the whole database (P1–P3). On 2026-09-29 the project reported a 6-hour history window, no snapshots, one branch and one customer-side admin, with no listed API keys or invitations. | `aws-eu-central-1` (Frankfurt); support/affiliate paths unverified | Current public terms point to Databricks and list Grafana Labs in the US alongside the Databricks subprocessors. Applicable/executed DPA, internal durability copies, support-transfer paths and deletion assistance remain open; see [suppliers.md](suppliers.md#t076-read-only-checks-2026-09-29). |
-| **Microsoft Azure** | Processor: runs the API and frontend containers, and holds the P4 logs. | swedencentral | DPA/Product Terms coverage for this subscription, transfer safeguards and actual log disposal; see [suppliers.md](suppliers.md). |
+| **UpCloud Oy** (from the cutover, specs/005) | Processor: the server that runs the API and frontend, the P4 Docker logs on its disk, and the managed PostgreSQL service holding the whole database (P1–P3) with 3-day daily backups. Shared with the owner's Subscription Tracker; separate database, role and containers. | `fi-hel1`, Helsinki, Finland; no subprocessors for EU data centres | Terms and DPA reviewed 2026-10-12 ([suppliers.md](suppliers.md#upcloud-agreement-review-2026-10-12)). Open: the ToS customer-type clause (§1.2) and the managed service's PostgreSQL log retention. |
+| **Neon / Databricks** (until the cutover; deleted in specs/005 T056) | Processor: the whole database (P1–P3). On 2026-09-29 the project reported a 6-hour history window, no snapshots, one branch and one customer-side admin, with no listed API keys or invitations. | `aws-eu-central-1` (Frankfurt); support/affiliate paths unverified | Current public terms point to Databricks and list Grafana Labs in the US alongside the Databricks subprocessors. Applicable/executed DPA, internal durability copies, support-transfer paths and deletion assistance remain open; see [suppliers.md](suppliers.md#t076-read-only-checks-2026-09-29). |
+| **Microsoft Azure** (until the cutover; deleted in specs/005 T056) | Processor: runs the API and frontend containers, and holds the P4 logs. | swedencentral | DPA/Product Terms coverage for this subscription, transfer safeguards and actual log disposal; see [suppliers.md](suppliers.md). |
 | **Cloudflare** | Authoritative DNS for `gymnotebook.fit` (`dawn`/`glen.ns.cloudflare.com`). **DNS-only, not proxied**, rechecked 2026-09-28: the A record resolved directly to the Azure frontend (20.240.228.206), the response had nginx's `server` header and no `cf-ray`, and public `/config.js` pointed the API directly to `azurecontainerapps.io`. Cloudflare sees DNS query metadata, usually from the visitor's resolver, rather than the page or API HTTP bodies. **Since specs/002 PR 5, also Turnstile** on the signup and reset screens: the visitor's IP address and browser signals from those two pages, and the token plus client IP the API sends to verify it (P1, Bot check). | global anycast | Applicable terms, role, DNS logging and transfers; Turnstile's role and data use under Cloudflare's terms; see [suppliers.md](suppliers.md). **Keep the proxy off:** enabling it adds a new HTTP recipient for every page and needs prior notice/inventory review. |
 | **Proton Mail** | Holds messages sent to the privacy contact, including rights requests (FR-025). Proton AG is the operator's email provider. | Switzerland, Germany or Norway for encrypted mail storage per Proton's public policy; account-specific path unverified. Switzerland has an EU adequacy decision. | Applicable account terms, role, subprocessors and actual deletion; routine correspondence is scheduled for 12 months after closure under Q8. See [suppliers.md](suppliers.md) and [rights-requests.md](rights-requests.md). |
 | **GitHub** | Holds source code and CI logs; no user data is intended. | — | Confirm that CI runs only against test containers, never production data. |
@@ -335,6 +344,32 @@ Buy Me a Coffee is not a recipient either. The cover's "Buy me a coffee" link (`
 **Decision:** Art. 6(1)(c) chosen by the owner, Jouni Uusimaa, 2026-09-28; consent not required for ordinary request handling. The owner confirmed on 2026-09-29 that the Art. 9 point for volunteered health details stays open for focused review before a real case needs those details.
 
 ---
+
+## Amendment, 2026-10-12: hosting moves to UpCloud (specs/005)
+
+**Pending owner review and signature (T047). Cutover (T048) must not start before it is signed** (specs/005 FR-023).
+
+**What changes.** Only where the data lives and who processes it. No field, purpose, lawful basis, consent or retention maximum changes. At the cutover the database is copied from Neon (AWS `eu-central-1`, Frankfurt) into a database `gymnotebook` on UpCloud's managed PostgreSQL 18 service, and the API and frontend move from Azure Container Apps (Sweden Central) to Docker containers on an UpCloud server. Both are in UpCloud's `fi-hel1` data centre in Helsinki, Finland, on the owner's personal UpCloud account, which already runs the owner's Subscription Tracker. Azure and Neon stay as the rollback target until a passed smoke test (T049), and are deleted in T056.
+
+**New "Where it lives" text, from the cutover:**
+
+- **P1, P2 and P3:** the `gymnotebook` database on UpCloud's managed PostgreSQL service in `fi-hel1`, reached only over the private network with TLS verified. It is owned by its own role `gymnotebook`; `CONNECT` is revoked from `PUBLIC`, so the tracker's role can't connect to it, and ours can't connect to the tracker's. The owner's `upadmin` service account can still reach every database in the service (specs/005 research R2). Only the operator has database access. The service takes daily backups, kept 3 days. The rest of each signed P1–P3 line (JWT, 404 for another user's data, P3 consent) is unchanged.
+- **P4:** `gym-api` and `gym-web` log to Docker's `json-file` driver on the server, at most 3 × 10 MB per container. The tracker's Caddy logs only errors for our hostnames, never an access line (`deploy/gymnotebook.caddy`). Shell access to the server is the owner's `admin` login. The GitHub deploy key runs a forced `deploy.sh` command and has no shell, so it can't read the logs. Azure's Log Analytics workspace keeps the pre-cutover lines until they expire or T056 deletes the workspace.
+- **P6:** UpCloud Oy becomes the processor for the server and database; Microsoft and Neon end at T056 (table above).
+
+**Processor and transfers.** UpCloud's [Terms of Service](https://upcloud.com/terms-of-service/) (effective 2026-07-03) include a DPA that takes precedence. It makes UpCloud a processor and does not exclude health data. It names no subprocessors for its EU data centres, and UpCloud does not move data out of the chosen data centre without instruction. For this hosting, the move takes the database and logs out of Frankfurt/AWS and Sweden into Finland, and removes the US-linked subprocessors Neon's terms listed. Details: [suppliers.md](suppliers.md#upcloud-agreement-review-2026-10-12).
+
+**Health data.** Unchanged: P3 data now sits with UpCloud instead of Neon, and P3's consent rule still governs it.
+
+**Open points the owner decides when signing:**
+
+1. **Log retention on the server.** Docker's limit is set by size, not time. At this service's volume a P4 line can outlive the 30-day maximum ([retention.md](retention.md)). Choose: add a time limit before cutover (for example a daily job that removes our containers' rotated log files older than 30 days), or amend the maximum and the notice. P4 is unsigned already; this adds to its findings.
+2. **Cutover dump and T050 archive.** The cutover's `/tmp/neon.dump` and T050's final Neon archive are manual dumps. Under the signed retention maximum, accounts deleted after the cutover must leave them by deletion + 30 days, so the proposal is to destroy both by **cutover + 30 calendar days**. T050 currently says to keep the archive offline with no end date.
+3. **UpCloud customer type.** ToS §1.2 says the service is meant for business and professional use, not private persons' personal use. The account is personal, while Gym Notebook is a public service. The DPA applies either way. Accept, ask UpCloud, or move the account to a business identity.
+
+**Notice.** The candidate's recipients paragraph is updated to UpCloud in Helsinki ([notice-candidate.json](notice-candidate.json)); it stays a candidate under the existing publication gates.
+
+**Decision:** _(owner, date, answers to the three points)_
 
 ## Consent summary (T042)
 
