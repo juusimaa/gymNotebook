@@ -1,7 +1,7 @@
 -- The fingerprint of Gym Notebook's data, used to prove two databases hold the
--- same thing: Neon against UpCloud at cutover (FR-008, SC-002), a restore
--- against the counts it should have (deploy/README.md § Restore), the final
--- Neon archive against the cutover output. Modelled on the tracker's
+-- same thing: the source against the copy at the 2026-10-12 cutover (FR-008,
+-- SC-002), and a restore against the counts it should have (deploy/README.md
+-- § Restore). Modelled on the tracker's
 -- deploy/bin/verify-copy.sql.
 --
 -- Run it on each side and diff the two outputs; they must be byte-identical:
@@ -10,7 +10,7 @@
 --
 -- -X skips any ~/.psqlrc, -A -t print bare `name|count` lines with no header
 -- or padding. Read-only (plain SELECTs, no temp objects), so it also runs on
--- Neon after the freeze has made it read-only. No row content is printed,
+-- a database that has been made read-only. No row content is printed,
 -- only counts and the migration id, so the output is safe to paste into a PR.
 
 -- One `table|rows` line per application table in `public`, found from the

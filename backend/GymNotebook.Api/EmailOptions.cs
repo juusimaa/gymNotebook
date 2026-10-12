@@ -44,7 +44,7 @@ public sealed class EmailOptions
         // Console logs live links; memory piles messages up in RAM and sends nothing. Both
         // are fine on a developer's machine — an SDK run and the test host are Development,
         // and Compose runs as "Local" (docker-compose.yml) — and neither is ever right in
-        // Production, which is what Azure runs: ASP.NET Core's default when
+        // Production, which is what the server runs: ASP.NET Core's default when
         // ASPNETCORE_ENVIRONMENT is unset. Keyed on Production rather than "not
         // Development" (owner decision, 2026-10-06) so Compose can keep Scalar and the
         // developer exception page off while still printing links to its log.

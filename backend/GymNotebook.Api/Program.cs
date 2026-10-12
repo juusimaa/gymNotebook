@@ -36,7 +36,7 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 ConnectionStringValidation.EnsureValid(connectionString);
 
 // Jwt:Secret signs every token, so it's as sensitive as the database password and
-// lives in the same places (user-secrets locally, a Container Apps secret in Azure).
+// lives in the same places (user-secrets locally, the server's env file in production).
 // Jwt:ExpiryMinutes isn't sensitive and has a committed default in
 // appsettings.Development.json, so no `?? throw` for it.
 var jwtSecret = builder.Configuration["Jwt:Secret"]
@@ -62,8 +62,8 @@ var dummyPasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()
 var privacyLifecycleEnabled = builder.Configuration["PRIVACY_LIFECYCLE_ENABLED"] == "true";
 
 // Whether to take the client address from X-Forwarded-For (see UseForwardedHeaders below).
-// Only right when a trusted proxy is the sole way in — Container Apps ingress in Azure,
-// where the Bicep sets it. Locally nothing sits in front of the API, so trusting the header
+// Only right when a trusted proxy is the sole way in — Caddy on the production server,
+// where deploy/compose.prod.yml sets it. Locally nothing sits in front of the API, so trusting the header
 // would let any caller choose their own rate-limit bucket. Same exact-"true" rule as the
 // privacy switch: missing or misspelled leaves it off, which keeps today's behavior.
 var forwardedHeadersEnabled = builder.Configuration["FORWARDED_HEADERS_ENABLED"] == "true";
@@ -484,14 +484,15 @@ if (app.Environment.IsDevelopment())
 }
 
 // The real client address, ahead of everything that reads it (the "auth" rate limiter).
-// Behind Container Apps ingress, Connection.RemoteIpAddress is the ingress itself, so
-// without this every visitor shares one login/register bucket (specs/001 research R10).
-// The ingress appends the caller's address as the *rightmost* X-Forwarded-For entry;
-// anything to its left came from the client and can be forged. ForwardLimit = 1 takes
-// only that rightmost entry. The known-proxy lists are cleared because the ingress's
-// internal address isn't ours to pin (no custom VNet) — the default list is loopback only,
-// which would silently ignore the header. That's safe only because external ingress is the
-// sole route into the container, hence the switch. X-Forwarded-Proto isn't processed:
+// Behind Caddy, Connection.RemoteIpAddress is Caddy's container, so without this every
+// visitor shares one login/register bucket (specs/001 research R10). Caddy replaces any
+// client-sent X-Forwarded-For with the TCP peer's address (deploy/gymnotebook.caddy sets no
+// trusted_proxies), so the header holds exactly one entry; ForwardLimit = 1 takes only the
+// rightmost entry, which would also be the right one if a proxy appended instead. The
+// known-proxy lists are cleared because Caddy's address on the Docker `edge` network isn't
+// fixed — the default list is loopback only, which would silently ignore the header. That's
+// safe only because Caddy is the sole route into the container (compose.prod.yml publishes
+// no ports), hence the switch. X-Forwarded-Proto isn't processed:
 // nothing here builds URLs or redirects by scheme.
 if (forwardedHeadersEnabled)
 {
@@ -543,7 +544,7 @@ app.UseRateLimiter();
 //
 // db.Database.CanConnectAsync() is the cheapest possible round trip (a SELECT 1) — no
 // entities, no tables of ours involved. It's the "is the database there" probe that
-// Compose and Azure health checks will hit.
+// Compose healthchecks and the deploy script's check through Caddy will hit.
 app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
     await db.Database.CanConnectAsync(ct)
         ? Results.Ok(new HealthResponse("ok", "reachable"))
@@ -552,7 +553,7 @@ app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
    .WithName("GetHealth")                                            // operationId; also usable for link generation
    .WithTags("Health")                                               // groups endpoints in the Scalar sidebar
    .WithSummary("Liveness and database reachability")
-   .WithDescription("Returns 200 when the API is up and the database answers, 503 when the database is unreachable. Used by Compose and Azure probes.")
+   .WithDescription("Returns 200 when the API is up and the database answers, 503 when the database is unreachable. Used by Compose healthchecks and the production deploy check.")
    // The generator can infer the 200 from a simple handler but never an alternative
    // status code, so every status the handler can return is declared explicitly. The
    // response type is a record (HealthResponse) rather than an anonymous object because
