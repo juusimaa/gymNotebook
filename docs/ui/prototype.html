@@ -744,7 +744,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       '        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">',
       '        ' + registrationService + '\n        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--color-neutral-700)">'
     );
-    const privacyLoginLink = `<div style="margin-top:20px;text-align:center;font-size:13px"><a href="#" sc-camel-on-click="{{ openPublicNotice }}">Privacy notice</a></div>`;
+    const privacyLoginLink = `<div style="margin-top:20px;text-align:center;font-size:13px"><a href="#" sc-camel-on-click="{{ openPublicNotice }}">Privacy notice</a></div><div style="margin-top:8px;text-align:center;font-size:13px;color:var(--color-neutral-700)">Your data is stored in the EU (Helsinki, Finland).</div>`;
     replacePrivacyAnchor(
       '          <a href="#" sc-camel-on-click="{{ goCover }}">Change password</a>\n        </div>\n      </div>\n    </sc-if>',
       '          <a href="#" sc-camel-on-click="{{ goCover }}">Change password</a>\n        </div>\n        ' + privacyLoginLink + '\n      </div>\n    </sc-if>'
