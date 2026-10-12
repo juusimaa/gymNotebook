@@ -72,6 +72,9 @@ checked during provisioning and written back here.
   Together 25, leaving room for the admin, backups, `pg_dump` and psql.
   G1 (2026-10-11): 20 rows in `pg_stat_activity`, including service background
   processes; 20 + our 10 = 30 ≤ 40, a pass.
+  T025 (2026-10-12): with 40 parallel `/health` callers, `gymnotebook` peaked
+  at 10 connections, never more, and the tracker's `/health` answered 200 in
+  about 0.1 s throughout.
 - **TLS**: as the tracker (tracker R4): private network only, non-default port,
   `SSL Mode=VerifyFull;Root Certificate=/etc/gymnotebook/upcloud-ca.pem`.
 - **Storage**: 10 GiB shared. G1 (2026-10-11): tracker `defaultdb` 8.7 MB;
