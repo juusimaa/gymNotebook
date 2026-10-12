@@ -19,6 +19,17 @@ on:
         description: Immutable GHCR tag to deploy, main-<40 hex sha>
         required: true
         type: string
+      # Lets the UpCloud rehearsal deploy a deliberately bad image (spec 005
+      # T034) without it reaching Azure, which is production until cutover.
+      # PR 5 removes this input together with the Azure job.
+      target:
+        description: Where to deploy (upcloud skips the Azure job)
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - upcloud
 
 permissions:
   contents: read
@@ -32,7 +43,7 @@ jobs:
   deploy:
     # A failed image build must never roll out a partial or missing image set.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && inputs.target != 'upcloud') ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-26.04
     environment: production
