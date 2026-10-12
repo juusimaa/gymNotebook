@@ -90,6 +90,18 @@ the `edge` network and `/opt/edge/sites`, and its Caddyfile imports
 `/etc/caddy/sites/*.caddy`), and the tracker connects with its own role, not
 `upadmin`.
 
+Check the role part before step 1; it is easy to apply the edge and miss it
+(2026-10-12 provisioning did). As `upadmin`, from any database:
+
+```sql
+SELECT datname, datdba::regrole AS owner, datacl
+FROM pg_database WHERE datname = 'defaultdb';
+```
+
+Pass: owner `tracker`, and no `c` after a bare `=` in `datacl` (`=Tc/…`
+means every role may connect). Otherwise apply the tracker's role steps
+first.
+
 `<host>` and `<port>` are the database's **Connection → Private** values in
 the UpCloud console (the port is not 5432).
 
@@ -141,6 +153,10 @@ the UpCloud console (the port is not 5432).
      /etc/gymnotebook/upcloud-ca.pem
    ```
 
+   Log out and back in before step 8: `gn` reads the env file as `admin`,
+   and without the group it fails with `permission denied`.
+   `id -nG | grep -w gymdeploy` confirms it.
+
 4. **Fill the env file** per § Environment with `sudo -e /etc/gymnotebook/.env`.
    The three **from Azure** values are read once, from your machine, while
    the Container App still exists:
@@ -168,15 +184,28 @@ the UpCloud console (the port is not 5432).
    ```sh
    sudo install -o root -g root -m 0644 /tmp/gn/gymnotebook.caddy /opt/edge/sites/gymnotebook.caddy
    rm -rf /tmp/gn
-   docker compose exec -w /etc/caddy caddy caddy reload
+   docker compose -f /opt/subscription-tracker/compose.prod.yml exec -w /etc/caddy caddy caddy reload
    ```
 
-   (`docker compose` without `-p` here on purpose: that is the tracker's
-   project, where `caddy` runs.)
+   `/tmp/gn` from step 2 may be gone if the server rebooted in between;
+   copy the site file again. The `-f` names the tracker's stack, where
+   `caddy` runs, instead of relying on the login shell's `COMPOSE_FILE`.
+   A "Caddyfile input is not formatted" warning is about the tracker's
+   file and harmless.
 
 7. **DNS.** At Cloudflare, a **grey-cloud** (DNS only) A record for
    `api.gymnotebook.fit` pointing at the server's public IPv4. Leave
    `gymnotebook.fit` on Azure until § Cutover.
+
+   Caddy then gets the certificate on its own. Until `gym-api` runs,
+   `curl https://api.gymnotebook.fit/health` gives **502 with a valid
+   certificate**; that is the pass for this step. `tlsv1 alert internal
+   error` means no certificate yet. Errors for `gymnotebook.fit` in Caddy's
+   log are expected until § Cutover (the name still points at Azure). If
+   the `api` attempt hangs, typically on ZeroSSL after Let's Encrypt failed
+   before the record existed, start a fresh one with `caddy reload --force`
+   (command above), or `restart caddy` in the tracker's stack if a stale
+   lock holds it (about a second of tracker downtime).
 
 8. **First start:**
 
@@ -187,8 +216,8 @@ the UpCloud console (the port is not 5432).
 
    `gym-api`'s entrypoint applies the migrations to the empty database first.
    Pass: `{"status":"ok","database":"reachable"}` and a valid certificate.
-   If the certificate fails, `docker compose logs caddy | grep -i gymnotebook`
-   (tracker's project).
+   If the certificate fails, see step 7; Caddy's log is
+   `docker compose -f /opt/subscription-tracker/compose.prod.yml logs caddy 2>&1 | grep 'api.gymnotebook'`.
 
 ### Isolation checks
 
@@ -286,8 +315,9 @@ gn up -d --wait
 ## Cutover
 
 The one-time move from Azure + Neon (quickstart § Cutover, FR-011).
-Preconditions: G2 passed (tasks T045) and the privacy amendment is signed and
-merged (T047). There is no maintenance page: the owner is the only active
+Preconditions: G2 passed (tasks T045), which includes every isolation check
+(T023, so the tracker runs on its own role), and the privacy amendment is
+signed and merged (T047). No data is copied before T023 passes in full. There is no maintenance page: the owner is the only active
 user and simply stops logging for the duration.
 
 `NEON_URL` is Neon's **unpooled** connection string with `sslmode=require`
