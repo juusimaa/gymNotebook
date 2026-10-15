@@ -31,6 +31,7 @@ Since the cutover on 2026-10-12 this server is production for both
 | `/etc/gymnotebook/upcloud-ca.pem` | `root:gymdeploy 0640` | admin | the database service's CA, mounted read-only into `gym-api` |
 | `/var/lib/gymnotebook/image-tag.env` | `gymdeploy` | `deploy.sh` only | `IMAGE_TAG=main-<40 hex>` |
 | `/var/lib/gymnotebook/previous-tag` | `gymdeploy` | `deploy.sh` only | rollback target |
+| `/var/lib/gymnotebook/deletion-evidence.log` | `gymdeploy 0600` | `deploy.sh`; trimmed by `trim-logs.sh` | replaced `gym-api` containers' deletion lines and per-minute health marks (§ Deletion evidence) |
 
 | User | Groups | Login |
 |---|---|---|
@@ -56,12 +57,21 @@ gn() {
 `gn ps`, `gn logs -f gym-api`, `gn up -d --wait` then only ever touch
 `gymnotebook-gym-api-1` and `gymnotebook-gym-web-1`.
 
+**Don't recreate `gym-api` by hand.** Docker deletes a container's log when
+the container is recreated, and that log holds the deletion lines a restore
+may need (§ Deletion evidence). `gn stop`, `gn start` and `gn restart` keep
+it. `gn up` recreates only when the image or configuration changed, and
+`gn down` always does. To change the version, run `deploy.sh` (§ Deploy,
+rolling back by hand), which saves the lines first.
+
 ## Environment
 
 `/etc/gymnotebook/.env` is the only place app secrets exist in production
 (contract: [server-env.md](../specs/005-upcloud-migration/contracts/server-env.md)).
 GitHub holds only the deploy key, host and known-hosts line. Edit with
-`sudo -e /etc/gymnotebook/.env`, apply with `gn up -d --wait`. Never copy a
+`sudo -e /etc/gymnotebook/.env`, apply by redeploying the running tag
+(§ Deploy), which saves the deletion evidence before it recreates `gym-api`;
+not with `gn up`, which would delete it. Never copy a
 value from a laptop `.env`, and never paste one into a PR, issue or chat.
 
 | Variable | Where the value comes from |
@@ -231,7 +241,8 @@ Docker caps each container's log at 3 × 10 MB but never by age, and the
 privacy retention schedule allows 30 days at most
 (`docs/privacy/retention.md`, signed decision T047). A daily timer runs
 `bin/trim-logs.sh`, which removes older lines from `gym-api`'s and
-`gym-web`'s logs. Install once per server, from a checkout of `main`:
+`gym-web`'s logs and from the saved deletion evidence (§ Deletion
+evidence). Install once per server, from a checkout of `main`:
 
 ```sh
 rsync -r deploy/bin deploy/systemd admin@<server>:/tmp/gn/
@@ -320,26 +331,73 @@ command the client asks for (contract:
    the private key from your machine.
 
 **What a deploy does**: refuse anything but `main-<40 hex>`; take a lock;
-remember the running tag; pull the new images; `up -d --wait`; check
+remember the running tag; pull the new images; stop `gym-api` and save its
+deletion evidence (§ Deletion evidence); `up -d --wait`; check
 `https://api.gymnotebook.fit/health` through Caddy on this machine; on
-failure, put the previous tag back. It only touches project `gymnotebook`.
+failure, save the failed container's evidence too and put the previous tag
+back. It only touches project `gymnotebook`.
 
 | Exit | Meaning | What to do |
 |---|---|---|
 | 0 | new tag live and healthy | nothing |
 | 1 | new tag failed; previous tag restored | read the job log and `gn logs gym-api`; fix forward |
-| 2 | rollback failed, or no previous tag | production is down: roll back by hand, below |
+| 2 | rollback failed, no previous tag, or the evidence save failed after `gym-api` stopped | production is down: read the job log; if it says the evidence save failed, fix that first (disk space, `/var/lib/gymnotebook` owner); then roll back by hand, below |
 | 64 | invalid tag; nothing ran | check the tag in the workflow |
-| 75 | image pull failed; nothing changed | GHCR or network; re-run the job |
+| 75 | image pull or evidence save failed; nothing changed | GHCR or network: re-run the job; evidence save: check disk space and `/var/lib/gymnotebook` first |
 
 **Rolling back by hand**: run the `deploy` workflow with `workflow_dispatch`
-and an older `main-<40 hex>` tag from GHCR. If CI itself is the problem, on
-the server:
+and an older `main-<40 hex>` tag from GHCR. If CI itself is the problem, run
+the same script on the server as `gymdeploy`, so the evidence is saved first:
 
 ```sh
-echo IMAGE_TAG=main-<40 hex> | sudo -u gymdeploy tee /var/lib/gymnotebook/image-tag.env
-gn up -d --wait
+sudo -u gymdeploy env SSH_ORIGINAL_COMMAND=main-<40 hex> /opt/gymnotebook/bin/deploy.sh
 ```
+
+**Redeploying the running tag** applies a changed env file the same way:
+
+```sh
+sudo -u gymdeploy sh -c 'SSH_ORIGINAL_COMMAND=$(sed -n "s/^IMAGE_TAG=//p" /var/lib/gymnotebook/image-tag.env) exec /opt/gymnotebook/bin/deploy.sh'
+```
+
+### Deletion evidence
+
+Docker deletes a container's log when the container is recreated, and every
+deploy recreates `gym-api`. The restore fallback
+([docs/privacy/restore.md](../docs/privacy/restore.md) § 4) needs the
+`deletion.*` lines from that log, and the health lines that show it has no
+gaps. So before `up`, `deploy.sh` stops `gym-api` (no request can log after
+the copy) and adds to `/var/lib/gymnotebook/deletion-evidence.log`:
+
+- every `deletion.intent`, `deletion.committed` and `deletion.rolled_back`
+  line, with Docker's timestamp;
+- `<time> health` for the first health check of each minute;
+- `<time> saved gym-api container <id>` for each save.
+
+Nothing else from the log is kept. The file is sorted and de-duplicated,
+`gymdeploy`-only (0600), and the daily log trim removes lines older than 30
+days ([retention.md](../docs/privacy/retention.md)). Read it with
+`sudo cat /var/lib/gymnotebook/deletion-evidence.log`; keep copies only in a
+restore's private directory.
+
+**Install** (once, then whenever `deploy.sh` or `trim-logs.sh` changes),
+from a checkout of `main`:
+
+```sh
+rsync -r deploy/bin admin@<server>:/tmp/gn/
+ssh admin@<server>
+sudo install -o root -g root -m 0755 /tmp/gn/bin/deploy.sh /tmp/gn/bin/trim-logs.sh /opt/gymnotebook/bin/
+rm -rf /tmp/gn
+```
+
+**Check it** after the next deploy:
+
+- `sudo stat -c '%U %a' /var/lib/gymnotebook/deletion-evidence.log` →
+  `gymdeploy 600`.
+- `sudo tail -1 /var/lib/gymnotebook/deletion-evidence.log` → a
+  `saved gym-api container` line from that deploy.
+- `sudo grep -c ' health$' /var/lib/gymnotebook/deletion-evidence.log` is
+  roughly the old container's lifetime in minutes.
+- `sudo systemctl start gymnotebook-log-trim.service` → `status=0/SUCCESS`.
 
 ## Cutover
 
@@ -391,7 +449,7 @@ while it exists: cents. Users' long-term copy remains the in-app JSON backup
    Before starting `gym-api` again, remove every account deleted since the
    backup was taken, as [docs/privacy/restore.md](../docs/privacy/restore.md)
    says; otherwise the restore brings deleted accounts back. Then
-   `gn up -d --wait`.
+   `gn start gym-api`, which keeps its log (§ Deletion evidence).
 
 4. Check the counts against what you expect, then delete the temporary
    service and `/tmp/restore.dump`:

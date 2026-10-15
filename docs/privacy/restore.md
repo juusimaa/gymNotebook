@@ -1,6 +1,6 @@
 # Account restore runbook
 
-Owner: Gym Notebook operator. Version: draft 2026-10-12, rewritten for UpCloud (specs/005 T062); the Neon version this replaces, exercised in T074 on 2026-09-29, is in Git history. Review this runbook after every restore exercise and every change to the database, deletion flow, logging, backups or deployment. The [restore contract](../../specs/001-privacy-account-lifecycle/contracts/operations.md#restore-contract--fail-closed) defines the required outcome; this runbook is its operator procedure, and [deploy/README.md § Restore](../../deploy/README.md#restore) holds the plain database mechanics it builds on.
+Owner: Gym Notebook operator. Version: draft 2026-10-15, rewritten for UpCloud (specs/005 T062), fallback sources extended to the saved deletion evidence (T063); the Neon version this replaces, exercised in T074 on 2026-09-29, is in Git history. Review this runbook after every restore exercise and every change to the database, deletion flow, logging, backups or deployment. The [restore contract](../../specs/001-privacy-account-lifecycle/contracts/operations.md#restore-contract--fail-closed) defines the required outcome; this runbook is its operator procedure, and [deploy/README.md § Restore](../../deploy/README.md#restore) holds the plain database mechanics it builds on.
 
 **Release status:** not yet exercised on UpCloud. The restore drill (specs/005 T058) is the first run; until the owner has reviewed its result, do not treat this document as evidence that production restores are safe. Use only with a restricted incident record and an authorized operator. Never rehearse with real users' data. Keep account UUIDs, password hashes, connection details, logs and incident evidence in restricted storage, outside Git.
 
@@ -21,7 +21,7 @@ All commands run on the server as `admin`, with `gn` defined (deploy/README.md �
 1. **Stop deploys.** A merge to `main` would start `gym-api` again: `gh workflow disable deploy` (from a machine with `gh`), or in GitHub, Actions → deploy → Disable workflow. Merge nothing until step 5.
 2. **Stop the API**: `gn stop gym-api`. `restart: unless-stopped` keeps it stopped through a reboot. `https://api.gymnotebook.fit/health` now answers **502** from Caddy; that is the isolation. `gym-web` may keep serving the static pages; without the API they can't read or write anything.
 3. **Record the isolation instant** (UTC) and confirm no other writer: `SELECT pid, usename, application_name, state FROM pg_stat_activity WHERE datname = 'gymnotebook';` as `gymnotebook` shows only your own session.
-4. **Before anything else, if the fallback might be needed** (step 4), record `gym-api`'s log coverage now: `docker inspect -f '{{.Created}}' gymnotebook-gym-api-1` and the oldest kept line, `gn logs --no-log-prefix --timestamps gym-api | head -1`. A stopped container keeps its log; **never** run `gn up`, `gn down` or a deploy before step 4 is done, because recreating the container deletes it.
+4. **Before anything else, if the fallback might be needed** (step 4), record `gym-api`'s log coverage now: `docker inspect -f '{{.Created}}' gymnotebook-gym-api-1`, the oldest kept line, `gn logs --no-log-prefix --timestamps gym-api | head -1`, and the oldest and newest lines of the evidence saved from earlier containers, `sudo sed -n '1p;$p' /var/lib/gymnotebook/deletion-evidence.log` (deploy/README.md § Deletion evidence). A stopped container keeps its log; **never** run `gn up`, `gn down` or a deploy before step 4 is done, because recreating the container deletes it.
 
 ## 2. Restore into a temporary service
 
@@ -111,32 +111,34 @@ Continue with step 5.
 
 ## 4. Fallback when the live database is unusable
 
-Use this only when step 3 can't be done. The application writes `deletion.intent`, `deletion.committed` and `deletion.rolled_back` lines as `<event> PrivacyAccountId=<uuid> DeletionBoundaryAt=<UTC instant>` (`AccountDeletion.cs`) to `gym-api`'s Docker log. Classify each deletion by the event and boundary in the line.
+Use this only when step 3 can't be done. The application writes `deletion.intent`, `deletion.committed` and `deletion.rolled_back` lines as `<event> PrivacyAccountId=<uuid> DeletionBoundaryAt=<UTC instant>` (`AccountDeletion.cs`) to `gym-api`'s Docker log. Every deploy since specs/005 T063 also saved the replaced container's deletion lines and per-minute health marks to `/var/lib/gymnotebook/deletion-evidence.log` before recreating it (deploy/README.md § Deletion evidence), so the two together are the source. Classify each deletion by the event and boundary in the line.
 
 **Coverage first.** The fallback is only possible if the log reaches back to `T` without gaps:
 
-1. **The container is older than `T`.** Docker deletes a container's log when the container is recreated, and **every deploy recreates `gym-api`**. If step 1.4's `Created` time is after `T`, deletions between `T` and that deploy are lost: stop, the fallback is unavailable.
-2. **Nothing has rotated out.** The oldest kept line from step 1.4 must be before `T`. The 3 × 10 MB size limit and the daily 30-day trim (deploy/README.md § Log time limit) both remove old lines; backups are at most 3 days old, so the trim alone never reaches `T`.
-3. **No gap between `T` and isolation.** The container's healthcheck calls `/health` every 10 seconds, and each call logs a `SELECT 1` line, so every minute the API ran has health lines. List the minutes that have none (`t0` = `T`, `t1` = the isolation instant, both to the minute, UTC):
+1. **The sources reach back to `T`.** Docker deletes a container's log when the container is recreated, and **every deploy recreates `gym-api`**. If step 1.4's `Created` time is before `T`, the container's own log is enough. If it is after `T`, the evidence file must cover the gap: its oldest line before `T`, and a `saved gym-api container` line for every `gym-api` recreation between `T` and `Created` (compare with the deploy workflow's runs). A recreation without one (a manual `gn up` or `gn down`, or a deploy before T063 was installed) lost that container's lines: stop, the fallback is unavailable.
+2. **Nothing has rotated out.** The oldest kept line from step 1.4 (the evidence file's, when it is needed) must be before `T`. The 3 × 10 MB size limit and the daily 30-day trim (deploy/README.md § Log time limit) both remove old lines; backups are at most 3 days old, so the trim alone never reaches `T`.
+3. **No gap between `T` and isolation.** The container's healthcheck calls `/health` every 10 seconds, and each call logs a `SELECT 1` line, so every minute the API ran has health lines; the evidence file keeps one `health` line per minute of replaced containers. List the minutes that have none in either (`t0` = `T`, `t1` = the isolation instant, both to the minute, UTC):
 
    ```sh
    t0='2026-10-12T08:00'; t1='2026-10-12T10:00'
-   gn logs --no-log-prefix --timestamps --since "${t0}:00Z" --until "${t1}:00Z" gym-api \
-     | grep 'SELECT 1' | cut -c1-16 | sort -u > have.txt
+   { gn logs --no-log-prefix --timestamps --since "${t0}:00Z" --until "${t1}:00Z" gym-api | grep 'SELECT 1'
+     sudo grep ' health$' /var/lib/gymnotebook/deletion-evidence.log
+   } | cut -c1-16 | sort -u > have.txt
    s=$(date -u -d "${t0}:00Z" +%s); e=$(date -u -d "${t1}:00Z" +%s)
    for ((x = s; x < e; x += 60)); do date -u -d "@$x" +%Y-%m-%dT%H:%M; done > want.txt
    comm -23 want.txt have.txt   # minutes with no health line: must print nothing
    ```
 
-   A listed minute is a gap unless the incident record shows `gym-api` was deliberately stopped then (a restart keeps the log; the container's own restarts show in `docker inspect -f '{{.RestartCount}}'`). An unexplained gap stops the fallback.
+   A listed minute is a gap unless the evidence file has a `saved gym-api container` line in it or the minute before (a deploy stops `gym-api` until the new one is healthy), or the incident record shows `gym-api` was deliberately stopped then (a restart keeps the log; the container's own restarts show in `docker inspect -f '{{.RestartCount}}'`). An unexplained gap stops the fallback.
 
 If any of the three fails, the restore can't be reconciled: keep `gym-api` stopped and escalate without reopening.
 
 **Collect the lines** into the private directory and remove them when the incident closes:
 
 ```sh
-gn logs --no-log-prefix --timestamps --since "${t0}:00Z" gym-api \
-  | grep -E 'deletion\.(intent|committed|rolled_back) PrivacyAccountId=' > deletion-lines.txt
+{ gn logs --no-log-prefix --timestamps --since "${t0}:00Z" gym-api
+  sudo cat /var/lib/gymnotebook/deletion-evidence.log
+} | grep -E 'deletion\.(intent|committed|rolled_back) PrivacyAccountId=' | sort -u > deletion-lines.txt
 ```
 
 Reconcile by UUID **and deletion boundary**, so a later retry can't erase the meaning of an earlier intent. For each `deletion.committed` after `T`, re-delete its UUID if present; a committed line wins even if its intent line is missing. For an intent with a matching `deletion.rolled_back`, leave the account alone for that attempt. For an intent with neither terminal line, don't guess: if its UUID exists in the restored copy, suspend sign-in (below); if it's absent, record that and keep `gym-api` stopped until the outcome is resolved. Conflicting lines or malformed UUIDs also keep it stopped. A missing committed line is never proof of rollback. Deletion lines written before T099's fix (deployed 2026-09-30) can show an intent with no terminal line after a transient error; none of those can follow an UpCloud `T`.
@@ -194,7 +196,7 @@ The fallback can't recover password hashes or token versions changed after `T`. 
 1. **Check the copy** before it replaces anything: `pg TMP_URL -At -f /bin-gn/verify-copy.sql > tmp.txt` gives the counts the live database will have. If `T` predates the optional-details transition clearing, run [its clearing and zero-count check](retention.md#optional-details-transition-clearing-fr-035) against `TMP_URL` now.
 2. **Replace the live data** with deploy/README.md § Restore steps 2 and 3, using `TMP_URL` as the dump source and **without** its final `gn up`. Then `pg GN_URL -At -f /bin-gn/verify-copy.sql > live.txt && diff tmp.txt live.txt` must print nothing.
 3. **Rotate `Jwt__Secret`** on every restore, fallback included, so a rewound user id or token version can't accept a token issued after `T`. Generate a fresh value in your password manager (at least 48 random bytes) and paste it into `sudo -e /etc/gymnotebook/.env`; never put it on a command line, which `sudo` would write to the auth log, or in a ticket. Since specs/005 the env file is the only copy: no GitHub secret needs the same change.
-4. **Start and verify while still closed to deploys**: `gn up -d --wait`, then `https://api.gymnotebook.fit/health` is 200; a control account signs in; a token issued before the restore is rejected; for the fallback, a suspended account gets `403 account_suspended`. Representative surviving accounts keep their notebooks.
+4. **Start and verify while still closed to deploys**: redeploy the running tag (deploy/README.md § Deploy), which applies the new `Jwt__Secret` and saves the stopped container's deletion evidence before recreating it (`gn up` would delete that log); then `https://api.gymnotebook.fit/health` is 200; a control account signs in; a token issued before the restore is rejected; for the fallback, a suspended account gets `403 account_suspended`. Representative surviving accounts keep their notebooks.
 5. **Clean up before declaring the restore done**: delete the temporary service in the UpCloud console and confirm it's gone from the list; `rm -r ~/restore` (dump, UUID file, deletion lines); `unset GN_URL TMP_URL`. The temporary service holds other people's live records; it is never kept as a standing copy ([retention.md](retention.md)).
 6. **Re-enable deploys** (`gh workflow enable deploy`) and record the evidence source, coverage, re-deleted and suspended counts, credential-copy result, rotation, retention checks, reviewer and the reopening decision.
 

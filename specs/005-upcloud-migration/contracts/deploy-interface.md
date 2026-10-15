@@ -38,11 +38,18 @@ The requested command only reaches the script as `$SSH_ORIGINAL_COMMAND`.
    `image-tag.env` (temp file + rename).
 4. `docker compose -p gymnotebook … pull` → on failure restore the tag file,
    exit **75**.
+4a. (T063) If a `gym-api` container exists: `stop gym-api`, then merge its
+   `deletion.*` lines, one `health` line per minute and a `saved gym-api
+   container <id>` line into `/var/lib/gymnotebook/deletion-evidence.log`
+   (0600, sorted, de-duplicated). On failure restore the tag file and
+   `start gym-api` (same container, log kept) → exit **75**; if it doesn't
+   start → exit **2**.
 5. `up -d --wait --wait-timeout 120`, then
    `curl --resolve api.gymnotebook.fit:443:127.0.0.1 https://api.gymnotebook.fit/health`
    with retries → exit **0**.
-6. Otherwise roll back to the previous tag with `up -d --wait` → exit **1**;
-   if that fails or there is no previous tag → exit **2**.
+6. Otherwise save the failed container's evidence as in 4a, then roll back
+   to the previous tag with `up -d --wait` → exit **1**; if the save or the
+   rollback fails, or there is no previous tag → exit **2**.
 
 It never runs `down`, `prune`, `caddy reload` or any command naming another
 Compose project, and never prints the env file.
@@ -52,5 +59,7 @@ Compose project, and never prints the env file.
 - A Gym Notebook deploy changes only containers in project `gymnotebook`
   (FR-005).
 - A version that fails its health check never stays live (FR-017).
+- `up` never recreates `gym-api` before its deletion evidence is saved
+  (T063): a failed save stops the deploy instead.
 - The key cannot open a shell or reach the tracker (FR-006). The boundary is
   the forced command, because `docker` group membership is root-equivalent (R6).
