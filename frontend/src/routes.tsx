@@ -19,6 +19,8 @@ import WorkoutDetail from './screens/WorkoutDetail.tsx'
 import Progress from './screens/Progress.tsx'
 import Exercises from './screens/Exercises.tsx'
 import EditExercise from './screens/EditExercise.tsx'
+import Templates from './screens/Templates.tsx'
+import EditTemplate from './screens/EditTemplate.tsx'
 
 // The route table, one entry per screen in docs/ui/README.md. Data-mode router
 // (createBrowserRouter) rather than <BrowserRouter><Routes>, for the loader below.
@@ -92,6 +94,11 @@ export const router = createBrowserRouter([
           { path: '/progress', element: <Progress /> },
           { path: '/exercises', element: <Exercises /> },
           { path: '/exercises/:exerciseId', element: <EditExercise /> },
+          // Templates (specs/006 US4). /templates/new is a static segment,
+          // so it ranks above /templates/:templateId.
+          { path: '/templates', element: <Templates /> },
+          { path: '/templates/new', element: <EditTemplate /> },
+          { path: '/templates/:templateId', element: <EditTemplate /> },
         ],
       },
     ],

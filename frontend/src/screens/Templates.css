@@ -1,0 +1,90 @@
+/* Templates (specs/006): the list shares Sessions.css for its header, its
+   scrolling list and its footer; these are only what differs. */
+
+.templates .sessions-header {
+  align-items: baseline;
+}
+
+.templates-explanation {
+  margin: 10px 0 6px;
+  color: var(--color-neutral-700);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.templates-empty {
+  margin: 18px 0;
+  color: var(--color-neutral-800);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.templates-error {
+  margin-top: 14px;
+}
+
+.templates-error .form-message {
+  margin: 0 0 var(--space-2);
+}
+
+.templates-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A template has no date, so its row is one column: the name in the heading
+   face, as a session's title, then the exercises and the counts. */
+.template-row {
+  display: block;
+  min-height: var(--hit-target);
+  padding: 16px 0;
+  color: var(--color-text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.template-row:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.template-row:focus-visible {
+  outline: 2px solid var(--color-accent-700);
+  outline-offset: 3px;
+}
+
+.template-row h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 19px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The editor's Name field, in place of a page's dateline. A taken name gets
+   the base invalid border (base.css) and its message right under it. */
+.template-name-field {
+  margin-top: var(--space-1);
+}
+
+.template-name-error {
+  margin: 0;
+}
+
+/* Delete in the editor's header, a quiet text button like the session
+   page's (WorkoutDetail.css), aligned to the header's right edge. */
+.template-delete {
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-neutral-700);
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.template-delete:focus-visible {
+  outline: 2px solid var(--color-accent-700);
+  outline-offset: 2px;
+}

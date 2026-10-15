@@ -111,6 +111,9 @@ describe('isNotebookPath', () => {
     '/progress',
     '/exercises',
     '/exercises/3',
+    '/templates',
+    '/templates/new',
+    '/templates/4',
   ])('treats %s as notebook content', (path) => {
     expect(isNotebookPath(path)).toBe(true)
   })
@@ -124,6 +127,7 @@ describe('isNotebookPath', () => {
     '/account/privacy/optional-details',
     '/privacy',
     '/workoutsx',
+    '/templatesx',
     '/login',
   ])('does not treat %s as notebook content', (path) => {
     expect(isNotebookPath(path)).toBe(false)

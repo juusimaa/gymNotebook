@@ -290,18 +290,20 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ### Frontend (PR 8, after T003)
 
-- [ ] T079 [P] [US4] Create `frontend/src/api/templates.ts`: types for the template DTOs; `listTemplates`, `getTemplate`, `createTemplate`, `updateTemplate`, `deleteTemplate`, `prepareFromTemplate`, `saveWorkoutAsTemplate`; constant `TEMPLATE_NAME_TAKEN = 'template_name_taken'`.
-- [ ] T080 [US4] Create `frontend/src/screens/Templates.tsx` (+ `Templates.css`): list ordered by name, loading/empty/error, **New template**, and **Prepare a session** per row.
-- [ ] T081 [US4] Create `frontend/src/screens/EditTemplate.tsx`:
+- [x] T079 [P] [US4] Create `frontend/src/api/templates.ts`: types for the template DTOs; `listTemplates`, `getTemplate`, `createTemplate`, `updateTemplate`, `deleteTemplate`, `prepareFromTemplate`, `saveWorkoutAsTemplate`; constant `TEMPLATE_NAME_TAKEN = 'template_name_taken'`.
+- [x] T080 [US4] Create `frontend/src/screens/Templates.tsx` (+ `Templates.css`): list ordered by name, loading/empty/error, **New template**, and **Prepare a session** per row.
+- [x] T081 [US4] Create `frontend/src/screens/EditTemplate.tsx`:
   - name field, blocks and set rows reusing the `newWorkoutDraft.ts` helpers and exercise autocomplete, no status
   - explicit **Save**
   - inline delete confirm ("Delete template Push A? Sessions made from it stay.")
   - a 409 shows "You already have a template called Push A." at the name field with `aria-invalid`, keeping input
   - extract shared block and row pieces from `NewWorkout.tsx` only as far as needed (plan D7)
-- [ ] T082 [US4] `frontend/src/routes.tsx`: `/templates`, `/templates/new` and `/templates/:templateId` behind the notice gate.
+- [x] T082 [US4] `frontend/src/routes.tsx`: `/templates`, `/templates/new` and `/templates/:templateId` behind the notice gate.
 - [ ] T083 [US4] **Save as template** on `frontend/src/screens/WorkoutDetail.tsx` and in prepare mode of `NewWorkout.tsx`; name prefilled from the title.
 - [ ] T084 [US4] The SC-007 entry from Sessions (`frontend/src/screens/Sessions.tsx`): "Prepare from template" reaches a prepared page in at most three taps from the cover.
 - [ ] T085 [US4] `docs/ui/README.md` Templates section, as built.
+  - PR 8 is split in two (owner, 2026-10-15). **PR 8a**: T079–T082 and the screens' as-built notes. **PR 8b**: T083, T084, the rest of T085 and T089.
+  - PR 8a: the shared block pieces came out of `NewWorkout.tsx` as `useExerciseBlocks.ts`, `ExerciseBlockList.tsx` and `ExercisePicker.tsx`; the template draft helpers are `templateDraft.ts` (Vitest in `templateDraft.test.ts`). The notice gate's `isNotebookPath` gained `/templates`.
 
 **Checkpoint**: All four stories independently testable.
 

@@ -1,14 +1,4 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FocusEvent,
-  type KeyboardEvent,
-  type MouseEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   Link,
@@ -41,10 +31,8 @@ import {
   type WorkoutDetailResponse,
 } from '../api/workouts'
 import {
-  addSetToExercise,
   countNotDone,
   type DraftFieldRef,
-  describeDraftSet,
   describeUnsavedSets,
   type ExistingWorkoutDraft,
   createExistingWorkoutDraft,
@@ -62,15 +50,11 @@ import {
   prepareWorkoutDraft,
   type PreparedPlanDraft,
   type PreparedWorkoutDraft,
-  removeSetFromExercise,
-  restoreSetToExercise,
   toggleSetDone,
-  updateSetInExercise,
   withLastTime,
   type WorkoutExerciseDraft,
   type WorkoutHeadingDraft,
   type WorkoutSetDraft,
-  type WorkoutSetDraftChanges,
 } from './newWorkoutDraft'
 import { getToken } from '../auth/token'
 import { createClientId } from './clientId'
@@ -86,11 +70,8 @@ import {
   saveEditorDraft,
   type EditorDraftRoute,
 } from './editorDraftStorage'
-import {
-  describeLastSet,
-  formatLastSet,
-  normalizeExerciseName,
-} from './exerciseFormat'
+import { ExerciseBlockList } from './ExerciseBlockList'
+import { ExercisePicker } from './ExercisePicker'
 import { OptionalDetailsChoice } from './OptionalDetailsConsent'
 import { formatCount } from './workoutFormat'
 import {
@@ -98,26 +79,10 @@ import {
   useWorkoutAutosave,
   withExerciseIds,
 } from './useWorkoutAutosave'
+import { focusInput, setFieldId, useExerciseBlocks } from './useExerciseBlocks'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import { useVisualViewportHeight } from './useVisualViewportHeight'
 import './NewWorkout.css'
-
-// The latest removal, kept so its "Removed … · Undo" line can put it back
-// where it was. One at a time: a newer removal replaces it.
-type Removal =
-  | {
-      kind: 'set'
-      exerciseClientId: string
-      set: WorkoutSetDraft
-      index: number
-      description: string
-    }
-  | {
-      kind: 'exercise'
-      exercise: WorkoutExerciseDraft
-      index: number
-      description: string
-    }
 
 // A field a failed save points at, by the set's client id rather than its
 // position, so the mark stays on the right row while rows come and go.
@@ -128,11 +93,6 @@ type InvalidField =
     }
   | { kind: 'set'; setClientId: string; field: 'weight' | 'reps' }
   | { kind: 'finishTime' }
-
-// The ids that let focus move to a set's inputs right after a render.
-function setFieldId(setClientId: string, field: 'weight' | 'reps'): string {
-  return `set-${setClientId}-${field}`
-}
 
 const HEADING_FIELD_IDS: Record<
   Extract<InvalidField, { kind: 'heading' }>['field'],
@@ -145,54 +105,8 @@ const HEADING_FIELD_IDS: Record<
 }
 
 const SAVE_MESSAGE_ID = 'new-workout-save-message'
-const UNDO_BUTTON_ID = 'new-workout-undo'
 const FINISH_BUTTON_ID = 'new-workout-finish'
 const FINISH_TIME_ID = 'new-workout-finish-time'
-// How long typing in the exercise search must pause before it asks the API.
-// Short enough to feel immediate, long enough to skip most mid-word queries.
-const EXERCISE_SEARCH_DELAY_MS = 250
-
-// Moves focus to an input by id. `select` highlights its value, so typing
-// replaces a copied figure instead of appending to it.
-function focusInput(id: string, select = false) {
-  const element = document.getElementById(id)
-  if (!(element instanceof HTMLInputElement)) return
-  element.focus()
-  if (select) element.select()
-}
-
-// A tapped weight or reps field selects its figure too, the same as one the
-// editor focuses itself: the copied "10" is replaced by typing "15", with no
-// select-all or backspacing on a phone. A second tap places the caret as
-// usual, for editing one digit.
-//
-// Two browser quirks need handling. The tap's own mouseup, which arrives
-// after focus, clears the selection in Chrome and Safari, so the first
-// mouseup after focus is cancelled. And iOS ignores select() on inputs, and
-// can still move the caret after the focus event, so the range is set
-// through setSelectionRange both at once and again on the next frame.
-const selectedOnFocus = new WeakSet<HTMLInputElement>()
-
-const selectOnFocusProps = {
-  onFocus(event: FocusEvent<HTMLInputElement>) {
-    const input = event.currentTarget
-    const selectAll = () => {
-      if (document.activeElement === input) {
-        input.setSelectionRange(0, input.value.length)
-      }
-    }
-    selectAll()
-    requestAnimationFrame(selectAll)
-    selectedOnFocus.add(input)
-  },
-  onMouseUp(event: MouseEvent<HTMLInputElement>) {
-    if (selectedOnFocus.delete(event.currentTarget)) event.preventDefault()
-  },
-  onBlur(event: FocusEvent<HTMLInputElement>) {
-    selectedOnFocus.delete(event.currentTarget)
-  },
-}
-
 // /workouts/new and /workouts/:id/edit render the same component. The key
 // gives each route (and each workout) its own editor instance, so the state
 // initialised from that route's stored draft never carries over to another.
@@ -351,17 +265,6 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
   const [exercises, setExercises] = useState<WorkoutExerciseDraft[]>(() =>
     !isEditing && restoredDraft !== null ? restoredDraft.exercises : [],
   )
-  const [exerciseQuery, setExerciseQuery] = useState('')
-  const [exerciseSuggestions, setExerciseSuggestions] = useState<
-    ExerciseResponse[]
-  >([])
-  // The trimmed query the shown suggestions (or error) answer. While it lags
-  // behind what is typed, a search is waiting or in flight and the previous
-  // answer stays on screen, so the picker doesn't collapse on every keystroke.
-  const [answeredExerciseQuery, setAnsweredExerciseQuery] = useState('')
-  const [exerciseSearchMessage, setExerciseSearchMessage] = useState<
-    string | null
-  >(null)
   const [savingAction, setSavingAction] = useState<
     'save' | 'finish' | 'tear-out' | 'keep' | 'plan' | 'start' | null
   >(null)
@@ -374,13 +277,11 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
   // the question opens, so it can't change shape under the lifter's thumb.
   const [finishAsksTime, setFinishAsksTime] = useState(false)
   const [finishTime, setFinishTime] = useState('')
-  const [removal, setRemoval] = useState<Removal | null>(null)
   const [invalidField, setInvalidField] = useState<InvalidField | null>(null)
   // The page heading's fields start folded behind their one-line summary;
   // a save that fails on one of them opens it again.
   const [isHeadingOpen, setIsHeadingOpen] = useState(false)
   useVisualViewportHeight()
-  const pickerRef = useRef<HTMLDivElement>(null)
   const keepFinishEditingRef = useRef<HTMLButtonElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   // Cancel or "Start over" on a changed draft asks first, inline: 'leave'
@@ -440,6 +341,24 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
   // The status a new row starts with: planned on a plan, done everywhere
   // else, so logging as you go costs no extra tap (research R14, Q5).
   const newRowStatus: SetStatus = isPlanning ? 'planned' : 'done'
+
+  // Blocks and set rows: add, change, remove and Undo (useExerciseBlocks.ts).
+  // Editing a set the last save complained about takes its mark off, and the
+  // message with it: it no longer describes what's on screen.
+  const blocks = useExerciseBlocks({
+    exercises,
+    setExercises,
+    newRowStatus,
+    onSetChange(setClientId) {
+      if (
+        invalidField?.kind === 'set' &&
+        invalidField.setClientId === setClientId
+      ) {
+        setInvalidField(null)
+        setSaveMessage(null)
+      }
+    },
+  })
 
   // — Autosave (specs/003-durable-logging) —
   // A session still in progress saves itself: a new page, or an edit page
@@ -543,7 +462,7 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
     setRestoredAt(null)
     setSaveMessage(null)
     setInvalidField(null)
-    setRemoval(null)
+    blocks.setRemoval(null)
     setConfirmingFinish(false)
 
     if (action === 'leave') {
@@ -581,72 +500,6 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
   const excludeWorkoutId =
     isEditing && hasValidWorkoutId ? parsedWorkoutId : undefined
 
-  // The search waits for typing to pause (debounce): each keystroke's cleanup
-  // cancels the pending timer, so only the last query of a burst is sent. The
-  // same cleanup marks an in-flight request as stale so a slower response
-  // cannot replace results for a newer query.
-  useEffect(() => {
-    const query = exerciseQuery.trim()
-    let cancelled = false
-
-    async function loadSuggestions() {
-      setExerciseSearchMessage(null)
-
-      try {
-        const response = await searchExercises(query, excludeWorkoutId)
-
-        if (!cancelled) {
-          setExerciseSuggestions(response)
-          setAnsweredExerciseQuery(query)
-        }
-      } catch {
-        if (!cancelled) {
-          setExerciseSuggestions([])
-          setAnsweredExerciseQuery(query)
-          setExerciseSearchMessage(
-            'Exercises could not be loaded. Please try again.',
-          )
-        }
-      }
-    }
-
-    // An emptied box clears at once; there is nothing to wait for.
-    const timer = window.setTimeout(
-      () => {
-        if (query === '') {
-          setExerciseSuggestions([])
-          setAnsweredExerciseQuery('')
-          setExerciseSearchMessage(null)
-        } else {
-          void loadSuggestions()
-        }
-      },
-      query === '' ? 0 : EXERCISE_SEARCH_DELAY_MS,
-    )
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [exerciseQuery, excludeWorkoutId])
-
-  // Typed text the shown answer doesn't cover yet: the debounce is waiting or
-  // the request is in flight.
-  const isExerciseSearchPending = exerciseQuery.trim() !== answeredExerciseQuery
-
-  // The picker sits last in the scrolling column, right above the sticky
-  // footer, so its answers (suggestions or the add-as choice) can open below
-  // the visible area. While the search box has focus, bring them into view;
-  // 'nearest' scrolls no more than it has to, and not at all when they fit.
-  // Keyed on the answer rather than the typed text, so it runs once per
-  // search instead of on every keystroke.
-  const pickerResultCount = exerciseSuggestions.length
-  useEffect(() => {
-    if (answeredExerciseQuery === '') return
-    if (document.activeElement !== searchRef.current) return
-    pickerRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [answeredExerciseQuery, pickerResultCount])
-
   // The finish question replaces the buttons that opened it, so focus would
   // be lost with them: move it to the safe answer, and back to "Finish
   // session" when the question closes without finishing.
@@ -662,16 +515,6 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
     wasConfirmingFinish.current = confirmingFinish
   }, [confirmingFinish, finishAsksTime])
 
-  // Focusing the search box opens the keyboard, which shrinks the visible
-  // area (see useVisualViewportHeight). Once it has settled, scroll the
-  // picker back into view inside the editor's own scroller.
-  function revealPicker() {
-    window.setTimeout(() => {
-      if (document.activeElement !== searchRef.current) return
-      pickerRef.current?.scrollIntoView({ block: 'nearest' })
-    }, 300)
-  }
-
   // Editing a field the last save complained about takes its mark off, and
   // the message with it: it no longer describes what's on screen.
   function updateHeadingField(field: keyof WorkoutHeadingDraft, value: string) {
@@ -680,40 +523,6 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
       setSaveMessage(null)
     }
     setHeading((current) => ({ ...current, [field]: value }))
-  }
-
-  // Any edit to a block ends the Undo offer for a set removed from it: the
-  // block has moved on, so putting the set back could land it somewhere
-  // surprising (the agreed rule: the offer lasts until the next edit there).
-  function changeExercise(
-    clientId: string,
-    change: (exercise: WorkoutExerciseDraft) => WorkoutExerciseDraft,
-  ) {
-    if (removal?.kind === 'set' && removal.exerciseClientId === clientId) {
-      setRemoval(null)
-    }
-    setExercises((current) =>
-      current.map((exercise) =>
-        exercise.clientId === clientId ? change(exercise) : exercise,
-      ),
-    )
-  }
-
-  function changeSet(
-    exerciseClientId: string,
-    setClientId: string,
-    changes: WorkoutSetDraftChanges,
-  ) {
-    if (
-      invalidField?.kind === 'set' &&
-      invalidField.setClientId === setClientId
-    ) {
-      setInvalidField(null)
-      setSaveMessage(null)
-    }
-    changeExercise(exerciseClientId, (exercise) =>
-      updateSetInExercise(exercise, setClientId, changes),
-    )
   }
 
   function isInvalid(field: InvalidField): boolean {
@@ -737,159 +546,6 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
     return isInvalid(field)
       ? { 'aria-invalid': true, 'aria-describedby': SAVE_MESSAGE_ID }
       : {}
-  }
-
-  // "+ Add set" repeats the set above (addSetToExercise) and puts the cursor
-  // in the new row with the copied figure selected: the same set again is
-  // one tap, a heavier one is one tap and the new number. flushSync renders
-  // the row first so it exists to focus, still inside the tap, which is what
-  // lets a phone open its keyboard. A bodyweight block without added weight
-  // has no weight field, so reps it is.
-  function addSet(exercise: WorkoutExerciseDraft) {
-    const setClientId = createClientId()
-    flushSync(() =>
-      changeExercise(exercise.clientId, (current) =>
-        addSetToExercise(current, setClientId, newRowStatus),
-      ),
-    )
-    focusSetEntry(exercise, setClientId)
-  }
-
-  // A set's first field: weight, or reps when the block has no weight field
-  // (bodyweight without added weight). Selected, so a copied figure is typed
-  // over rather than appended to.
-  function focusSetEntry(exercise: WorkoutExerciseDraft, setClientId: string) {
-    const hasWeight = !exercise.isBodyweight || exercise.isAddedWeightEnabled
-    focusInput(setFieldId(setClientId, hasWeight ? 'weight' : 'reps'), true)
-  }
-
-  // Enter moves forward through a block, because a phone's numeric keypad
-  // has no Tab key: weight → reps → the next set's first field. On the
-  // block's last set it closes the keyboard ("done") rather than adding a
-  // set: a ditto row added by a stray Enter after the final set would be
-  // saved as a set nobody did. "+ Add set" stays the one way to add one.
-  function advanceFromSetField(
-    event: KeyboardEvent<HTMLInputElement>,
-    exercise: WorkoutExerciseDraft,
-    setIndex: number,
-    field: 'weight' | 'reps',
-  ) {
-    // isComposing: Enter that confirms an IME composition isn't "next".
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
-    event.preventDefault()
-    const set = exercise.sets[setIndex]
-    if (field === 'weight') {
-      focusInput(setFieldId(set.clientId, 'reps'), true)
-      return
-    }
-    const next = exercise.sets[setIndex + 1]
-    if (next === undefined) {
-      event.currentTarget.blur()
-    } else {
-      focusSetEntry(exercise, next.clientId)
-    }
-  }
-
-  // Removing never loses anything for good: the set or block goes, and an
-  // Undo line takes its place and the focus, so a mis-tap at the rack is one
-  // more tap to reverse.
-  function removeSet(exercise: WorkoutExerciseDraft, set: WorkoutSetDraft) {
-    const index = exercise.sets.findIndex(
-      (candidate) => candidate.clientId === set.clientId,
-    )
-    const figures = describeDraftSet(exercise, set)
-    flushSync(() => {
-      changeExercise(exercise.clientId, (current) =>
-        removeSetFromExercise(current, set.clientId),
-      )
-      setRemoval({
-        kind: 'set',
-        exerciseClientId: exercise.clientId,
-        set,
-        index,
-        description: `Removed set ${index + 1}${figures === '' ? '' : ` · ${figures}`}`,
-      })
-    })
-    document.getElementById(UNDO_BUTTON_ID)?.focus()
-  }
-
-  function removeExercise(exercise: WorkoutExerciseDraft) {
-    const index = exercises.findIndex(
-      (candidate) => candidate.clientId === exercise.clientId,
-    )
-    const setCount = exercise.sets.length
-    flushSync(() => {
-      setExercises((current) =>
-        current.filter((candidate) => candidate.clientId !== exercise.clientId),
-      )
-      setRemoval({
-        kind: 'exercise',
-        exercise,
-        index,
-        description: `Removed ${exercise.exerciseName} and its ${setCount === 1 ? 'set' : `${setCount} sets`}`,
-      })
-    })
-    document.getElementById(UNDO_BUTTON_ID)?.focus()
-  }
-
-  // Puts the removed set or block back at its old position (clamped, if the
-  // list has since shrunk) and returns focus to what came back.
-  function undoRemoval() {
-    if (removal === null) return
-    const restored = removal
-    flushSync(() => {
-      setRemoval(null)
-      if (restored.kind === 'set') {
-        setExercises((current) =>
-          current.map((exercise) =>
-            exercise.clientId === restored.exerciseClientId
-              ? restoreSetToExercise(exercise, restored.set, restored.index)
-              : exercise,
-          ),
-        )
-      } else {
-        setExercises((current) => {
-          const next = [...current]
-          next.splice(
-            Math.min(restored.index, next.length),
-            0,
-            restored.exercise,
-          )
-          return next
-        })
-      }
-    })
-    if (restored.kind === 'set') {
-      const weightId = setFieldId(restored.set.clientId, 'weight')
-      focusInput(
-        document.getElementById(weightId) === null
-          ? setFieldId(restored.set.clientId, 'reps')
-          : weightId,
-      )
-    } else {
-      document
-        .getElementById(`remove-block-${restored.exercise.clientId}`)
-        ?.focus()
-    }
-  }
-
-  // The Undo line, drawn where the removed item was. The button carries the
-  // description, so focus landing on it says what Undo would bring back.
-  function renderUndo(className: string) {
-    if (removal === null) return null
-    return (
-      <p className={`new-workout-undo ${className}`}>
-        <span id={`${UNDO_BUTTON_ID}-text`}>{removal.description}.</span>
-        <button
-          id={UNDO_BUTTON_ID}
-          type="button"
-          aria-describedby={`${UNDO_BUTTON_ID}-text`}
-          onClick={undoRemoval}
-        >
-          Undo
-        </button>
-      </p>
-    )
   }
 
   // A failed save marks the field it's about and moves focus there, opening
@@ -950,32 +606,11 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
       newRowStatus,
     )
 
-    addExerciseBlock(draft)
+    blocks.addExerciseBlock(draft)
   }
 
-  // A new block ends the Undo offer for a removed block, whose position
-  // would otherwise be ambiguous.
-  // Focus goes straight to the new block's first set, still inside the tap
-  // that picked it (flushSync renders the row first), so the keyboard opens
-  // on the figure to log. With "last time" written in, that figure is
-  // selected: the same set again is one tap away, a new one is typed over it.
-  function addExerciseBlock(draft: WorkoutExerciseDraft) {
-    if (removal?.kind === 'exercise') setRemoval(null)
-    flushSync(() => {
-      setExercises((current) => [...current, draft])
-      clearExercisePicker()
-    })
-    focusSetEntry(draft, draft.sets[0].clientId)
-  }
-
-  // There is deliberately no standalone create-exercise endpoint. A name with
-  // no exact match becomes an exercise when the workout bulk write is saved.
-  function selectNewExercise(isBodyweight: boolean) {
-    const name = exerciseQuery.trim()
-    if (name === '') {
-      return
-    }
-
+  // A name not in the index: it becomes an exercise when the page is saved.
+  function selectNewExercise(name: string, isBodyweight: boolean) {
     const draft = createWorkoutExerciseDraft(
       createClientId(),
       createClientId(),
@@ -987,25 +622,7 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
       newRowStatus,
     )
 
-    addExerciseBlock(draft)
-  }
-
-  function clearExercisePicker() {
-    setExerciseQuery('')
-    setExerciseSuggestions([])
-    setAnsweredExerciseQuery('')
-    setExerciseSearchMessage(null)
-  }
-
-  function setAddedWeightEnabled(clientId: string, enabled: boolean) {
-    changeExercise(clientId, (exercise) => ({
-      ...exercise,
-      isAddedWeightEnabled: enabled,
-      // Turning the field off also clears hidden values so they cannot be saved.
-      sets: enabled
-        ? exercise.sets
-        : exercise.sets.map((set) => ({ ...set, weight: '' })),
-    }))
+    blocks.addExerciseBlock(draft)
   }
 
   // — Saving —
@@ -1642,7 +1259,7 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
     setIsPlanning(isPlan)
     setIsInProgress(!isPlan && draft.endTime === '')
     setRestoredAt(null)
-    setRemoval(null)
+    blocks.setRemoval(null)
     setInvalidField(null)
     setLastSavedAt(null)
     setPageProblem(null)
@@ -1650,25 +1267,6 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
     scheduler.resume()
   }
 
-  // The add-as choice appears once a search has answered and stays put while
-  // the next one runs, so it doesn't blink on every keystroke. Its buttons
-  // only work once the answer covers exactly what is typed: until then an
-  // existing exercise with that name may not be in the list yet, and adding
-  // would create a duplicate. It names the answered query, so it also stays
-  // hidden while that one is an exact match — "Add Back squat" must not show
-  // for a moment after typing past "Back squat".
-  const isExactExerciseMatch = (name: string) =>
-    exerciseSuggestions.some(
-      (exercise) =>
-        normalizeExerciseName(exercise.name) === normalizeExerciseName(name),
-    )
-  const showCreateExerciseChoice =
-    exerciseQuery.trim() !== '' &&
-    answeredExerciseQuery !== '' &&
-    exerciseSearchMessage === null &&
-    !isExactExerciseMatch(exerciseQuery) &&
-    !isExactExerciseMatch(answeredExerciseQuery)
-  const canCreateExercise = showCreateExerciseChoice && !isExerciseSearchPending
   const isSaving = savingAction !== null
   // Shown on the folded heading line only when the account allows it.
   const summaryTitle = detailsAllowed ? heading.title.trim() : ''
@@ -2058,378 +1656,34 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
                 </p>
               )}
 
-              {exercises.map((exercise, exerciseIndex) => (
-                <Fragment key={exercise.clientId}>
-                  {removal?.kind === 'exercise' &&
-                    removal.index === exerciseIndex &&
-                    renderUndo('new-workout-undo-block')}
-                  <article className="new-workout-exercise">
-                    <div className="new-workout-exercise-heading">
-                      <div>
-                        <h3>{exercise.exerciseName}</h3>
-                        <span className="new-workout-exercise-kind">
-                          {exercise.isBodyweight ? 'bodyweight' : 'kg'}
-                        </span>
-                        {/* The paper log's habit of glancing at last week's
-                            line before loading the bar. */}
-                        {exercise.lastSet != null && (
-                          <p className="new-workout-last">
-                            last time{' '}
-                            <span className="num">
-                              {formatLastSet(
-                                exercise.lastSet,
-                                exercise.isBodyweight,
-                              )}
-                            </span>
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        id={`remove-block-${exercise.clientId}`}
-                        className="btn btn-ghost new-workout-remove-exercise"
-                        type="button"
-                        onClick={() => removeExercise(exercise)}
-                      >
-                        Remove
-                      </button>
-                    </div>
+              <ExerciseBlockList
+                exercises={exercises}
+                blocks={blocks}
+                invalidProps={(setClientId, field) =>
+                  invalidProps({ kind: 'set', setClientId, field })
+                }
+                done={
+                  isPlanning
+                    ? undefined
+                    : {
+                        nextSetClientId: nextSet?.setClientId ?? null,
+                        note: setNote,
+                        // Released, a set goes back to planned, or to
+                        // skipped on a finished page (toggleSetDone).
+                        onToggle: (exercise, set) =>
+                          blocks.changeSet(exercise.clientId, set.clientId, {
+                            status: toggleSetDone(set.status, !isInProgress),
+                          }),
+                      }
+                }
+              />
 
-                    {exercise.isBodyweight && (
-                      <button
-                        className="btn btn-secondary new-workout-added-weight"
-                        type="button"
-                        aria-pressed={exercise.isAddedWeightEnabled}
-                        onClick={() =>
-                          setAddedWeightEnabled(
-                            exercise.clientId,
-                            !exercise.isAddedWeightEnabled,
-                          )
-                        }
-                      >
-                        {exercise.isAddedWeightEnabled
-                          ? 'Use bodyweight only'
-                          : 'Add extra weight'}
-                      </button>
-                    )}
-
-                    {/* has-done adds the Done column. A plan has none: its
-                        sets are all still to do, so its rows keep the plain
-                        layout and solid fields (docs/ui/README.md → Plan). */}
-                    <div
-                      className={`new-workout-sets${isPlanning ? '' : ' has-done'}`}
-                    >
-                      {/* One column header per block instead of a caption on
-                          every row. Hidden from screen readers: each input
-                          already names its exercise, set and column. */}
-                      <div
-                        className="new-workout-set-columns"
-                        aria-hidden="true"
-                      >
-                        <span></span>
-                        <span>
-                          {!exercise.isBodyweight
-                            ? 'Weight'
-                            : exercise.isAddedWeightEnabled
-                              ? 'Added kg'
-                              : 'Load'}
-                        </span>
-                        <span>Reps</span>
-                      </div>
-                      {exercise.sets.map((set, setIndex) => (
-                        <Fragment key={set.clientId}>
-                          {removal?.kind === 'set' &&
-                            removal.exerciseClientId === exercise.clientId &&
-                            removal.index === setIndex &&
-                            renderUndo('new-workout-undo-set')}
-                          <div
-                            className={`new-workout-set${set.status === 'done' || isPlanning ? '' : ' is-not-done'}`}
-                          >
-                            <span className="new-workout-set-number num">
-                              {setIndex + 1}
-                            </span>
-
-                            {exercise.isBodyweight &&
-                            !exercise.isAddedWeightEnabled ? (
-                              <span className="new-workout-bodyweight-load">
-                                Bodyweight
-                              </span>
-                            ) : (
-                              <input
-                                className="input num"
-                                id={setFieldId(set.clientId, 'weight')}
-                                type="text"
-                                inputMode="decimal"
-                                enterKeyHint="next"
-                                aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, weight`}
-                                {...invalidProps({
-                                  kind: 'set',
-                                  setClientId: set.clientId,
-                                  field: 'weight',
-                                })}
-                                {...selectOnFocusProps}
-                                value={set.weight}
-                                onChange={(event) =>
-                                  changeSet(exercise.clientId, set.clientId, {
-                                    weight: event.target.value,
-                                  })
-                                }
-                                onKeyDown={(event) =>
-                                  advanceFromSetField(
-                                    event,
-                                    exercise,
-                                    setIndex,
-                                    'weight',
-                                  )
-                                }
-                              />
-                            )}
-
-                            <input
-                              className="input num"
-                              id={setFieldId(set.clientId, 'reps')}
-                              type="text"
-                              inputMode="numeric"
-                              enterKeyHint={
-                                setIndex === exercise.sets.length - 1
-                                  ? 'done'
-                                  : 'next'
-                              }
-                              aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, reps`}
-                              {...invalidProps({
-                                kind: 'set',
-                                setClientId: set.clientId,
-                                field: 'reps',
-                              })}
-                              {...selectOnFocusProps}
-                              value={set.reps}
-                              onChange={(event) =>
-                                changeSet(exercise.clientId, set.clientId, {
-                                  reps: event.target.value,
-                                })
-                              }
-                              onKeyDown={(event) =>
-                                advanceFromSetField(
-                                  event,
-                                  exercise,
-                                  setIndex,
-                                  'reps',
-                                )
-                              }
-                            />
-
-                            {/* A switch with one name: "Warm-up", pressed or
-                                not. A label that flipped between "Working"
-                                and "Warm-up" would make a screen reader
-                                announce the opposite of its state. */}
-                            <button
-                              className="new-workout-set-kind"
-                              type="button"
-                              aria-pressed={set.isWarmup}
-                              onClick={() =>
-                                changeSet(exercise.clientId, set.clientId, {
-                                  isWarmup: !set.isWarmup,
-                                })
-                              }
-                            >
-                              Warm-up
-                            </button>
-
-                            <button
-                              className="new-workout-remove-set"
-                              type="button"
-                              aria-label={`Remove ${exercise.exerciseName} set ${setIndex + 1}`}
-                              disabled={exercise.sets.length === 1}
-                              onClick={() => removeSet(exercise, set)}
-                            >
-                              ×
-                            </button>
-
-                            {/* Done (specs/006): last, under the thumb, so the
-                                destructive × is never the end of the row. A
-                                round switch where Warm-up is a rectangular
-                                tag, and not by colour alone: a filled disc
-                                with a check when done, a hollow circle
-                                reading "Done" when not. One name, pressed or
-                                not, like Warm-up. Released, a set goes back
-                                to planned, or to skipped on a finished page
-                                (toggleSetDone). Marking one done saves at
-                                once (useWorkoutAutosave). Not on a plan:
-                                nothing can be done before the session
-                                starts. */}
-                            {!isPlanning && (
-                              <button
-                                className={`new-workout-set-done${nextSet?.setClientId === set.clientId ? ' is-next' : ''}${set.status === 'skipped' ? ' is-skipped' : ''}`}
-                                type="button"
-                                aria-pressed={set.status === 'done'}
-                                aria-label="Done"
-                                aria-describedby={
-                                  setNote(set) === null
-                                    ? undefined
-                                    : `${set.clientId}-note`
-                                }
-                                onClick={() =>
-                                  changeSet(exercise.clientId, set.clientId, {
-                                    status: toggleSetDone(
-                                      set.status,
-                                      !isInProgress,
-                                    ),
-                                  })
-                                }
-                              >
-                                {set.status === 'done' ? (
-                                  <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 20 20"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2.2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    aria-hidden="true"
-                                  >
-                                    <path d="M4 10.5l4 4 8-9" />
-                                  </svg>
-                                ) : (
-                                  'Done'
-                                )}
-                              </button>
-                            )}
-                          </div>
-                          {setNote(set) !== null && (
-                            <p
-                              id={`${set.clientId}-note`}
-                              className={`new-workout-set-note${nextSet?.setClientId === set.clientId ? ' is-next' : ''}`}
-                            >
-                              {setNote(set)}
-                            </p>
-                          )}
-                        </Fragment>
-                      ))}
-                      {removal?.kind === 'set' &&
-                        removal.exerciseClientId === exercise.clientId &&
-                        removal.index >= exercise.sets.length &&
-                        renderUndo('new-workout-undo-set')}
-                    </div>
-
-                    <button
-                      className="btn btn-ghost new-workout-add-set"
-                      type="button"
-                      onClick={() => addSet(exercise)}
-                    >
-                      + Add set
-                    </button>
-                  </article>
-                </Fragment>
-              ))}
-              {removal?.kind === 'exercise' &&
-                removal.index >= exercises.length &&
-                renderUndo('new-workout-undo-block')}
-
-              <div className="field exercise-picker" ref={pickerRef}>
-                <label className="label" htmlFor="exercise-search">
-                  Add exercise
-                </label>
-                <input
-                  className="input"
-                  id="exercise-search"
-                  ref={searchRef}
-                  type="search"
-                  autoComplete="off"
-                  placeholder="Search or enter a new exercise"
-                  value={exerciseQuery}
-                  onChange={(event) => setExerciseQuery(event.target.value)}
-                  onFocus={revealPicker}
-                />
-
-                {/* Only the first search after an empty box says so; later
-                    ones keep the previous answer on screen while they run. */}
-                {isExerciseSearchPending && answeredExerciseQuery === '' && (
-                  <p className="muted exercise-search-status" role="status">
-                    Searching exercises…
-                  </p>
-                )}
-
-                {exerciseSearchMessage !== null && (
-                  <p
-                    className="form-message exercise-search-status"
-                    role="alert"
-                  >
-                    {exerciseSearchMessage}
-                  </p>
-                )}
-
-                {exerciseQuery.trim() !== '' &&
-                  exerciseSearchMessage === null &&
-                  exerciseSuggestions.length > 0 && (
-                    <ul
-                      className="exercise-suggestions"
-                      aria-label="Exercise suggestions"
-                    >
-                      {exerciseSuggestions.map((exercise) => (
-                        <li key={exercise.id}>
-                          <button
-                            className="exercise-suggestion"
-                            type="button"
-                            onClick={() => selectExercise(exercise)}
-                          >
-                            <span className="exercise-suggestion-name">
-                              {exercise.name}
-                            </span>
-                            <span className="exercise-suggestion-kind">
-                              {exercise.isBodyweight ? 'bodyweight' : 'kg'}
-                            </span>
-                            <span className="exercise-suggestion-last">
-                              {describeLastSet(exercise)}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                {/* Existing names come first and the add-as choice last, so a
-                    near-miss like "Taka" offers "Takakyykky" before inviting a
-                    typo'd duplicate. The wording says which case this is,
-                    for the query the list answers. */}
-                {showCreateExerciseChoice && (
-                  <div className="new-exercise-choice">
-                    <p>
-                      {exerciseSuggestions.length > 0 ? (
-                        <>
-                          Not in the list? Add{' '}
-                          <strong>{answeredExerciseQuery}</strong> as a new
-                          exercise:
-                        </>
-                      ) : (
-                        <>
-                          No exercise called{' '}
-                          <strong>{answeredExerciseQuery}</strong> yet. Add it
-                          as:
-                        </>
-                      )}
-                    </p>
-                    <div>
-                      <button
-                        className="btn btn-secondary"
-                        type="button"
-                        disabled={!canCreateExercise}
-                        onClick={() => selectNewExercise(false)}
-                      >
-                        Loaded (kg)
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        type="button"
-                        disabled={!canCreateExercise}
-                        onClick={() => selectNewExercise(true)}
-                      >
-                        Bodyweight
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ExercisePicker
+                inputRef={searchRef}
+                excludeWorkoutId={excludeWorkoutId}
+                onSelect={selectExercise}
+                onSelectNew={selectNewExercise}
+              />
             </section>
           </div>
 
