@@ -275,12 +275,12 @@ public class OptionalDetailsConsentTests(PrivacyEnabledGymNotebookFactory factor
         Assert.Null(after.StartedAt);
     }
 
-    // specs/006 research R8: a page prepared from a template takes the template's name as
-    // its title only when the account may store optional details.
+    // specs/006 research R8: a session started from a template takes the template's name
+    // as its title only when the account may store optional details.
     [Theory]
     [InlineData(false, null)]
     [InlineData(true, "Push A")]
-    public async Task Prepare_FromTemplate_TitleFollowsConsent(bool consented, string? expectedTitle)
+    public async Task Start_FromTemplate_TitleFollowsConsent(bool consented, string? expectedTitle)
     {
         // Arrange
         var (client, _) = await OptionalDetailsTestData.CreateAccountAsync(factory, consentVersion: consented ? CurrentVersion : null);
@@ -289,9 +289,10 @@ public class OptionalDetailsConsentTests(PrivacyEnabledGymNotebookFactory factor
         var template = await created.Content.ReadFromJsonAsync<TemplateDetailResponse>();
 
         // Act
-        var response = await client.PostAsync($"/templates/{template!.Id}/prepare", null);
+        var response = await client.PostAsJsonAsync($"/templates/{template!.Id}/start",
+            new StartFromTemplateRequest(new DateOnly(2026, 10, 15), DateTimeOffset.UtcNow));
 
-        // Assert: without consent the page is still prepared, just without a title.
+        // Assert: without consent the session still starts, just without a title.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var page = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
         Assert.Equal(expectedTitle, page!.Title);

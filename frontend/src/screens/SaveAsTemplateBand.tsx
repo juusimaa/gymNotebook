@@ -7,27 +7,20 @@ import {
 } from './templateDraft'
 import './SaveAsTemplateBand.css'
 
-// What a save handed to the band ended as. 'stopped' means the screen found
-// a problem of its own before any template was written (a plan that doesn't
-// validate yet) and has already said so where the problem is; the band then
-// just lets the name be tried again.
-export type SaveAsTemplateOutcome = 'saved' | 'stopped'
-
 interface SaveAsTemplateBandProps {
   // The page title, or '' without one: the name the field starts with.
   initialName: string
   // Writes the template. A thrown ApiError is the band's to explain: a 409
   // template_name_taken at the field, anything else on one line.
-  onSave: (name: string) => Promise<SaveAsTemplateOutcome>
+  onSave: (name: string) => Promise<void>
   // Cancel or Close. The screen hides the band and puts focus back on the
   // button that opened it.
   onClose: () => void
 }
 
 // Save as template (specs/006 US4, docs/ui/README.md → session page): an
-// inline band under the header, not a modal, shared by the session page and
-// a plan in the editor. It asks only for a name; what gets copied is the
-// screen's business, through onSave.
+// inline band under the header, not a modal. It asks only for a name; what
+// gets copied is the screen's business, through onSave.
 export function SaveAsTemplateBand({
   initialName,
   onSave,
@@ -64,9 +57,9 @@ export function SaveAsTemplateBand({
     setNameMessage(null)
     setSaveMessage(null)
     try {
-      const outcome = await onSave(trimmed)
+      await onSave(trimmed)
       setIsSaving(false)
-      if (outcome === 'saved') setSavedName(trimmed)
+      setSavedName(trimmed)
     } catch (error: unknown) {
       setIsSaving(false)
       if (

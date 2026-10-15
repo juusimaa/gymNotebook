@@ -1,6 +1,5 @@
 import type { ExerciseResponse } from '../api/exercises'
 import type {
-  CreatePreparedWorkoutRequest,
   CreateWorkoutRequest,
   PutWorkoutExercisesRequest,
   SetStatus,
@@ -174,8 +173,8 @@ export type WorkoutSetDraftChanges = Partial<
 
 // Every factory below takes the new row's status. A row added while logging
 // starts done (research R14, owner Q5): logging as you go costs no extra tap,
-// on any page in progress, prepared or not. Only a page being written ahead,
-// before it starts, adds planned rows; that mode passes 'planned'.
+// on any page in progress, started from a template or not. Only the template
+// editor, whose rows are never lifted, passes 'planned'.
 export function createEmptySetDraft(
   clientId: string,
   status: SetStatus = 'done',
@@ -552,10 +551,12 @@ type PrepareHeadingResult<T> =
     }
 
 // The heading's optional details: the texts trimmed to null, bodyweight as a
-// number. A plan's whole heading (specs/006), since it has no date or start.
+// number.
 function prepareHeadingDetails(
   heading: WorkoutHeadingDraft,
-): PrepareHeadingResult<CreatePreparedWorkoutRequest> {
+): PrepareHeadingResult<
+  Pick<CreateWorkoutRequest, 'title' | 'bodyweightKg' | 'location' | 'notes'>
+> {
   let bodyweightKg: number | null = null
   if (heading.bodyweightKg.trim() !== '') {
     bodyweightKg = parseNonNegativeDecimal(heading.bodyweightKg)
@@ -667,64 +668,8 @@ export function prepareWorkoutDraft(
   }
 }
 
-// A plan (specs/006) as Save plan and Start session send it: the heading
-// without a date or start, which a plan doesn't have yet, and the blocks as
-// strictly as prepareWorkoutDraft takes them, since a planned set needs its
-// reps (and weight, by the usual rule) like any other (Q3). Every set goes as
-// planned, whatever the row holds: a prepared page holds nothing else
-// (research R3), and the server would refuse the save otherwise.
-export interface PreparedPlanDraft {
-  workout: CreatePreparedWorkoutRequest
-  exercises: PutWorkoutExercisesRequest
-}
-
-export type PreparePlanDraftResult =
-  | { ok: true; value: PreparedPlanDraft }
-  | { ok: false; at: DraftFieldRef; message: string }
-
-export function preparePlanDraft(
-  heading: WorkoutHeadingDraft,
-  exerciseDrafts: WorkoutExerciseDraft[],
-): PreparePlanDraftResult {
-  const workout = prepareHeadingDetails(heading)
-  if (!workout.ok) {
-    return workout
-  }
-
-  const exercises = prepareExerciseInputs(exerciseDrafts)
-  if (!exercises.ok) {
-    return exercises
-  }
-
-  return {
-    ok: true,
-    value: {
-      workout: workout.value,
-      exercises: {
-        exercises: exercises.value.map((exercise) => ({
-          ...exercise,
-          sets: exercise.sets.map((set) => ({ ...set, status: 'planned' })),
-        })),
-      },
-    },
-  }
-}
-
-// The heading a new plan starts from: everything empty. Unlike a new page it
-// has no date or start time to default to "now"; Start session gives it both.
-export function createPlanHeadingDraft(): WorkoutHeadingDraft {
-  return {
-    date: '',
-    startTime: '',
-    title: '',
-    bodyweightKg: '',
-    location: '',
-    notes: '',
-  }
-}
-
-// What Start sends: the local calendar day of the tap, and the tap as an
-// instant. Local getters, as in createInitialHeadingDraft: a session started
+// What starting from a template sends: the local calendar day of the tap, and
+// the tap as an instant. Local getters, as in createInitialHeadingDraft: a session started
 // at 23.50 belongs to that evening's date, not to the UTC one.
 export function createStartTimes(now: Date): {
   date: string

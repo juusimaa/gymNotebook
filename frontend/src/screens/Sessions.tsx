@@ -1,16 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ApiError } from '../api/client'
-import {
-  ALREADY_STARTED,
-  listPreparedWorkouts,
-  listWorkouts,
-  startWorkout,
-  type PreparedWorkoutSummaryResponse,
-  type WorkoutSummaryResponse,
-} from '../api/workouts'
+import { listWorkouts, type WorkoutSummaryResponse } from '../api/workouts'
 import {
   listTemplates,
-  prepareFromTemplate,
+  startFromTemplate,
   type TemplateSummaryResponse,
 } from '../api/templates'
 import { Link, useNavigate } from 'react-router'
@@ -45,42 +38,39 @@ export default function Sessions() {
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [earlierMessage, setEarlierMessage] = useState<string | null>(null)
 
-  // The Planned group (specs/006): pages written ahead, not started yet. Its
-  // own failure stays inside the group, so a hiccup there never hides the
-  // history below it. null is "not loaded", as with workouts.
-  const [plans, setPlans] = useState<PreparedWorkoutSummaryResponse[] | null>(
-    null,
-  )
-  const [plansMessage, setPlansMessage] = useState<string | null>(null)
-  // The plan whose Start is on its way, and what went wrong with the last one.
-  const [startingPlanId, setStartingPlanId] = useState<number | null>(null)
-  const [startMessage, setStartMessage] = useState<string | null>(null)
-  // The templates the chooser offers (specs/006 SC-007: a plan from a
-  // template is three taps from the cover). Loaded with the lists, so the
+  // The templates the chooser offers (specs/006 SC-007: a session from a
+  // template is three taps from the cover). Loaded with the history, so the
   // chooser opens complete; null with templatesFailed false is "loading".
-  // A failure only costs the chooser its templates: a blank page and All
-  // templates still work.
+  // A failure only costs the chooser its templates: All templates and a new
+  // page still work.
   const [templates, setTemplates] = useState<TemplateSummaryResponse[] | null>(
     null,
   )
   const [templatesFailed, setTemplatesFailed] = useState(false)
-  // The template a plan is being made from, and what went wrong last time.
-  const [planningFromId, setPlanningFromId] = useState<number | null>(null)
+  // The template a session is being started from, and what went wrong last
+  // time.
+  const [startingFromId, setStartingFromId] = useState<number | null>(null)
   const [chooserMessage, setChooserMessage] = useState<string | null>(null)
   const navigate = useNavigate()
 
-  // "Plan a session" opens a small chooser above the footer rather than a
-  // modal. Opening it moves focus to its first choice; closing it (Close or
-  // Escape) hands focus back to the button that opened it.
-  const [choosingPlan, setChoosingPlan] = useState(false)
-  const planButtonRef = useRef<HTMLButtonElement>(null)
-  const firstChoiceRef = useRef<HTMLAnchorElement>(null)
-  const wasChoosingPlan = useRef(false)
+  // "From template" opens a small chooser above the footer rather than a
+  // modal. Opening it moves focus to its first template, or to All templates
+  // when there is none; closing it (Close or Escape) hands focus back to the
+  // button that opened it.
+  const [choosingTemplate, setChoosingTemplate] = useState(false)
+  const chooserButtonRef = useRef<HTMLButtonElement>(null)
+  const firstTemplateRef = useRef<HTMLButtonElement>(null)
+  const allTemplatesRef = useRef<HTMLAnchorElement>(null)
+  const wasChoosingTemplate = useRef(false)
   useEffect(() => {
-    if (choosingPlan) firstChoiceRef.current?.focus()
-    else if (wasChoosingPlan.current) planButtonRef.current?.focus()
-    wasChoosingPlan.current = choosingPlan
-  }, [choosingPlan])
+    if (choosingTemplate) {
+      const first = firstTemplateRef.current ?? allTemplatesRef.current
+      first?.focus()
+    } else if (wasChoosingTemplate.current) {
+      chooserButtonRef.current?.focus()
+    }
+    wasChoosingTemplate.current = choosingTemplate
+  }, [choosingTemplate])
 
   // Effects cannot themselves be async because their return value is reserved
   // for cleanup, so the request lives in an inner function and is launched below.
@@ -91,10 +81,9 @@ export default function Sessions() {
       setMessage(null)
 
       // Both lists at once. allSettled rather than all: each answer is used
-      // on its own, so a failed plan list still shows the history.
-      const [history, prepared, templateList] = await Promise.allSettled([
+      // on its own, so a failed template list still shows the history.
+      const [history, templateList] = await Promise.allSettled([
         listWorkouts(PAGE_SIZE),
-        listPreparedWorkouts(),
         listTemplates(),
       ])
 
@@ -110,14 +99,6 @@ export default function Sessions() {
         setHasEarlierPages(history.value.length === PAGE_SIZE)
       } else {
         setMessage('The notebook could not be opened. Please try again.')
-      }
-
-      if (prepared.status === 'fulfilled') {
-        setPlans(prepared.value)
-        setPlansMessage(null)
-      } else {
-        setPlans(null)
-        setPlansMessage('Your planned sessions could not be loaded.')
       }
 
       if (templateList.status === 'fulfilled') {
@@ -145,77 +126,41 @@ export default function Sessions() {
   }
 
   // Reloads both lists in place, without the full-screen loading state: after
-  // a Start that found its plan already started or gone, the lists on screen
-  // are out of date, but there is no reason to blank them.
+  // a template turned out to be gone, the chooser is out of date, but there
+  // is no reason to blank the history.
   function refresh() {
     setLoadAttempt((attempt) => attempt + 1)
   }
 
-  // Start on a Planned row (specs/006): starts the session at once, with the
-  // local date and this moment, and opens it in the editor, in progress. The
-  // row has no revision to send, so none is: a plan changed elsewhere since
-  // is still a plan, and starts as it now is.
-  async function startPlan(plan: PreparedWorkoutSummaryResponse) {
-    if (startingPlanId !== null) {
+  // A template picked in the chooser (specs/006): the server copies it into
+  // a new session started now, with the local date and this moment, which
+  // opens in the editor in progress, every set waiting to be ticked off.
+  async function startSessionFrom(template: TemplateSummaryResponse) {
+    if (startingFromId !== null) {
       return
     }
 
-    setStartingPlanId(plan.id)
-    setStartMessage(null)
-    const { date, startedAt } = createStartTimes(new Date())
-
-    try {
-      await startWorkout(plan.id, date, startedAt)
-      void navigate(`/workouts/${plan.id}/edit`)
-    } catch (error: unknown) {
-      setStartingPlanId(null)
-      const name = plan.title ?? 'That plan'
-      if (
-        error instanceof ApiError &&
-        error.status === 409 &&
-        error.code === ALREADY_STARTED
-      ) {
-        // Started elsewhere meanwhile: it now belongs under Logged.
-        setStartMessage(
-          `${name} had already been started. It is under Logged now.`,
-        )
-        refresh()
-      } else if (error instanceof ApiError && error.status === 404) {
-        setStartMessage(`${name} no longer exists.`)
-        refresh()
-      } else {
-        setStartMessage('The session could not be started. Please try again.')
-      }
-    }
-  }
-
-  // A template picked in the chooser: the server copies it into a new plan,
-  // which opens in the editor, as the template editor's Plan a session does.
-  async function planFromTemplate(template: TemplateSummaryResponse) {
-    if (planningFromId !== null) {
-      return
-    }
-
-    setPlanningFromId(template.id)
+    setStartingFromId(template.id)
     setChooserMessage(null)
+    const { date, startedAt } = createStartTimes(new Date())
     try {
-      const plan = await prepareFromTemplate(template.id)
-      void navigate(`/workouts/${plan.id}/edit`)
+      const session = await startFromTemplate(template.id, date, startedAt)
+      void navigate(`/workouts/${session.id}/edit`)
     } catch (error: unknown) {
-      setPlanningFromId(null)
+      setStartingFromId(null)
       if (error instanceof ApiError && error.status === 404) {
         // Deleted on another device: the chooser's list is out of date.
         setChooserMessage(`${template.name} no longer exists.`)
         refresh()
       } else {
-        setChooserMessage('The plan could not be made. Please try again.')
+        setChooserMessage('The session could not be started. Please try again.')
       }
     }
   }
 
   function closeChooserOnEscape(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {
-      setChoosingPlan(false)
+      setChoosingTemplate(false)
     }
   }
 
@@ -299,92 +244,6 @@ export default function Sessions() {
       )}
 
       <div className="sessions-list">
-        {/* The Planned group (specs/006, docs/ui/README.md → Planned group).
-            Not dated, so the history below stays one flat list (rule 1).
-            The Templates link shares the label line. */}
-        <section className="sessions-group" aria-labelledby="planned-title">
-          <div className="sessions-group-heading">
-            <h2 id="planned-title" className="kicker sessions-group-label">
-              Planned
-            </h2>
-            <Link
-              className="header-link sessions-templates-link"
-              to="/templates"
-            >
-              Templates
-            </Link>
-          </div>
-          {startMessage !== null && (
-            <p className="form-message sessions-start-message" role="alert">
-              {startMessage}
-            </p>
-          )}
-          {plansMessage !== null ? (
-            <div className="sessions-plans-error">
-              <p className="form-message" role="alert">
-                {plansMessage}
-              </p>
-              <button className="btn btn-ghost" type="button" onClick={refresh}>
-                Try again
-              </button>
-            </div>
-          ) : plans === null ? (
-            <p className="sessions-plans-empty">Opening plans…</p>
-          ) : plans.length === 0 ? (
-            <p className="sessions-plans-empty">
-              Nothing planned. Use Plan a session to set one up ahead.
-            </p>
-          ) : (
-            plans.map((plan) => {
-              const title = plan.title ?? 'Untitled plan'
-              const isStarting = startingPlanId === plan.id
-              return (
-                // The row opens the plan in the editor; Start sits beside
-                // it, never inside it, as Continue logging does below.
-                <div className="plan-entry" key={plan.id}>
-                  <Link
-                    className="session-row plan-row"
-                    to={`/workouts/${plan.id}/edit`}
-                  >
-                    <span className="plan-marker">Plan</span>
-                    <div className="session-content">
-                      <h3
-                        className={
-                          plan.title === null ? 'is-untitled' : undefined
-                        }
-                      >
-                        {title}
-                      </h3>
-                      <p className="session-exercises">
-                        {plan.exerciseNames.length === 0
-                          ? 'No exercises yet'
-                          : plan.exerciseNames.join(' · ')}
-                      </p>
-                      <p className="session-meta num">
-                        {formatCount(plan.exerciseCount, 'exercise')} ·{' '}
-                        {formatCount(plan.setCount, 'set')}
-                      </p>
-                    </div>
-                  </Link>
-                  <button
-                    className="btn btn-secondary plan-start"
-                    type="button"
-                    aria-label={`Start ${plan.title ?? 'untitled plan'}`}
-                    disabled={startingPlanId !== null}
-                    aria-busy={isStarting}
-                    onClick={() => void startPlan(plan)}
-                  >
-                    {isStarting ? 'Starting…' : 'Start'}
-                  </button>
-                </div>
-              )
-            })
-          )}
-        </section>
-
-        <h2 className="kicker sessions-group-label sessions-logged-label">
-          Logged
-        </h2>
         {workouts.length === 0 ? (
           <p className="sessions-empty">
             No sessions logged yet. Start a new page when you’re ready.
@@ -492,75 +351,79 @@ export default function Sessions() {
       </div>
 
       <footer className="sessions-action">
-        {choosingPlan && (
+        {choosingTemplate && (
           <div
-            className="plan-chooser"
-            id="plan-chooser"
+            className="template-chooser"
+            id="template-chooser"
             role="group"
-            aria-labelledby="plan-chooser-title"
+            aria-labelledby="template-chooser-title"
             onKeyDown={closeChooserOnEscape}
           >
-            <p id="plan-chooser-title" className="kicker">
-              Plan a session from
+            <p id="template-chooser-title" className="kicker">
+              Start a session from
             </p>
-            <Link
-              ref={firstChoiceRef}
-              className="plan-chooser-choice"
-              to="/workouts/prepare"
-            >
-              A blank page
-            </Link>
-            {/* The templates by name, so a plan from one is three taps from
-                the cover (SC-007): Open the notebook, Plan a session, the
-                template. Buttons, not links: picking one makes a plan. */}
-            {templates?.map((template) => (
+            {/* The templates by name, so a session from one is three taps
+                from the cover (SC-007): Open the notebook, From template,
+                the template. Buttons, not links: picking one starts it. */}
+            {templates?.map((template, index) => (
               <button
                 key={template.id}
-                className="plan-chooser-choice plan-chooser-template"
+                ref={index === 0 ? firstTemplateRef : undefined}
+                className="template-chooser-choice"
                 type="button"
-                disabled={planningFromId !== null}
-                aria-busy={planningFromId === template.id}
-                onClick={() => void planFromTemplate(template)}
+                disabled={startingFromId !== null}
+                aria-busy={startingFromId === template.id}
+                onClick={() => void startSessionFrom(template)}
               >
-                <span className="plan-chooser-name">
-                  {planningFromId === template.id
-                    ? `Planning ${template.name}…`
+                <span className="template-chooser-name">
+                  {startingFromId === template.id
+                    ? `Starting ${template.name}…`
                     : template.name}
                 </span>
-                <span className="plan-chooser-summary">
+                <span className="template-chooser-summary">
                   {template.exerciseNames.join(' · ')}
                 </span>
               </button>
             ))}
+            {templates?.length === 0 && (
+              <p className="template-chooser-note">
+                No templates yet. Write one under All templates, or save a
+                session page as one.
+              </p>
+            )}
             {templatesFailed && (
-              <p className="plan-chooser-note">
+              <p className="template-chooser-note">
                 Your templates could not be loaded.
               </p>
             )}
             {chooserMessage !== null && (
-              <p className="form-message plan-chooser-note" role="alert">
+              <p className="form-message template-chooser-note" role="alert">
                 {chooserMessage}
               </p>
             )}
-            <div className="plan-chooser-actions">
-              <Link className="header-link" to="/templates">
+            <div className="template-chooser-actions">
+              <Link
+                ref={allTemplatesRef}
+                className="header-link"
+                to="/templates"
+              >
                 All templates
               </Link>
-              <button type="button" onClick={() => setChoosingPlan(false)}>
+              <button type="button" onClick={() => setChoosingTemplate(false)}>
                 Close
               </button>
             </div>
           </div>
         )}
         <button
-          ref={planButtonRef}
+          ref={chooserButtonRef}
           className="btn btn-secondary"
           type="button"
-          aria-expanded={choosingPlan}
-          aria-controls={choosingPlan ? 'plan-chooser' : undefined}
-          onClick={() => setChoosingPlan((open) => !open)}
+          aria-expanded={choosingTemplate}
+          aria-controls={choosingTemplate ? 'template-chooser' : undefined}
+          onClick={() => setChoosingTemplate((open) => !open)}
         >
-          Plan a session
+          From template
         </button>
         <Link className="btn btn-primary" to="/workouts/new">
           Start a new page

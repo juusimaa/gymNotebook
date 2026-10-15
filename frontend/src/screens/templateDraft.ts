@@ -53,9 +53,9 @@ export type PrepareTemplateDraftResult =
   | { ok: true; value: SaveTemplateRequest }
   | { ok: false; at: DraftFieldRef | { area: 'name' }; message: string }
 
-// What Save sends, or the first thing that stops it. As strict as a plan's
-// Save plan: every set needs its reps, and its weight unless bodyweight, so a
-// session planned from the template is ready to start.
+// What Save sends, or the first thing that stops it. As strict as a page's
+// Save changes: every set needs its reps, and its weight unless bodyweight, so
+// a session started from the template is ready to tick off.
 export function prepareTemplateDraft(
   draft: TemplateDraft,
 ): PrepareTemplateDraftResult {

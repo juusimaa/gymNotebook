@@ -33,15 +33,29 @@
   list-style: none;
 }
 
+.templates-start-message {
+  margin: var(--space-2) 0 0;
+}
+
+/* A template row and its Start share one rule underneath, like an
+   in-progress session row and its Continue logging. */
+.template-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--color-divider);
+}
+
 /* A template has no date, so its row is one column: the name in the heading
    face, as a session's title, then the exercises and the counts. */
 .template-row {
   display: block;
+  min-width: 0;
   min-height: var(--hit-target);
   padding: 16px 0;
   color: var(--color-text);
   text-decoration: none;
-  border-bottom: 1px solid var(--color-divider);
 }
 
 .template-row:hover {
@@ -51,6 +65,12 @@
 .template-row:focus-visible {
   outline: 2px solid var(--color-accent-700);
   outline-offset: 3px;
+}
+
+.template-start {
+  min-width: 68px;
+  padding-inline: 14px;
+  font-size: 15px;
 }
 
 .template-row h2 {

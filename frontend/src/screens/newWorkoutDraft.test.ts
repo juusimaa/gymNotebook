@@ -6,7 +6,6 @@ import {
   createExistingWorkoutDraft,
   createInitialHeadingDraft,
   createLocalEndedAt,
-  createPlanHeadingDraft,
   createStartTimes,
   createWorkoutExerciseDraft,
   describeDraftSet,
@@ -19,7 +18,6 @@ import {
   hasOptionalDetails,
   needsExplicitFinishTime,
   prepareAutosaveDraft,
-  preparePlanDraft,
   prepareWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
@@ -1170,8 +1168,8 @@ describe('set status', () => {
     ])
   })
 
-  // Research R14 (owner Q5): rows added while logging start done; only a page
-  // written ahead (prepare mode) asks for planned rows.
+  // Research R14 (owner Q5): rows added while logging start done; only the
+  // template editor, whose rows are never lifted, asks for planned rows.
   it('starts new rows done unless the mode asks for planned', () => {
     // Arrange
     const logged = createWorkoutExerciseDraft('b', 's', 42, 'Squat', false)
@@ -1299,129 +1297,8 @@ describe('set status', () => {
   })
 })
 
-// Prepare mode (specs/006 PR 7): a plan has no date or start, and its rows
-// start planned.
-describe('plan drafts', () => {
-  function plannedSquat(): WorkoutExerciseDraft {
-    const exercise = createWorkoutExerciseDraft(
-      'block-1',
-      'set-1',
-      42,
-      'Back Squat',
-      false,
-      null,
-      null,
-      'planned',
-    )
-    exercise.sets[0].weight = '100'
-    exercise.sets[0].reps = '5'
-    return exercise
-  }
-
-  it('createPlanHeadingDraft_NewPlan_HasNoDateOrStart', () => {
-    // Act
-    const heading = createPlanHeadingDraft()
-
-    // Assert
-    expect(heading).toEqual({
-      date: '',
-      startTime: '',
-      title: '',
-      bodyweightKg: '',
-      location: '',
-      notes: '',
-    })
-  })
-
-  it('addSetToExercise_PlanRow_StartsPlanned', () => {
-    // Act
-    const exercise = addSetToExercise(plannedSquat(), 'set-2', 'planned')
-
-    // Assert
-    expect(exercise.sets.map((set) => set.status)).toEqual([
-      'planned',
-      'planned',
-    ])
-  })
-
-  it('preparePlanDraft_ValidPlan_SendsHeadingWithoutDateAndPlannedSets', () => {
-    // Arrange
-    const heading = {
-      ...createPlanHeadingDraft(),
-      title: ' Push A ',
-      notes: 'Go light',
-    }
-
-    // Act
-    const result = preparePlanDraft(heading, [plannedSquat()])
-
-    // Assert
-    expect(result).toEqual({
-      ok: true,
-      value: {
-        workout: {
-          title: 'Push A',
-          bodyweightKg: null,
-          location: null,
-          notes: 'Go light',
-        },
-        exercises: {
-          exercises: [
-            {
-              exerciseName: 'Back Squat',
-              sets: [
-                { weight: 100, reps: 5, isWarmup: false, status: 'planned' },
-              ],
-            },
-          ],
-        },
-      },
-    })
-  })
-
-  it('preparePlanDraft_RowNotPlanned_SendsItAsPlanned', () => {
-    // Arrange: a plan holds only planned sets (research R3).
-    const exercise = plannedSquat()
-    exercise.sets[0].status = 'done'
-
-    // Act
-    const result = preparePlanDraft(createPlanHeadingDraft(), [exercise])
-
-    // Assert
-    expect(
-      result.ok && result.value.exercises.exercises[0].sets[0].status,
-    ).toBe('planned')
-  })
-
-  it('preparePlanDraft_RowWithoutReps_PointsAtIt', () => {
-    // Arrange: a planned set needs its reps like any other (Q3).
-    const exercise = plannedSquat()
-    exercise.sets[0].reps = ''
-
-    // Act
-    const result = preparePlanDraft(createPlanHeadingDraft(), [exercise])
-
-    // Assert
-    expect(result).toEqual({
-      ok: false,
-      at: { area: 'set', exerciseIndex: 0, setIndex: 0, field: 'reps' },
-      message:
-        'Back Squat, set 1: reps must be a whole number greater than zero.',
-    })
-  })
-
-  it('preparePlanDraft_NoExercises_AsksForOne', () => {
-    // Act
-    const result = preparePlanDraft(createPlanHeadingDraft(), [])
-
-    // Assert
-    expect(result).toEqual({
-      ok: false,
-      at: { area: 'exercises' },
-      message: 'Add at least one exercise.',
-    })
-  })
-
+// What starting a session from a template sends (specs/006).
+describe('start times', () => {
   it('createStartTimes_LateEvening_UsesLocalDate', () => {
     // Arrange: late enough that the UTC date may already be the next day.
     const now = new Date(2026, 9, 15, 23, 50)

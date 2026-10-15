@@ -95,8 +95,7 @@
   gap: 10px;
 }
 
-.session-heading h3,
-.plan-row h3 {
+.session-heading h3 {
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -173,7 +172,7 @@
 
 /* The rows scroll inside the page above, so these actions stay aligned to the
    centred column and remain reachable without covering the final row. Two
-   of them (specs/006): the secondary Plan a session, and the primary Start a
+   of them (specs/006): the secondary From template, and the primary Start a
    new page, which outranks it by weight and a little more width. */
 .sessions-action {
   position: absolute;
@@ -197,96 +196,9 @@
   font-size: 17px;
 }
 
-/* — The Planned group (specs/006) — */
-
-/* "Planned" and "Logged": the two group labels, small caps like a kicker. */
-.sessions-group-label {
-  display: flex;
-  align-items: center;
-  min-height: var(--hit-target);
-  margin: 6px 0 0;
-  font-family: var(--font-body);
-  font-weight: 400;
-  letter-spacing: 0.22em;
-}
-
-/* The Planned label line also holds the Templates link, at its right. */
-.sessions-group-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 6px;
-}
-
-.sessions-group-heading .sessions-group-label {
-  margin: 0;
-}
-
-.sessions-templates-link {
-  font-size: 13px;
-}
-
-.sessions-logged-label {
-  margin-top: 22px;
-}
-
-.sessions-plans-empty {
-  margin: 0;
-  padding-bottom: 14px;
-  color: var(--color-neutral-700);
-  font-size: 14px;
-  line-height: 1.55;
-  border-bottom: 1px solid var(--color-divider);
-}
-
-.sessions-plans-error {
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--color-divider);
-}
-
-.sessions-plans-error .form-message,
-.sessions-start-message {
-  margin: 0 0 var(--space-2);
-}
-
-/* A plan row and its Start share one rule underneath, like an in-progress
-   row and its Continue logging. The row link keeps the 56px numeral column,
-   where "Plan" stands in for a date. */
-.plan-entry {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  border-bottom: 1px solid var(--color-divider);
-}
-
-.plan-row {
-  padding: 12px 0;
-  border-bottom: 0;
-}
-
-.plan-marker {
-  padding-top: 5px;
-  color: var(--color-neutral-700);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-align: right;
-  text-transform: uppercase;
-}
-
-.plan-row h3.is-untitled {
-  color: var(--color-neutral-700);
-}
-
-.plan-start {
-  min-width: 68px;
-  padding-inline: 14px;
-  font-size: 15px;
-}
-
-/* "Plan a session from": an inline chooser standing just above the footer,
+/* "Start a session from": an inline chooser standing just above the footer,
    not a modal, so the list stays in view behind it. */
-.plan-chooser {
+.template-chooser {
   position: absolute;
   right: 22px;
   bottom: calc(100% - 2px);
@@ -298,24 +210,15 @@
   box-shadow: var(--shadow-md);
 }
 
-.plan-chooser .kicker {
+.template-chooser .kicker {
   margin: 0 0 2px;
   letter-spacing: 0.22em;
 }
 
-.plan-chooser-choice {
-  display: flex;
-  align-items: center;
-  min-height: 48px;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-  font-size: 18px;
-  border-bottom: 1px solid var(--color-divider);
-}
-
-/* A template choice: its name as a choice reads, its exercises under it in
+/* A template choice: its name in the heading face, its exercises under it in
    one cut-off line, so a long routine doesn't grow the chooser. */
-.plan-chooser-template {
+.template-chooser-choice {
+  display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
@@ -324,6 +227,9 @@
   min-height: 52px;
   padding: 4px 0;
   cursor: pointer;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-size: 18px;
   text-align: left;
   background: none;
   border-width: 0 0 1px;
@@ -331,11 +237,11 @@
   border-color: var(--color-divider);
 }
 
-.plan-chooser-template:disabled {
+.template-chooser-choice:disabled {
   cursor: default;
 }
 
-.plan-chooser-summary {
+.template-chooser-summary {
   max-width: 100%;
   overflow: hidden;
   color: var(--color-neutral-700);
@@ -345,36 +251,36 @@
   white-space: nowrap;
 }
 
-.plan-chooser-note {
+.template-chooser-note {
   margin: var(--space-2) 0 0;
   color: var(--color-neutral-700);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.plan-chooser-note.form-message {
+.template-chooser-note.form-message {
   color: var(--color-error);
 }
 
-.plan-chooser-choice:focus-visible,
-.plan-chooser-actions a:focus-visible,
-.plan-chooser-actions button:focus-visible {
+.template-chooser-choice:focus-visible,
+.template-chooser-actions a:focus-visible,
+.template-chooser-actions button:focus-visible {
   outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
 }
 
-.plan-chooser-actions {
+.template-chooser-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.plan-chooser-actions a {
+.template-chooser-actions a {
   justify-content: flex-start;
   font-size: 13px;
 }
 
-.plan-chooser-actions button {
+.template-chooser-actions button {
   min-width: var(--hit-target);
   min-height: var(--hit-target);
   padding: 0;

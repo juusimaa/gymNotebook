@@ -2007,7 +2007,7 @@ workouts.MapPost("/{id:int}/template", async (int id, SaveAsTemplateRequest requ
    .Produces(StatusCodes.Status404NotFound);
 
 // Templates (specs/006 user story 4): named routines, edited at home with an explicit
-// save and copied into prepared pages. A copy is never linked to its template, so later
+// save and copied into new sessions. A copy is never linked to its template, so later
 // changes to either side never reach the other (research R8). No revision: the last
 // save wins (research R9).
 var templates = app.MapGroup("/templates").RequireAuthorization().RequireAccountLifecycle();
@@ -2145,7 +2145,7 @@ templates.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbCon
 {
     var userId = ParseUserId(caller);
 
-    // Blocks and sets go by the database cascade. Pages prepared from it are untouched:
+    // Blocks and sets go by the database cascade. Pages started from it are untouched:
     // nothing links them to it.
     var deleted = await db.Templates.Where(t => t.Id == id && t.UserId == userId).ExecuteDeleteAsync(ct);
 
@@ -2153,11 +2153,11 @@ templates.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbCon
 })
    .WithName("DeleteTemplate")
    .WithSummary("Deletes a template")
-   .WithDescription("Deletes one of the caller's templates. Pages prepared from it stay.")
+   .WithDescription("Deletes one of the caller's templates. Pages started from it stay.")
    .Produces(StatusCodes.Status204NoContent)
    .Produces(StatusCodes.Status404NotFound);
 
-templates.MapPost("/{id:int}/prepare", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+templates.MapPost("/{id:int}/start", async (int id, StartFromTemplateRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
     var userId = ParseUserId(caller);
     var template = await db.Templates
@@ -2171,21 +2171,31 @@ templates.MapPost("/{id:int}/prepare", async (int id, ClaimsPrincipal caller, Ap
         return Results.NotFound();
     }
 
+    if (request.Date is null || request.StartedAt is null)
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
     // The page's title is an optional detail, the template's name isn't. So the same
-    // consent check as POST /workouts/prepared decides whether the name may become the
-    // title. Without consent the page simply has no title rather than a 403: the lifter
-    // asked for a page, not a title (research R8).
+    // consent check as POST /workouts decides whether the name may become the title.
+    // Without consent the page simply has no title rather than a 403: the lifter asked
+    // for a session, not a title (research R8).
     var decision = await OptionalDetails.DecideAsync(db, userId, privacyLifecycleEnabled,
         template.Name, bodyweightKg: null, location: null, notes: null, ct);
 
+    // Started at once, with the client's local day and the moment of the tap, as
+    // POST /workouts does; normalized to UTC for timestamptz.
     var workout = new Workout
     {
         UserId = userId,
+        Date = request.Date.Value,
+        StartedAt = request.StartedAt.Value.ToUniversalTime(),
         Title = decision == OptionalDetailsDecision.Store ? template.Name : null,
     };
 
-    // Every set planned: a prepared page holds nothing lifted yet. Built through the
-    // downward navigations, so one save writes the page, its blocks and its sets.
+    // Every set planned: nothing on the page has been lifted yet, and ticking each one
+    // done is the lifter's job (an in-progress page allows planned and done). Built
+    // through the downward navigations, so one save writes the page, its blocks and sets.
     foreach (var block in template.Exercises.OrderBy(te => te.Position))
     {
         workout.WorkoutExercises.Add(new WorkoutExercise
@@ -2213,10 +2223,11 @@ templates.MapPost("/{id:int}/prepare", async (int id, ClaimsPrincipal caller, Ap
         workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, await GetWorkoutExercisesAsync(db, workout.Id, ct));
     return Results.Created($"/workouts/{workout.Id}", response);
 })
-   .WithName("PrepareFromTemplate")
-   .WithSummary("Prepares a page from a template")
-   .WithDescription("Creates a new prepared page holding a copy of the template's blocks and sets, all planned. Its title is the template name, or none when the privacy feature is on and the account lacks optional-details consent.")
+   .WithName("StartFromTemplate")
+   .WithSummary("Starts a session from a template")
+   .WithDescription("Creates a new in-progress page dated and started at the given local date and instant, holding a copy of the template's blocks and sets, all planned, to be ticked off as done. Its title is the template name, or none when the privacy feature is on and the account lacks optional-details consent. 400 invalid_request when date or startedAt is missing.")
    .Produces<WorkoutDetailResponse>(StatusCodes.Status201Created)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status404NotFound);
 
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
