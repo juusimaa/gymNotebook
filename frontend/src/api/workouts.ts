@@ -18,7 +18,6 @@ export interface SetEntryResponse {
 
 // Where a set stands in its session (specs/006). Only 'done' counts as training;
 // 'planned' is written ahead, 'skipped' was still planned when the page finished.
-// The editor doesn't send a status yet, so the server stores 'done' as before.
 export type SetStatus = 'planned' | 'done' | 'skipped'
 
 // One exercise block within a workout. This id identifies the block appearance;
@@ -96,10 +95,14 @@ export interface PutWorkoutExerciseInput {
 
 // Weight is null for an unloaded bodyweight set. Set number is intentionally absent:
 // the backend assigns it from this array's order rather than trusting the client.
+// Status may be omitted (the server then uses the page's default: planned on a
+// prepared page, done otherwise); the editor always sends it. One the page's state
+// doesn't allow is refused with 400 invalid_set_status (specs/006 research R3).
 export interface PutSetInput {
   weight: number | null
   reps: number
   isWarmup: boolean
+  status?: SetStatus
 }
 
 // The compact row returned by GET /workouts. It contains everything the sessions

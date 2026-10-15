@@ -38,7 +38,10 @@ import {
 const KEY_PREFIX = 'gymnotebook.draft.'
 
 // Bumped when the stored shape changes; a copy with another version is dropped
-// rather than migrated, since it lives no longer than a tab.
+// rather than migrated, since it lives no longer than a tab. Not bumped for the
+// set status (specs/006): a copy written before it is read with every set done,
+// which is what those sets were, so a half-logged page survives the deploy
+// instead of being thrown away.
 const STORAGE_VERSION = 1
 
 export type EditorDraftRoute =
@@ -120,11 +123,19 @@ function isHeading(value: unknown): value is WorkoutHeadingDraft {
   )
 }
 
-function isSet(value: unknown): value is WorkoutSetDraft {
+const SET_STATUSES: readonly unknown[] = ['planned', 'done', 'skipped']
+
+// A set as stored. status may be missing on a copy from before it existed
+// (see STORAGE_VERSION); withSetStatus fills it in after the checks.
+type StoredSet = Omit<WorkoutSetDraft, 'status'> &
+  Partial<Pick<WorkoutSetDraft, 'status'>>
+
+function isSet(value: unknown): value is StoredSet {
   return (
     isRecord(value) &&
     hasStrings(value, ['clientId', 'weight', 'reps']) &&
-    typeof value.isWarmup === 'boolean'
+    typeof value.isWarmup === 'boolean' &&
+    (value.status === undefined || SET_STATUSES.includes(value.status))
   )
 }
 
@@ -175,6 +186,21 @@ function isStoredDraft(value: unknown): value is StoredEditorDraft {
   )
 }
 
+// A stored set without a status was written before sets had one, when every
+// set was a set lifted: it reads as done.
+function withSetStatus(draft: StoredEditorDraft): StoredEditorDraft {
+  return {
+    ...draft,
+    exercises: draft.exercises.map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set: StoredSet) => ({
+        ...set,
+        status: set.status ?? 'done',
+      })),
+    })),
+  }
+}
+
 // Parses one stored value. Null for anything absent, malformed or from another
 // version; ownership is the caller's question.
 export function parseStoredEditorDraft(
@@ -185,7 +211,7 @@ export function parseStoredEditorDraft(
   }
   try {
     const value: unknown = JSON.parse(raw)
-    return isStoredDraft(value) ? value : null
+    return isStoredDraft(value) ? withSetStatus(value) : null
   } catch {
     return null
   }
@@ -209,6 +235,7 @@ export function draftFingerprint(content: EditorDraftContent): string {
         weight: set.weight,
         reps: set.reps,
         isWarmup: set.isWarmup,
+        status: set.status,
       })),
     })),
   })

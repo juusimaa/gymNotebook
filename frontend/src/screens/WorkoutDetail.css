@@ -157,7 +157,8 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
-.workout-detail-sets li.is-warmup {
+/* Warm-ups, and sets not done (specs/006), recede: neither counts. */
+.workout-detail-sets li.is-demoted {
   color: var(--color-neutral-700);
 }
 

@@ -4,6 +4,7 @@ import { ApiError } from '../api/client'
 import {
   deleteWorkout,
   getWorkout,
+  type SetEntryResponse,
   type WorkoutDetailResponse,
 } from '../api/workouts'
 import {
@@ -252,7 +253,11 @@ export default function WorkoutDetail() {
                 <ol className="workout-detail-sets">
                   {exercise.sets.map((set) => (
                     <li
-                      className={set.isWarmup ? 'is-warmup' : undefined}
+                      className={
+                        set.isWarmup || set.status !== 'done'
+                          ? 'is-demoted'
+                          : undefined
+                      }
                       key={set.id}
                     >
                       <span className="workout-detail-set-number num">
@@ -265,10 +270,18 @@ export default function WorkoutDetail() {
                           set.reps,
                         )}
                       </span>
-                      {/* Only warm-ups are tagged: a working set is the
-                          default, and tagging every row made the tag noise. */}
-                      {set.isWarmup && (
-                        <span className="workout-detail-set-tag">warm-up</span>
+                      {/* Only exceptions are tagged: a done working set is
+                          the default, and tagging every row made the tag
+                          noise. A set not done (specs/006) is demoted like a
+                          warm-up and never counts toward the best above:
+                          "skipped" on a finished page, "to do" while the
+                          session is still going. Its status outranks the
+                          warm-up tag, since that is what decides whether it
+                          happened. */}
+                      {setTag(set) !== null && (
+                        <span className="workout-detail-set-tag">
+                          {setTag(set)}
+                        </span>
                       )}
                     </li>
                   ))}
@@ -303,6 +316,13 @@ export default function WorkoutDetail() {
       )}
     </main>
   )
+}
+
+// The one tag a set row carries, if any.
+function setTag(set: SetEntryResponse): string | null {
+  if (set.status === 'skipped') return 'skipped'
+  if (set.status === 'planned') return 'to do'
+  return set.isWarmup ? 'warm-up' : null
 }
 
 // What tearing out the page destroys, counted, since a destructive action

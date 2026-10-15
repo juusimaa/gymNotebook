@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addSetToExercise,
+  countNotDone,
   createEmptySetDraft,
   createExistingWorkoutDraft,
   createInitialHeadingDraft,
@@ -12,15 +13,18 @@ import {
   describeUnsavedSets,
   dropOptionalDetails,
   findIncompleteSet,
+  findNextSet,
   hasOptionalDetails,
   needsExplicitFinishTime,
   prepareAutosaveDraft,
   prepareWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
+  toggleSetDone,
   updateSetInExercise,
   withLastTime,
   type WorkoutExerciseDraft,
+  type WorkoutSetDraft,
 } from './newWorkoutDraft'
 
 function createTwoSetExercise() {
@@ -119,6 +123,7 @@ describe('createExistingWorkoutDraft', () => {
               weight: '10',
               reps: '5',
               isWarmup: false,
+              status: 'done',
             },
           ],
         },
@@ -182,6 +187,7 @@ describe('createEmptySetDraft', () => {
       weight: '',
       reps: '',
       isWarmup: false,
+      status: 'done',
     })
   })
 })
@@ -209,6 +215,7 @@ describe('createWorkoutExerciseDraft', () => {
           weight: '',
           reps: '',
           isWarmup: false,
+          status: 'done',
         },
       ],
     })
@@ -236,6 +243,7 @@ describe('createWorkoutExerciseDraft', () => {
           weight: '',
           reps: '',
           isWarmup: false,
+          status: 'done',
         },
       ],
     })
@@ -276,7 +284,13 @@ describe('createWorkoutExerciseDraft', () => {
     )
 
     expect(draft.sets).toEqual([
-      { clientId: 's', weight: '92.5', reps: '5', isWarmup: false },
+      {
+        clientId: 's',
+        weight: '92.5',
+        reps: '5',
+        isWarmup: false,
+        status: 'done',
+      },
     ])
     expect(draft.isAddedWeightEnabled).toBe(false)
   })
@@ -339,7 +353,13 @@ describe('createWorkoutExerciseDraft', () => {
     )
 
     expect(draft.sets).toEqual([
-      { clientId: 's', weight: '60', reps: '10', isWarmup: true },
+      {
+        clientId: 's',
+        weight: '60',
+        reps: '10',
+        isWarmup: true,
+        status: 'done',
+      },
     ])
     // The "last time" line still names the working set.
     expect(draft.lastSet).toEqual({ weight: 100, reps: 5, isWarmup: false })
@@ -357,7 +377,13 @@ describe('createWorkoutExerciseDraft', () => {
     )
 
     expect(draft.sets).toEqual([
-      { clientId: 's', weight: '100', reps: '5', isWarmup: false },
+      {
+        clientId: 's',
+        weight: '100',
+        reps: '5',
+        isWarmup: false,
+        status: 'done',
+      },
     ])
   })
 
@@ -385,7 +411,13 @@ describe('set draft operations', () => {
     }
 
     expect(addSetToExercise(empty, 'set-1').sets).toEqual([
-      { clientId: 'set-1', weight: '', reps: '', isWarmup: false },
+      {
+        clientId: 'set-1',
+        weight: '',
+        reps: '',
+        isWarmup: false,
+        status: 'done',
+      },
     ])
   })
 
@@ -405,6 +437,7 @@ describe('set draft operations', () => {
       weight: '60',
       reps: '5',
       isWarmup: false,
+      status: 'done',
     })
     expect(result.sets[1]).toBe(filled.sets[1])
     expect(filled.sets).toHaveLength(2)
@@ -453,12 +486,14 @@ describe('set draft operations', () => {
         weight: '',
         reps: '',
         isWarmup: false,
+        status: 'done',
       },
       {
         clientId: 'set-2',
         weight: '',
         reps: '',
         isWarmup: false,
+        status: 'done',
       },
     ])
     expect(original.sets).toHaveLength(1)
@@ -481,12 +516,14 @@ describe('set draft operations', () => {
         weight: '',
         reps: '',
         isWarmup: false,
+        status: 'done',
       },
       {
         clientId: 'set-2',
         weight: '100',
         reps: '5',
         isWarmup: true,
+        status: 'done',
       },
     ])
     expect(original.sets[1]).toEqual({
@@ -494,6 +531,7 @@ describe('set draft operations', () => {
       weight: '',
       reps: '',
       isWarmup: false,
+      status: 'done',
     })
   })
 
@@ -510,6 +548,7 @@ describe('set draft operations', () => {
         weight: '',
         reps: '',
         isWarmup: false,
+        status: 'done',
       },
     ])
     expect(original.sets.map((set) => set.clientId)).toEqual(['set-1', 'set-2'])
@@ -550,7 +589,7 @@ describe('prepareWorkoutDraft', () => {
           exercises: [
             {
               exerciseName: 'Back Squat',
-              sets: [{ weight: 90, reps: 3, isWarmup: false }],
+              sets: [{ weight: 90, reps: 3, isWarmup: false, status: 'done' }],
             },
           ],
         },
@@ -818,7 +857,13 @@ function loadedBlock(
     isBodyweight: false,
     isAddedWeightEnabled: false,
     sets: [
-      { clientId: `${clientId}-1`, weight: '100', reps: '5', isWarmup: false },
+      {
+        clientId: `${clientId}-1`,
+        weight: '100',
+        reps: '5',
+        isWarmup: false,
+        status: 'done',
+      },
     ],
   }
 }
@@ -873,6 +918,7 @@ function typedBlock(
       weight,
       reps,
       isWarmup: false,
+      status: 'done',
     })),
   }
 }
@@ -1045,5 +1091,207 @@ describe('describeUnsavedSets', () => {
 
     // Assert
     expect(unsaved).toEqual([])
+  })
+})
+
+// specs/006: where each set stands (planned, done, skipped).
+describe('set status', () => {
+  // A block whose sets carry the given statuses, all with complete figures.
+  function blockWith(
+    clientId: string,
+    statuses: WorkoutSetDraft['status'][],
+  ): WorkoutExerciseDraft {
+    return {
+      ...typedBlock(clientId, []),
+      sets: statuses.map((status, index) => ({
+        clientId: `${clientId}-${index + 1}`,
+        weight: '100',
+        reps: '5',
+        isWarmup: false,
+        status,
+      })),
+    }
+  }
+
+  it('reads each set status from the server page', () => {
+    // Arrange
+    const workout = {
+      id: 12,
+      revision: 3,
+      date: '2026-10-15',
+      startedAt: new Date(2026, 9, 15, 7, 15).toISOString(),
+      endedAt: null,
+      title: null,
+      bodyweightKg: null,
+      location: null,
+      notes: null,
+      exercises: [
+        {
+          id: 20,
+          exerciseId: 42,
+          exerciseName: 'Back Squat',
+          isBodyweight: false,
+          sets: [
+            {
+              id: 21,
+              setNumber: 1,
+              reps: 5,
+              weight: 100,
+              isWarmup: false,
+              status: 'done' as const,
+            },
+            {
+              id: 22,
+              setNumber: 2,
+              reps: 5,
+              weight: 100,
+              isWarmup: false,
+              status: 'planned' as const,
+            },
+          ],
+        },
+      ],
+    }
+    let nextId = 0
+
+    // Act
+    const draft = createExistingWorkoutDraft(
+      workout,
+      () => `client-${(nextId += 1)}`,
+    )
+
+    // Assert
+    expect(draft.exercises[0].sets.map((set) => set.status)).toEqual([
+      'done',
+      'planned',
+    ])
+  })
+
+  // Research R14 (owner Q5): rows added while logging start done; only a page
+  // written ahead (prepare mode) asks for planned rows.
+  it('starts new rows done unless the mode asks for planned', () => {
+    // Arrange
+    const logged = createWorkoutExerciseDraft('b', 's', 42, 'Squat', false)
+    const prepared = createWorkoutExerciseDraft(
+      'b',
+      's',
+      42,
+      'Squat',
+      false,
+      { weight: 100, reps: 5, isWarmup: false },
+      null,
+      'planned',
+    )
+
+    // Act
+    const loggedAdded = addSetToExercise(logged, 's2')
+    const preparedAdded = addSetToExercise(prepared, 's2', 'planned')
+
+    // Assert
+    expect(createEmptySetDraft('s').status).toBe('done')
+    expect(loggedAdded.sets.map((set) => set.status)).toEqual(['done', 'done'])
+    expect(preparedAdded.sets.map((set) => set.status)).toEqual([
+      'planned',
+      'planned',
+    ])
+  })
+
+  // "Add set" is the ditto mark for figures, not for status: below a planned
+  // row, the new row is a set lifted now.
+  it('copies the figures but starts the added set done', () => {
+    // Arrange
+    const block = blockWith('b', ['planned'])
+
+    // Act
+    const result = addSetToExercise(block, 'b-2')
+
+    // Assert
+    expect(result.sets[1]).toEqual({
+      clientId: 'b-2',
+      weight: '100',
+      reps: '5',
+      isWarmup: false,
+      status: 'done',
+    })
+  })
+
+  // SC-003: weight and reps stay editable after done.
+  it('keeps a done set done when its figures change', () => {
+    // Arrange
+    const block = blockWith('b', ['done'])
+
+    // Act
+    const result = updateSetInExercise(block, 'b-1', {
+      weight: '102.5',
+      reps: '4',
+    })
+
+    // Assert
+    expect(result.sets[0]).toMatchObject({
+      weight: '102.5',
+      reps: '4',
+      status: 'done',
+    })
+  })
+
+  it('toggles planned and done while the session is in progress', () => {
+    expect(toggleSetDone('planned', false)).toBe('done')
+    expect(toggleSetDone('done', false)).toBe('planned')
+  })
+
+  // FR-010a: a forgotten tap is fixed on the finished page.
+  it('toggles skipped and done on a finished page', () => {
+    expect(toggleSetDone('skipped', true)).toBe('done')
+    expect(toggleSetDone('done', true)).toBe('skipped')
+  })
+
+  it('sends each set status in the strict save and the autosave', () => {
+    // Arrange
+    const heading = createInitialHeadingDraft(new Date(2026, 9, 15, 7, 15))
+    const exercises = [blockWith('Squat', ['done', 'planned'])]
+
+    // Act
+    const strict = prepareWorkoutDraft(heading, exercises)
+    const autosave = prepareAutosaveDraft(heading, exercises)
+
+    // Assert
+    const statusesOf = (result: typeof strict | typeof autosave) =>
+      result.ok
+        ? result.value.exercises.exercises[0].sets.map((set) => set.status)
+        : null
+    expect(statusesOf(strict)).toEqual(['done', 'planned'])
+    expect(statusesOf(autosave)).toEqual(['done', 'planned'])
+  })
+
+  it('finds the first planned set in page order as next', () => {
+    // Arrange
+    const exercises = [
+      blockWith('a', ['done', 'done']),
+      blockWith('b', ['done', 'planned', 'planned']),
+    ]
+
+    // Act
+    const next = findNextSet(exercises)
+
+    // Assert
+    expect(next).toEqual({ exerciseClientId: 'b', setClientId: 'b-2' })
+  })
+
+  it('has no next set when nothing is planned', () => {
+    expect(findNextSet([blockWith('a', ['done', 'skipped'])])).toBeNull()
+  })
+
+  it('counts every set not done for the finish summary', () => {
+    // Arrange
+    const exercises = [
+      blockWith('a', ['done', 'planned']),
+      blockWith('b', ['planned', 'skipped', 'done']),
+    ]
+
+    // Act
+    const count = countNotDone(exercises)
+
+    // Assert
+    expect(count).toBe(3)
   })
 })

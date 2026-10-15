@@ -134,12 +134,13 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ### Frontend (PR 7, after T003)
 
-- [ ] T060 [US1] `frontend/src/screens/newWorkoutDraft.ts`:
+- [x] T060 [US1] `frontend/src/screens/newWorkoutDraft.ts`:
   - add `status: 'planned' | 'done' | 'skipped'` to `WorkoutSetDraft`
   - `createExistingWorkoutDraft` reads it, and new rows get `'planned'` in prepare mode and `'done'` otherwise (Q5)
   - `prepareWorkoutDraft` and `prepareAutosaveDraft` send `status`
-- [ ] T061 [US1] `frontend/src/screens/editorDraftStorage.ts`: a stored set without `status` reads as `'done'`, so a pre-deploy draft survives. Keep `STORAGE_VERSION = 1` and comment why.
-- [ ] T062 [P] [US1] Vitest in `frontend/src/screens/newWorkoutDraft.test.ts` and `editorDraftStorage.test.ts`:
+  - PR 6: the row factories (`createEmptySetDraft`, `createWorkoutExerciseDraft`, `addSetToExercise`) take the new row's status, default `'done'`; prepare mode (T063, PR 7) passes `'planned'`.
+- [x] T061 [US1] `frontend/src/screens/editorDraftStorage.ts`: a stored set without `status` reads as `'done'`, so a pre-deploy draft survives. Keep `STORAGE_VERSION = 1` and comment why.
+- [x] T062 [P] [US1] Vitest in `frontend/src/screens/newWorkoutDraft.test.ts` and `editorDraftStorage.test.ts`:
   - status defaults per mode
   - status is sent in both payloads
   - a legacy stored row reads as done
@@ -188,23 +189,23 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 ### Frontend (PR 6 and PR 7, after T003)
 
 - [ ] T068 [US2] `startWorkout(id, date, startedAt, expectedRevision)` in `frontend/src/api/workouts.ts`.
-- [ ] T069 [US2] `frontend/src/screens/newWorkoutDraft.ts`:
+- [x] T069 [US2] `frontend/src/screens/newWorkoutDraft.ts`:
   - `findNextSet(draft)`: the first planned set in page order
   - `countNotDone(draft)` for the finish summary
   - Vitest in `newWorkoutDraft.test.ts`
-- [ ] T070 [US2] **PR 6** `frontend/src/screens/NewWorkout.tsx` (+ `NewWorkout.css`), in-progress mode:
+- [x] T070 [US2] **PR 6** `frontend/src/screens/NewWorkout.tsx` (+ `NewWorkout.css`), in-progress mode:
   - a done toggle per set row: 44px, `aria-pressed`, named "Done", distinct from Warm-up, not colour-only
   - toggling triggers an immediate save like a completed row (`saveScheduler`)
   - the **next** marker on `findNextSet`
   - planned rows visually distinct from done
-- [ ] T071 [US2] **PR 6** `NewWorkout.tsx` finish confirmation: when `countNotDone > 0`, name them ("2 planned sets will be kept as skipped.") before **Confirm finish**.
-- [ ] T072 [US2] **PR 6** `frontend/src/screens/WorkoutDetail.tsx` (+ `WorkoutDetail.css`):
+- [x] T071 [US2] **PR 6** `NewWorkout.tsx` finish confirmation: when `countNotDone > 0`, name them ("2 planned sets will be kept as skipped.") before **Confirm finish**.
+- [x] T072 [US2] **PR 6** `frontend/src/screens/WorkoutDetail.tsx` (+ `WorkoutDetail.css`):
   - skipped sets get a "skipped" tag and are demoted like warm-ups
   - in progress, planned sets show as to do
   - the block best (`frontend/src/screens/workoutFormat.ts`) ignores non-done sets, with Vitest in `workoutFormat.test.ts`
 - [ ] T073 [US2] **PR 7** **Start session** in prepare mode in `NewWorkout.tsx`: save first, then `startWorkout` with the local date and now, then switch to in-progress mode with autosave. Also a **Start** on each Prepared row in `frontend/src/screens/Sessions.tsx`.
-- [ ] T074 [US2] **PR 6** `frontend/src/screens/Sessions.tsx`: the meta line uses `notDoneSetCount` per the mock ("9 sets · 2 skipped" / "4 of 9 done").
-- [ ] T075 [US2] `docs/ui/README.md`: done toggle, next set, finish summary, skipped display (as built).
+- [x] T074 [US2] **PR 6** `frontend/src/screens/Sessions.tsx`: the meta line uses `notDoneSetCount` per the mock ("9 sets · 2 skipped" / "4 of 9 done").
+- [x] T075 [US2] `docs/ui/README.md`: done toggle, next set, finish summary, skipped display (as built).
 
 **Checkpoint**: Story 1 + Story 2 form the MVP and match the issue's use case.
 
@@ -216,13 +217,13 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 **Independent test**: Change one planned weight and another's reps, mark both done, add an exercise with a done set. All three are recorded with the changed values (spec Story 3).
 
-- [ ] T044 [P] [US3] Backend tests in `backend/GymNotebook.Tests/SetStatusTests.cs`:
+- [x] T044 [P] [US3] Backend tests in `backend/GymNotebook.Tests/SetStatusTests.cs`:
   - `PutExercises_ChangedValuesOnDoneSet_KeepsDone`
   - `PutExercises_SkippedToDoneOnFinishedPage_Saves` (FR-010a)
   - `PutExercises_RemoveSkippedSetOnFinishedPage_Saves`
-- [ ] T076 [US3] `frontend/src/screens/NewWorkout.tsx`: weight and reps stay editable on done rows without clearing done; newly added rows and blocks start done (Q5).
-- [ ] T077 [US3] `NewWorkout.tsx`, finished-page edit: skipped rows show the done toggle (skipped ↔ done) and can be removed with the existing undo.
-- [ ] T078 [P] [US3] Vitest in `frontend/src/screens/newWorkoutDraft.test.ts`: editing a done row keeps its status; "Add set" copies figures but starts `'done'`; toggling skipped gives done.
+- [x] T076 [US3] `frontend/src/screens/NewWorkout.tsx`: weight and reps stay editable on done rows without clearing done; newly added rows and blocks start done (Q5).
+- [x] T077 [US3] `NewWorkout.tsx`, finished-page edit: skipped rows show the done toggle (skipped ↔ done) and can be removed with the existing undo.
+- [x] T078 [P] [US3] Vitest in `frontend/src/screens/newWorkoutDraft.test.ts`: editing a done row keeps its status; "Add set" copies figures but starts `'done'`; toggling skipped gives done.
 
 **Checkpoint**: Stories 1–3 work independently of templates.
 

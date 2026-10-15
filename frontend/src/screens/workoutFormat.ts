@@ -1,3 +1,5 @@
+import type { SetStatus } from '../api/workouts'
+
 const MONTHS = [
   'Jan',
   'Feb',
@@ -32,6 +34,8 @@ interface WorkoutSetFigure {
   reps: number
   weight: number | null
   isWarmup: boolean
+  // Absent counts as done, as the API's default does (specs/006).
+  status?: SetStatus
 }
 
 export function formatWorkoutDate(date: string): {
@@ -120,6 +124,24 @@ export function formatCount(count: number, singular: string): string {
   return `${count} ${count === 1 ? singular : `${singular}s`}`
 }
 
+// The set part of a Sessions row's meta line (specs/006). setCount is done
+// sets only, the ones that count; notDoneSetCount is the rest. A finished page
+// adds what it skipped ("9 sets · 2 skipped"); a page in progress with sets
+// still to do says how far along it is ("4 of 9 done"). With every set done
+// it reads as it always did ("9 sets").
+export function formatSetCounts(
+  setCount: number,
+  notDoneSetCount: number,
+  inProgress: boolean,
+): string {
+  if (notDoneSetCount === 0) {
+    return formatCount(setCount, 'set')
+  }
+  return inProgress
+    ? `${setCount} of ${setCount + notDoneSetCount} done`
+    : `${formatCount(setCount, 'set')} · ${notDoneSetCount} skipped`
+}
+
 export function formatSetLoad(
   isBodyweight: boolean,
   weight: number | null,
@@ -138,7 +160,16 @@ export function formatBestSet(
   isBodyweight: boolean,
   sets: WorkoutSetFigure[],
 ): string {
-  const workingSets = sets.filter((set) => !set.isWarmup)
+  // Only a set lifted counts (specs/006 research R4): a planned set is still
+  // to do and a skipped one never happened, as on the progress chart.
+  const doneSets = sets.filter(
+    (set) => set.status === undefined || set.status === 'done',
+  )
+  if (doneSets.length === 0) {
+    return 'no sets done'
+  }
+
+  const workingSets = doneSets.filter((set) => !set.isWarmup)
 
   if (workingSets.length === 0) {
     return 'warm-ups only'

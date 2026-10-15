@@ -36,6 +36,7 @@ import {
 } from '../api/workouts'
 import {
   addSetToExercise,
+  countNotDone,
   type DraftFieldRef,
   describeDraftSet,
   describeUnsavedSets,
@@ -46,12 +47,14 @@ import {
   createWorkoutExerciseDraft,
   describeHeadingWhen,
   dropOptionalDetails,
+  findNextSet,
   needsExplicitFinishTime,
   prepareAutosaveDraft,
   prepareWorkoutDraft,
   type PreparedWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
+  toggleSetDone,
   updateSetInExercise,
   withLastTime,
   type WorkoutExerciseDraft,
@@ -79,6 +82,7 @@ import {
   normalizeExerciseName,
 } from './exerciseFormat'
 import { OptionalDetailsChoice } from './OptionalDetailsConsent'
+import { formatCount } from './workoutFormat'
 import {
   autosaveTrigger,
   useWorkoutAutosave,
@@ -1453,6 +1457,23 @@ function WorkoutEditor() {
   const isSaving = savingAction !== null
   // Shown on the folded heading line only when the account allows it.
   const summaryTitle = detailsAllowed ? heading.title.trim() : ''
+  // Set status (specs/006). While logging, the first planned set is "next";
+  // a finished page has none, its not-done sets are skipped. Finishing keeps
+  // whatever is still planned as skipped, and the question says how many.
+  const nextSet = isInProgress ? findNextSet(exercises) : null
+  const notDoneCount = countNotDone(exercises)
+  const finishSkips =
+    notDoneCount === 0
+      ? null
+      : `${formatCount(notDoneCount, 'planned set')} will be kept as skipped.`
+  // The word under a not-done row, so its state never rests on the control's
+  // look alone: "next" on the set the lifter is up to, "skipped" on a
+  // finished page. Other planned sets need none; their dashed fields and
+  // hollow toggle already say "not yet".
+  const setNote = (set: WorkoutSetDraft): string | null => {
+    if (set.status === 'skipped') return 'skipped'
+    return nextSet?.setClientId === set.clientId ? 'next' : null
+  }
 
   if (isLoading) {
     return <main className="page workout-editor-state">Opening page…</main>
@@ -1855,7 +1876,7 @@ function WorkoutEditor() {
                       </button>
                     )}
 
-                    <div className="new-workout-sets">
+                    <div className="new-workout-sets has-done">
                       {/* One column header per block instead of a caption on
                           every row. Hidden from screen readers: each input
                           already names its exercise, set and column. */}
@@ -1879,7 +1900,9 @@ function WorkoutEditor() {
                             removal.exerciseClientId === exercise.clientId &&
                             removal.index === setIndex &&
                             renderUndo('new-workout-undo-set')}
-                          <div className="new-workout-set">
+                          <div
+                            className={`new-workout-set${set.status === 'done' ? '' : ' is-not-done'}`}
+                          >
                             <span className="new-workout-set-number num">
                               {setIndex + 1}
                             </span>
@@ -1979,7 +2002,63 @@ function WorkoutEditor() {
                             >
                               ×
                             </button>
+
+                            {/* Done (specs/006): last, under the thumb, so the
+                                destructive × is never the end of the row. A
+                                round switch where Warm-up is a rectangular
+                                tag, and not by colour alone: a filled disc
+                                with a check when done, a hollow circle
+                                reading "Done" when not. One name, pressed or
+                                not, like Warm-up. Released, a set goes back
+                                to planned, or to skipped on a finished page
+                                (toggleSetDone). Marking one done saves at
+                                once (useWorkoutAutosave). */}
+                            <button
+                              className={`new-workout-set-done${nextSet?.setClientId === set.clientId ? ' is-next' : ''}${set.status === 'skipped' ? ' is-skipped' : ''}`}
+                              type="button"
+                              aria-pressed={set.status === 'done'}
+                              aria-label="Done"
+                              aria-describedby={
+                                setNote(set) === null
+                                  ? undefined
+                                  : `${set.clientId}-note`
+                              }
+                              onClick={() =>
+                                changeSet(exercise.clientId, set.clientId, {
+                                  status: toggleSetDone(
+                                    set.status,
+                                    !isInProgress,
+                                  ),
+                                })
+                              }
+                            >
+                              {set.status === 'done' ? (
+                                <svg
+                                  width="20"
+                                  height="20"
+                                  viewBox="0 0 20 20"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M4 10.5l4 4 8-9" />
+                                </svg>
+                              ) : (
+                                'Done'
+                              )}
+                            </button>
                           </div>
+                          {setNote(set) !== null && (
+                            <p
+                              id={`${set.clientId}-note`}
+                              className={`new-workout-set-note${nextSet?.setClientId === set.clientId ? ' is-next' : ''}`}
+                            >
+                              {setNote(set)}
+                            </p>
+                          )}
                         </Fragment>
                       ))}
                       {removal?.kind === 'set' &&
@@ -2145,6 +2224,7 @@ function WorkoutEditor() {
               <div className="finish-confirmation" role="alert">
                 {finishAsksTime ? (
                   <>
+                    {finishSkips !== null && <p>{finishSkips}</p>}
                     <label htmlFor={FINISH_TIME_ID}>
                       This page started{' '}
                       <span className="num">
@@ -2174,7 +2254,10 @@ function WorkoutEditor() {
                   </>
                 ) : (
                   <p>
-                    Finish this session now? The current time will be saved.
+                    {finishSkips === null
+                      ? 'Finish this session now?'
+                      : finishSkips}{' '}
+                    The current time will be saved.
                   </p>
                 )}
                 <div>

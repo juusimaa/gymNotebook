@@ -2,6 +2,7 @@ import type { ExerciseResponse } from '../api/exercises'
 import type {
   CreateWorkoutRequest,
   PutWorkoutExercisesRequest,
+  SetStatus,
   WorkoutDetailResponse,
 } from '../api/workouts'
 import { normalizeExerciseName } from './exerciseFormat'
@@ -143,6 +144,7 @@ export function createExistingWorkoutDraft(
         weight: set.weight === null ? '' : String(set.weight),
         reps: String(set.reps),
         isWarmup: set.isWarmup,
+        status: set.status,
       })),
     })),
   }
@@ -150,26 +152,39 @@ export function createExistingWorkoutDraft(
 
 // Set input values stay as strings while editing so empty and partial values
 // remain representable. clientId is only a stable React key and is never sent
-// to the API.
+// to the API. status is where the set stands (specs/006): 'planned' written
+// ahead, 'done' lifted, 'skipped' still planned when the page was finished.
+// It is sent with every set, so what the server holds is what the row shows.
 export interface WorkoutSetDraft {
   clientId: string
   weight: string
   reps: string
   isWarmup: boolean
+  status: SetStatus
 }
 
 // A set update can change only editable values. Excluding clientId keeps the
-// stable React key intact when a field is edited.
+// stable React key intact when a field is edited. Weight and reps can change
+// without touching status, so a done set stays done when its figures are
+// corrected (specs/006 SC-003).
 export type WorkoutSetDraftChanges = Partial<
-  Pick<WorkoutSetDraft, 'weight' | 'reps' | 'isWarmup'>
+  Pick<WorkoutSetDraft, 'weight' | 'reps' | 'isWarmup' | 'status'>
 >
 
-export function createEmptySetDraft(clientId: string): WorkoutSetDraft {
+// Every factory below takes the new row's status. A row added while logging
+// starts done (research R14, owner Q5): logging as you go costs no extra tap,
+// on any page in progress, prepared or not. Only a page being written ahead,
+// before it starts, adds planned rows; that mode passes 'planned'.
+export function createEmptySetDraft(
+  clientId: string,
+  status: SetStatus = 'done',
+): WorkoutSetDraft {
   return {
     clientId,
     weight: '',
     reps: '',
     isWarmup: false,
+    status,
   }
 }
 
@@ -222,6 +237,7 @@ export function withLastTime(
 function createSetDraftFromLastSet(
   clientId: string,
   lastSet: NonNullable<ExerciseResponse['lastSet']>,
+  status: SetStatus,
 ): WorkoutSetDraft {
   return {
     clientId,
@@ -229,6 +245,7 @@ function createSetDraftFromLastSet(
     reps: String(lastSet.reps),
     // Absent on a hint restored from a draft stored before the flag existed.
     isWarmup: lastSet.isWarmup === true,
+    status,
   }
 }
 
@@ -247,6 +264,7 @@ export function createWorkoutExerciseDraft(
   isBodyweight: boolean,
   lastSet: ExerciseResponse['lastSet'] = null,
   firstSet: ExerciseResponse['firstSet'] = null,
+  status: SetStatus = 'done',
 ): WorkoutExerciseDraft {
   const copiedSet = firstSet?.isWarmup === true ? firstSet : lastSet
 
@@ -264,8 +282,8 @@ export function createWorkoutExerciseDraft(
     lastSet,
     sets: [
       copiedSet === null
-        ? createEmptySetDraft(initialSetClientId)
-        : createSetDraftFromLastSet(initialSetClientId, copiedSet),
+        ? createEmptySetDraft(initialSetClientId, status)
+        : createSetDraftFromLastSet(initialSetClientId, copiedSet, status),
     ],
   }
 }
@@ -277,17 +295,20 @@ export function createWorkoutExerciseDraft(
 // logged as one more warm-up and dropped out of progress, with nothing on
 // screen to say so. Pressing Warm-up again is visible; a missing working set
 // is not. The first set of a block has nothing above it and starts empty.
-// Returns a new block and set array so React can observe the change; the
-// original stays untouched.
+// The status isn't copied either: the new row takes the mode's (done while
+// logging, R14), so a ditto of a planned row is a set lifted now, not one
+// more to do. Returns a new block and set array so React can observe the
+// change; the original stays untouched.
 export function addSetToExercise(
   exercise: WorkoutExerciseDraft,
   setClientId: string,
+  status: SetStatus = 'done',
 ): WorkoutExerciseDraft {
   const previous = exercise.sets.at(-1)
   const set =
     previous === undefined
-      ? createEmptySetDraft(setClientId)
-      : { ...previous, clientId: setClientId, isWarmup: false }
+      ? createEmptySetDraft(setClientId, status)
+      : { ...previous, clientId: setClientId, isWarmup: false, status }
   return { ...exercise, sets: [...exercise.sets, set] }
 }
 
@@ -328,6 +349,45 @@ export function removeSetFromExercise(
     ...exercise,
     sets: exercise.sets.filter((set) => set.clientId !== setClientId),
   }
+}
+
+// The Done toggle (specs/006). Pressed, a set is done; released, it goes back
+// to what a not-done set is on this page: planned while the session is in
+// progress, skipped once it is finished (research R3: a finished page holds
+// only done and skipped). So on a finished page the same toggle fixes a
+// forgotten tap, skipped ↔ done (FR-010a).
+export function toggleSetDone(
+  status: SetStatus,
+  isFinished: boolean,
+): SetStatus {
+  if (status !== 'done') return 'done'
+  return isFinished ? 'skipped' : 'planned'
+}
+
+// Where the lifter is up to: the first planned set in page order, which the
+// editor marks "next". Null when nothing is left to do.
+export function findNextSet(
+  exercises: WorkoutExerciseDraft[],
+): { exerciseClientId: string; setClientId: string } | null {
+  for (const exercise of exercises) {
+    const set = exercise.sets.find(
+      (candidate) => candidate.status === 'planned',
+    )
+    if (set !== undefined) {
+      return { exerciseClientId: exercise.clientId, setClientId: set.clientId }
+    }
+  }
+  return null
+}
+
+// The sets finishing would keep as skipped, for the finish question: "2
+// planned sets will be kept as skipped." Everything not done counts.
+export function countNotDone(exercises: WorkoutExerciseDraft[]): number {
+  return exercises.reduce(
+    (total, exercise) =>
+      total + exercise.sets.filter((set) => set.status !== 'done').length,
+    0,
+  )
 }
 
 // What a set holds, as typed, in the same notation as the "last time" line:
@@ -556,7 +616,10 @@ function prepareSet(
     }
   }
 
-  return { ok: true, value: { weight, reps, isWarmup: set.isWarmup } }
+  return {
+    ok: true,
+    value: { weight, reps, isWarmup: set.isWarmup, status: set.status },
+  }
 }
 
 // Validates the complete editor state and converts its string fields into the
