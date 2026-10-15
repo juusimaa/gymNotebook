@@ -236,18 +236,18 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ### Backend (PR 4)
 
-- [ ] T045 [P] [US4] Create entities `backend/GymNotebook.Api/Template.cs` (Id, UserId, `required Name`, `required NormalizedName`, CreatedAt, `ICollection<TemplateExercise> Exercises`), `TemplateExercise.cs` (Id, TemplateId, ExerciseId, Position, `ICollection<TemplateSet> Sets`) and `TemplateSet.cs` (Id, TemplateExerciseId, SetNumber, `decimal? Weight`, `int Reps`, `bool IsWarmup`). No upward navigation properties.
-- [ ] T046 [US4] Configure in `backend/GymNotebook.Api/Data/AppDbContext.cs` (`DbSet`s plus model config):
+- [x] T045 [P] [US4] Create entities `backend/GymNotebook.Api/Template.cs` (Id, UserId, `required Name`, `required NormalizedName`, CreatedAt, `ICollection<TemplateExercise> Exercises`), `TemplateExercise.cs` (Id, TemplateId, ExerciseId, Position, `ICollection<TemplateSet> Sets`) and `TemplateSet.cs` (Id, TemplateExerciseId, SetNumber, `decimal? Weight`, `int Reps`, `bool IsWarmup`). No upward navigation properties.
+- [x] T046 [US4] Configure in `backend/GymNotebook.Api/Data/AppDbContext.cs` (`DbSet`s plus model config):
   - `templates`: FK user cascade, **unique `ix_templates_user_id_normalized_name` on `(user_id, normalized_name)`**, `created_at` default `now()`
   - `template_exercises`: FK template cascade, FK `exercise_id` **Restrict**, index on `template_id`
   - `template_sets`: FK cascade, `weight numeric(6,2)`, index on `(template_exercise_id, set_number)`
-- [ ] T047 [US4] Generate migration `AddTemplates` in `backend/GymNotebook.Api/Migrations/`. Review that it holds exactly three tables, their FKs and indexes.
-- [ ] T048 [P] [US4] Create DTOs, one per file in `backend/GymNotebook.Api/`:
+- [x] T047 [US4] Generate migration `AddTemplates` in `backend/GymNotebook.Api/Migrations/`. Review that it holds exactly three tables, their FKs and indexes.
+- [x] T048 [P] [US4] Create DTOs, one per file in `backend/GymNotebook.Api/`:
   - `TemplateSummaryResponse` (Id, Name, ExerciseNames, ExerciseCount, SetCount)
   - `TemplateDetailResponse`, `TemplateExerciseResponse`, `TemplateSetResponse`
   - `SaveTemplateRequest` (Name, `List<PutWorkoutExerciseInput> Exercises`)
   - `SaveAsTemplateRequest` (Name)
-- [ ] T049 [US4] Map a `/templates` group in `Program.cs` with `.RequireAuthorization().RequireAccountLifecycle()`:
+- [x] T049 [US4] Map a `/templates` group in `Program.cs` with `.RequireAuthorization().RequireAccountLifecycle()`:
   - `GET /` ordered by Name, one projection
   - `GET /{id:int}`
   - `POST /`
@@ -257,14 +257,14 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - exercises via `GetOrCreateExerciseAsync`
   - `catch (DbUpdateException ex) when (IsUniqueViolation(ex, "ix_templates_user_id_normalized_name"))` → 409 `ErrorResponse("template_name_taken")`, writing nothing
   - foreign or missing id → 404
-- [ ] T050 [US4] `POST /templates/{id:int}/prepare` in `Program.cs`:
+- [x] T050 [US4] `POST /templates/{id:int}/prepare` in `Program.cs`:
   - a new prepared page copying the blocks and sets as `planned`
   - title = template name, or null when the privacy feature is on and the account lacks optional-details consent (reuse the check from `OptionalDetails.cs`)
   - 201 `WorkoutDetailResponse`
-- [ ] T051 [US4] `POST /workouts/{id:int}/template` in `Program.cs`: copies every block and set (weight, reps, warm-up) whatever its status; 201 `TemplateDetailResponse`; 409 `template_name_taken`; 404 for a foreign page.
-- [ ] T052 [US4] `PATCH /exercises/{id}` merge in `Program.cs`: re-point the losing exercise's `TemplateExercises` along with its `WorkoutExercises`, in the same `SaveChanges` (research R7).
-- [ ] T053 [US4] `backend/GymNotebook.Api/AccountDeletion.cs`: `Templates.Where(UserId).ExecuteDeleteAsync` before the exercises delete. Comment the Restrict FK reason.
-- [ ] T054 [P] [US4] Tests in new `backend/GymNotebook.Tests/TemplateTests.cs`:
+- [x] T051 [US4] `POST /workouts/{id:int}/template` in `Program.cs`: copies every block and set (weight, reps, warm-up) whatever its status; 201 `TemplateDetailResponse`; 409 `template_name_taken`; 404 for a foreign page.
+- [x] T052 [US4] `PATCH /exercises/{id}` merge in `Program.cs`: re-point the losing exercise's `TemplateExercises` along with its `WorkoutExercises`, in the same `SaveChanges` (research R7).
+- [x] T053 [US4] `backend/GymNotebook.Api/AccountDeletion.cs`: `Templates.Where(UserId).ExecuteDeleteAsync` before the exercises delete. Comment the Restrict FK reason.
+- [x] T054 [P] [US4] Tests in new `backend/GymNotebook.Tests/TemplateTests.cs`:
   - `CreateTemplate_Valid_Returns201`
   - `CreateTemplate_NameDiffersOnlyByCaseAndSpaces_Returns409AndWritesNothing`
   - `CreateTemplate_SameNameOtherUser_Returns201`
@@ -277,13 +277,13 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - `Prepare_CopiesBlocksAsPlanned`
   - `Prepare_ThenEditPage_TemplateUnchanged`
   - `EditTemplate_AfterPrepare_PageUnchanged`
-  - `Prepare_WithoutConsent_HasNoTitle` (privacy factory)
+  - `Prepare_WithoutConsent_HasNoTitle` (privacy factory): built as `Prepare_FromTemplate_TitleFollowsConsent` in `OptionalDetailsConsentTests.cs`, which already runs the privacy factory, covering both with and without consent
   - `SaveAsTemplate_FinishedPageWithSkipped_CopiesAllSets`
   - `SaveAsTemplate_OtherUsersPage_Returns404`
   - `MergeExercise_UsedInTemplate_RepointsTemplateBlocks`
   - `Templates_NeverAffectExerciseSessionCount`
-- [ ] T055 [P] [US4] Tests: `DeleteAccount_WithTemplates_RemovesThem` in `backend/GymNotebook.Tests/DeletionTests.cs`; extend `LifecycleCoverageTests.cs` so the `/templates` routes are covered by the lifecycle filter.
-- [ ] T056 [US4] `PLAN.md`: data model (the three tables, unique name per user, normalized like exercises, refused rather than merged) and REST API (`/templates` routes, prepare, save-as-template, merge re-pointing).
+- [x] T055 [P] [US4] Tests: `DeleteAccount_WithTemplates_RemovesThem` in `backend/GymNotebook.Tests/DeletionTests.cs`; extend `LifecycleCoverageTests.cs` so the `/templates` routes are covered by the lifecycle filter.
+- [x] T056 [US4] `PLAN.md`: data model (the three tables, unique name per user, normalized like exercises, refused rather than merged) and REST API (`/templates` routes, prepare, save-as-template, merge re-pointing).
 
 ### Frontend (PR 8, after T003)
 

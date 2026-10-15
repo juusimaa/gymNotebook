@@ -116,6 +116,10 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
             // on the User row, so it goes with it. Set-based deletes, not loading entities:
             // the reference notebook has 100,000 sets.
             await db.Workouts.Where(w => w.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
+            // Templates before exercises for the same reason as workouts: template blocks
+            // reference exercises with ON DELETE RESTRICT (specs/006). Blocks and sets
+            // cascade from the template.
+            await db.Templates.Where(t => t.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
             await db.Exercises.Where(e => e.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
             await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(CancellationToken.None);
         }

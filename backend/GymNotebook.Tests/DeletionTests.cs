@@ -156,6 +156,41 @@ public class DeletionTests(TwoHostGymNotebookFixture db)
     }
 
     [Fact]
+    public async Task DeleteAccount_WithTemplates_RemovesThem()
+    {
+        // Arrange: a template (specs/006) whose block uses one of A's exercises. Its
+        // Restrict FK would block the exercise delete if templates didn't go first.
+        await using var host = db.CreateHost(ExportTestSupport.FlagOn());
+        var userId = await SeedAccountAsync();
+        await db.ExecuteAsync(
+            """
+            WITH t AS (
+                INSERT INTO templates (user_id, name, normalized_name) VALUES (@id, 'Push A', 'push a') RETURNING id),
+            te AS (
+                INSERT INTO template_exercises (template_id, exercise_id, position)
+                SELECT t.id, (SELECT min(id) FROM exercises WHERE user_id = @id), 0 FROM t RETURNING id)
+            INSERT INTO template_sets (template_exercise_id, set_number, weight, reps, is_warmup)
+            SELECT te.id, 1, 60, 8, false FROM te;
+            """,
+            userId);
+        var aRows = await DeletionTestSupport.RowIdsAsync(db, userId);
+        using var client = host.ClientFor(userId);
+
+        // Act
+        var response = await DeletionTestSupport.DeleteAsync(client);
+
+        // Assert: the account and its template are gone. Its blocks and sets can't
+        // outlive it: their FKs to the template cascade.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(0, await DeletionTestSupport.CountRemainingAsync(db, aRows));
+        await using var connection = new NpgsqlConnection(db.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM templates WHERE user_id = @id", connection);
+        command.Parameters.AddWithValue("id", userId);
+        Assert.Equal(0L, await command.ExecuteScalarAsync());
+    }
+
+    [Fact]
     public async Task Delete_Success_EveryOldTokenGets401OnEveryProtectedRoute()
     {
         // Arrange: two sessions of A, both valid before the deletion.

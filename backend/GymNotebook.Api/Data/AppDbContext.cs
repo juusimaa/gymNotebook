@@ -19,6 +19,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SetEntry> SetEntries => Set<SetEntry>();
     public DbSet<Exercise> Exercises => Set<Exercise>();
     public DbSet<EmailSend> EmailSends => Set<EmailSend>();
+    public DbSet<Template> Templates => Set<Template>();
+    public DbSet<TemplateExercise> TemplateExercises => Set<TemplateExercise>();
+    public DbSet<TemplateSet> TemplateSets => Set<TemplateSet>();
 
     // Model configuration that conventions can't infer. Anything set here ends up in the
     // migrations, so a change here means a new `dotnet ef migrations add`.
@@ -141,6 +144,50 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(e => e.UserId);
+        });
+
+        // Templates mirror the page tables (specs/006 research R6): cascades go template →
+        // blocks → sets, and a block's exercise is Restrict, as on workout_exercises.
+        modelBuilder.Entity<Template>(entity =>
+        {
+            // Named so the handlers can tell a name clash from any other unique violation
+            // (IsUniqueViolation) and answer 409 template_name_taken.
+            entity.HasIndex(t => new { t.UserId, t.NormalizedName })
+                .IsUnique()
+                .HasDatabaseName("ix_templates_user_id_normalized_name");
+            entity.Property(t => t.CreatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(t => t.UserId);
+        });
+
+        modelBuilder.Entity<TemplateExercise>(entity =>
+        {
+            entity.HasOne<Template>()
+                .WithMany(t => t.Exercises)
+                .HasForeignKey(te => te.TemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict: an exercise used in a template can't vanish under it. Account
+            // deletion removes templates before exercises for this reason, and an exercise
+            // merge re-points these rows first (research R7).
+            entity.HasOne<Exercise>()
+                .WithMany()
+                .HasForeignKey(te => te.ExerciseId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TemplateSet>(entity =>
+        {
+            entity.Property(s => s.Weight).HasPrecision(6, 2);
+
+            entity.HasOne<TemplateExercise>()
+                .WithMany(te => te.Sets)
+                .HasForeignKey(s => s.TemplateExerciseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(s => new { s.TemplateExerciseId, s.SetNumber });
         });
 
         modelBuilder.Entity<EmailSend>(entity =>

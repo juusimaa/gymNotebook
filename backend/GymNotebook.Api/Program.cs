@@ -1201,6 +1201,17 @@ exercises.MapPatch("/{id:int}", async (int id, UpdateExerciseRequest request, Cl
                     block.ExerciseId = exercise.Id;
                 }
 
+                // Template blocks too (specs/006 research R7): their exercise FK is
+                // Restrict as well, so leaving them would make the delete below fail.
+                var collisionTemplateBlocks = await db.TemplateExercises
+                    .Where(te => te.ExerciseId == collision.Id)
+                    .ToListAsync(ct);
+
+                foreach (var block in collisionTemplateBlocks)
+                {
+                    block.ExerciseId = exercise.Id;
+                }
+
                 db.Exercises.Remove(collision);
             }
 
@@ -1926,6 +1937,288 @@ workouts.MapDelete("/{id:int}/sets/{setId:int}", async (int id, int setId, int? 
    .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
    .Produces(StatusCodes.Status404NotFound);
 
+// Save as template (specs/006 research R8): a copy of the page's blocks and sets, every
+// set whatever its status, since a skipped set is still part of the routine. Nothing
+// links the template back to the page.
+workouts.MapPost("/{id:int}/template", async (int id, SaveAsTemplateRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var pageExists = await db.Workouts.AnyAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (!pageExists)
+    {
+        return Results.NotFound();
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    var blocks = await db.WorkoutExercises
+        .AsNoTracking()
+        .Include(we => we.SetEntries)
+        .Where(we => we.WorkoutId == id)
+        .OrderBy(we => we.Position)
+        .ToListAsync(ct);
+
+    var template = new Template
+    {
+        UserId = userId,
+        Name = request.Name,
+        NormalizedName = ExerciseNameNormalizer.Normalize(request.Name),
+    };
+
+    // Positions and set numbers are renumbered from the order, as the bulk write does,
+    // so a page with gaps (a set deleted from history) still copies to 0, 1, 2… and 1, 2, 3….
+    var position = 0;
+    foreach (var block in blocks)
+    {
+        var setNumber = 1;
+        template.Exercises.Add(new TemplateExercise
+        {
+            ExerciseId = block.ExerciseId,
+            Position = position++,
+            Sets = block.SetEntries
+                .OrderBy(se => se.SetNumber)
+                .Select(se => new TemplateSet
+                {
+                    SetNumber = setNumber++,
+                    Weight = se.Weight,
+                    Reps = se.Reps,
+                    IsWarmup = se.IsWarmup,
+                })
+                .ToList(),
+        });
+    }
+
+    db.Templates.Add(template);
+    if (await TrySaveTemplateAsync(db, ct) is { } nameTaken) return nameTaken;
+
+    var response = new TemplateDetailResponse(template.Id, template.Name, await GetTemplateExercisesAsync(db, template.Id, ct));
+    return Results.Created($"/templates/{template.Id}", response);
+})
+   .WithName("SaveWorkoutAsTemplate")
+   .WithSummary("Saves a page as a new template")
+   .WithDescription("Copies every block and set of the page (weight, reps, warm-up), whatever its status, into a new template with the given name. 400 invalid_request for a blank name, 409 template_name_taken when the caller already has a template with that name (compared like exercise names).")
+   .Produces<TemplateDetailResponse>(StatusCodes.Status201Created)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .Produces<ErrorResponse>(StatusCodes.Status409Conflict)
+   .Produces(StatusCodes.Status404NotFound);
+
+// Templates (specs/006 user story 4): named routines, edited at home with an explicit
+// save and copied into prepared pages. A copy is never linked to its template, so later
+// changes to either side never reach the other (research R8). No revision: the last
+// save wins (research R9).
+var templates = app.MapGroup("/templates").RequireAuthorization().RequireAccountLifecycle();
+
+templates.MapGet("/", async (ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    // One projection, as in GET /workouts/prepared, so names and counts don't cost a
+    // query per row.
+    var results = await db.Templates
+        .AsNoTracking()
+        .Where(t => t.UserId == userId)
+        .OrderBy(t => t.Name)
+        .ThenBy(t => t.Id)
+        .Select(t => new TemplateSummaryResponse(
+            t.Id,
+            t.Name,
+            t.Exercises
+                .OrderBy(te => te.Position)
+                .Select(te => db.Exercises.Where(e => e.Id == te.ExerciseId).Select(e => e.Name).Single())
+                .ToList(),
+            t.Exercises.Count,
+            t.Exercises.Sum(te => te.Sets.Count)))
+        .ToListAsync(ct);
+
+    return Results.Ok(results);
+})
+   .WithName("ListTemplates")
+   .WithSummary("Lists the caller's templates")
+   .WithDescription("Every template of the caller, ordered by name, with the exercise names in position order, the exercise count and the set count.")
+   .Produces<List<TemplateSummaryResponse>>(StatusCodes.Status200OK);
+
+templates.MapGet("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var template = await db.Templates
+        .AsNoTracking()
+        .Where(t => t.Id == id && t.UserId == userId)
+        .Select(t => new { t.Id, t.Name })
+        .SingleOrDefaultAsync(ct);
+
+    if (template is null)
+    {
+        return Results.NotFound();
+    }
+
+    return Results.Ok(new TemplateDetailResponse(template.Id, template.Name, await GetTemplateExercisesAsync(db, template.Id, ct)));
+})
+   .WithName("GetTemplate")
+   .WithSummary("Retrieves a template")
+   .WithDescription("Returns one of the caller's templates with its blocks and sets.")
+   .Produces<TemplateDetailResponse>(StatusCodes.Status200OK)
+   .Produces(StatusCodes.Status404NotFound);
+
+templates.MapPost("/", async (SaveTemplateRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    if (!IsValidTemplate(request))
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    var template = new Template
+    {
+        UserId = userId,
+        Name = request.Name!,
+        NormalizedName = ExerciseNameNormalizer.Normalize(request.Name!),
+    };
+
+    // The template row isn't added until its blocks are built: GetOrCreateExerciseAsync
+    // saves, and a template added earlier would be flushed (and might clash) mid-loop.
+    foreach (var block in await BuildTemplateBlocksAsync(db, userId, request.Exercises!, ct))
+    {
+        template.Exercises.Add(block);
+    }
+
+    db.Templates.Add(template);
+    if (await TrySaveTemplateAsync(db, ct) is { } nameTaken) return nameTaken;
+
+    var response = new TemplateDetailResponse(template.Id, template.Name, await GetTemplateExercisesAsync(db, template.Id, ct));
+    return Results.Created($"/templates/{template.Id}", response);
+})
+   .WithName("CreateTemplate")
+   .WithSummary("Creates a template")
+   .WithDescription("Creates a named template from blocks shaped like PUT /workouts/{id}/exercises (a set's status is ignored). Exercise names are get-or-create. 400 invalid_request for a blank name, a blank exercise name or reps below 1; 409 template_name_taken when the caller already has a template with that name (compared like exercise names), writing nothing.")
+   .Produces<TemplateDetailResponse>(StatusCodes.Status201Created)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .Produces<ErrorResponse>(StatusCodes.Status409Conflict);
+
+templates.MapPut("/{id:int}", async (int id, SaveTemplateRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var template = await db.Templates.SingleOrDefaultAsync(t => t.Id == id && t.UserId == userId, ct);
+
+    if (template is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (!IsValidTemplate(request))
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    // Replace, like PUT /workouts/{id}/exercises: the old blocks go (their sets by the
+    // database cascade) and the request's blocks come in. All of it, and the rename, in
+    // the lifecycle filter's transaction, so a 409 below leaves the template as it was.
+    var newBlocks = await BuildTemplateBlocksAsync(db, userId, request.Exercises!, ct);
+    var oldBlocks = await db.TemplateExercises.Where(te => te.TemplateId == template.Id).ToListAsync(ct);
+    db.TemplateExercises.RemoveRange(oldBlocks);
+    foreach (var block in newBlocks)
+    {
+        block.TemplateId = template.Id;
+        db.TemplateExercises.Add(block);
+    }
+
+    template.Name = request.Name!;
+    template.NormalizedName = ExerciseNameNormalizer.Normalize(request.Name!);
+
+    if (await TrySaveTemplateAsync(db, ct) is { } nameTaken) return nameTaken;
+
+    return Results.Ok(new TemplateDetailResponse(template.Id, template.Name, await GetTemplateExercisesAsync(db, template.Id, ct)));
+})
+   .WithName("ReplaceTemplate")
+   .WithSummary("Replaces a template")
+   .WithDescription("Replaces the name and every block and set of one of the caller's templates, in one transaction. Last write wins. Same validation and 409 template_name_taken as POST /templates.")
+   .Produces<TemplateDetailResponse>(StatusCodes.Status200OK)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .Produces<ErrorResponse>(StatusCodes.Status409Conflict)
+   .Produces(StatusCodes.Status404NotFound);
+
+templates.MapDelete("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    // Blocks and sets go by the database cascade. Pages prepared from it are untouched:
+    // nothing links them to it.
+    var deleted = await db.Templates.Where(t => t.Id == id && t.UserId == userId).ExecuteDeleteAsync(ct);
+
+    return deleted == 0 ? Results.NotFound() : Results.NoContent();
+})
+   .WithName("DeleteTemplate")
+   .WithSummary("Deletes a template")
+   .WithDescription("Deletes one of the caller's templates. Pages prepared from it stay.")
+   .Produces(StatusCodes.Status204NoContent)
+   .Produces(StatusCodes.Status404NotFound);
+
+templates.MapPost("/{id:int}/prepare", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var template = await db.Templates
+        .AsNoTracking()
+        .Include(t => t.Exercises)
+        .ThenInclude(te => te.Sets)
+        .SingleOrDefaultAsync(t => t.Id == id && t.UserId == userId, ct);
+
+    if (template is null)
+    {
+        return Results.NotFound();
+    }
+
+    // The page's title is an optional detail, the template's name isn't. So the same
+    // consent check as POST /workouts/prepared decides whether the name may become the
+    // title. Without consent the page simply has no title rather than a 403: the lifter
+    // asked for a page, not a title (research R8).
+    var decision = await OptionalDetails.DecideAsync(db, userId, privacyLifecycleEnabled,
+        template.Name, bodyweightKg: null, location: null, notes: null, ct);
+
+    var workout = new Workout
+    {
+        UserId = userId,
+        Title = decision == OptionalDetailsDecision.Store ? template.Name : null,
+    };
+
+    // Every set planned: a prepared page holds nothing lifted yet. Built through the
+    // downward navigations, so one save writes the page, its blocks and its sets.
+    foreach (var block in template.Exercises.OrderBy(te => te.Position))
+    {
+        workout.WorkoutExercises.Add(new WorkoutExercise
+        {
+            ExerciseId = block.ExerciseId,
+            Position = block.Position,
+            SetEntries = block.Sets
+                .OrderBy(s => s.SetNumber)
+                .Select(s => new SetEntry
+                {
+                    SetNumber = s.SetNumber,
+                    Weight = s.Weight,
+                    Reps = s.Reps,
+                    IsWarmup = s.IsWarmup,
+                    Status = SetStatus.Planned,
+                })
+                .ToList(),
+        });
+    }
+
+    db.Workouts.Add(workout);
+    await db.SaveChangesAsync(ct);
+
+    var response = new WorkoutDetailResponse(workout.Id, workout.Revision, workout.Date, workout.StartedAt, workout.EndedAt,
+        workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, await GetWorkoutExercisesAsync(db, workout.Id, ct));
+    return Results.Created($"/workouts/{workout.Id}", response);
+})
+   .WithName("PrepareFromTemplate")
+   .WithSummary("Prepares a page from a template")
+   .WithDescription("Creates a new prepared page holding a copy of the template's blocks and sets, all planned. Its title is the template name, or none when the privacy feature is on and the account lacks optional-details consent.")
+   .Produces<WorkoutDetailResponse>(StatusCodes.Status201Created)
+   .Produces(StatusCodes.Status404NotFound);
+
 // Starts Kestrel and blocks until shutdown (Ctrl+C, SIGTERM from the container runtime).
 // specs/001: the public notice and the account's acknowledgement state (user story 1), the
 // account deletion (user story 4) and optional-details consent (user story 6).
@@ -2093,6 +2386,87 @@ static async Task<List<WorkoutExerciseResponse>> GetWorkoutExercisesAsync(AppDbC
                 .Select(se => new SetEntryResponse(se.Id, se.SetNumber, se.Reps, se.Weight, se.IsWarmup, SetStatusRules.ToText(se.Status)))
                 .ToList()))
         .ToListAsync(ct);
+
+// GetWorkoutExercisesAsync's counterpart for a template: its blocks with exercise names
+// and sets, in one query, shared by every route that answers with a TemplateDetailResponse.
+static async Task<List<TemplateExerciseResponse>> GetTemplateExercisesAsync(AppDbContext db, int templateId, CancellationToken ct) =>
+    await (
+        from te in db.TemplateExercises
+        join exercise in db.Exercises on te.ExerciseId equals exercise.Id
+        where te.TemplateId == templateId
+        orderby te.Position
+        select new TemplateExerciseResponse(
+            te.Id,
+            te.ExerciseId,
+            exercise.Name,
+            exercise.IsBodyweight,
+            te.Sets
+                .OrderBy(s => s.SetNumber)
+                .Select(s => new TemplateSetResponse(s.Id, s.SetNumber, s.Weight, s.Reps, s.IsWarmup))
+                .ToList()))
+        .ToListAsync(ct);
+
+// POST and PUT /templates: a name, a block list, and in it named exercises and sets of at
+// least one rep (contracts/api.md). Checked whole before anything is written, so a bad
+// payload creates no exercises either.
+static bool IsValidTemplate(SaveTemplateRequest request) =>
+    !string.IsNullOrWhiteSpace(request.Name)
+    && request.Exercises is not null
+    && request.Exercises.All(e =>
+        WorkoutInputValidation.HasExerciseName(e.ExerciseName)
+        && (e.Sets ?? []).All(s => s.Reps >= 1));
+
+// The template blocks for a validated payload, positions and set numbers from array order
+// as in the bulk page write. Not yet added to the context: the caller attaches them to a
+// new or existing template. Exercises are get-or-create, as on pages, so a new exercise
+// arrives by being typed; the same name twice resolves to one row (see GetOrCreateExerciseAsync).
+static async Task<List<TemplateExercise>> BuildTemplateBlocksAsync(
+    AppDbContext db, int userId, List<PutWorkoutExerciseInput> inputs, CancellationToken ct)
+{
+    var blocks = new List<TemplateExercise>();
+    var position = 0;
+
+    foreach (var input in inputs)
+    {
+        var exercise = await GetOrCreateExerciseAsync(db, userId, input.ExerciseName, ct);
+        var setNumber = 1;
+
+        blocks.Add(new TemplateExercise
+        {
+            ExerciseId = exercise.Id,
+            Position = position++,
+            Sets = (input.Sets ?? [])
+                .Select(s => new TemplateSet
+                {
+                    SetNumber = setNumber++,
+                    Weight = s.Weight,
+                    Reps = s.Reps,
+                    IsWarmup = s.IsWarmup,
+                })
+                .ToList(),
+        });
+    }
+
+    return blocks;
+}
+
+// Saves a template write, turning a name clash into 409 template_name_taken (research R6).
+// Returns null on success. The unique index is the check, not a lookup first: two saves
+// at the same moment would both pass a lookup. The failed INSERT or UPDATE aborts the
+// lifecycle filter's transaction, and the filter rolls back on a non-2xx, so nothing of
+// this request is written, not even exercises it created on the way.
+static async Task<IResult?> TrySaveTemplateAsync(AppDbContext db, CancellationToken ct)
+{
+    try
+    {
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+    catch (DbUpdateException ex) when (IsUniqueViolation(ex, "ix_templates_user_id_normalized_name"))
+    {
+        return Results.Json(new ErrorResponse("template_name_taken"), statusCode: StatusCodes.Status409Conflict);
+    }
+}
 
 // The first half of "exerciseName is get-or-create, twice over" (PLAN.md, REST API):
 // find this user's exercise by its normalized name, or bring one into being. This is the
