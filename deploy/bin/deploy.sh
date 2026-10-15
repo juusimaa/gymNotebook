@@ -7,16 +7,18 @@
 # or reach the tracker (FR-006). Ported from the tracker's deploy/bin/deploy.sh;
 # differences are the user, paths, Compose project and tag format.
 #
-# Then: take the lock, remember the running tag, start the new one, check it
-# through Caddy, and roll back to the remembered tag if anything fails.
+# Then: take the lock, remember the running tag, pull the new one, save the
+# old gym-api's deletion evidence, start the new one, check it through Caddy,
+# and roll back to the remembered tag if anything fails.
 #
 # Exit codes, which CI shows as the job result:
 #   0  new tag live and healthy
 #   1  new tag failed; previous tag restored and running
-#   2  rollback failed too, or there was no previous tag (deploy/README.md
-#      § Deploy, rolling back by hand)
+#   2  rollback failed too, or there was no previous tag, or the failed
+#      container's evidence couldn't be saved (deploy/README.md § Deploy,
+#      rolling back by hand)
 #   64 invalid tag; nothing ran
-#   75 image pull failed; nothing changed
+#   75 image pull or evidence save failed; nothing changed
 #
 # It only ever touches Compose project `gymnotebook`: never `down`, `prune`,
 # `caddy reload` or another project (FR-005). It never prints the env file or
@@ -42,6 +44,7 @@ STATE_DIR="${GYMNOTEBOOK_STATE_DIR:-/var/lib/gymnotebook}"
 ENV_FILE="${GYMNOTEBOOK_ENV_FILE:-/etc/gymnotebook/.env}"
 COMPOSE_FILE="${GYMNOTEBOOK_COMPOSE_FILE:-/opt/gymnotebook/compose.prod.yml}"
 TAG_FILE="$STATE_DIR/image-tag.env"
+EVIDENCE_FILE="$STATE_DIR/deletion-evidence.log"
 # compose.prod.yml reads it for gym-api's env_file.
 export ENV_FILE
 
@@ -77,6 +80,46 @@ restore_tag() {
     fi
 }
 
+# Docker deletes a container's log when Compose recreates the container, and
+# every deploy recreates gym-api. The restore fallback (docs/privacy/
+# restore.md § 4) needs that log's deletion lines, so they are saved first
+# (specs/005 T063). gym-api is stopped before its log is read, so no request
+# can log anything after the copy; the outage this adds is the copy itself.
+#
+# Kept from each line, with Docker's timestamp in front:
+#   - deletion.intent/committed/rolled_back lines, unchanged (UUID, boundary);
+#   - "<time> health" for the first health-check `SELECT 1` of each minute,
+#     so the restore's gap check still works across deploys;
+#   - one "<time> saved gym-api container <id>" line per save.
+# Nothing else: no other log content leaves Docker's log.
+#
+# The file is merged, sorted and de-duplicated, so saving the same container
+# twice adds nothing. umask 077 makes it 0600 (gymdeploy only; admin reads it
+# with sudo). trim-logs.sh removes lines older than 30 days daily, taking
+# deploy.lock so it never rewrites the file under a deploy.
+save_evidence() {
+    local id
+    id="$(compose ps -a -q gym-api)" || return 1
+    # First deploy on a fresh server: no container, nothing to keep.
+    [[ -n "$id" ]] || return 0
+    compose stop gym-api || return 1
+    (
+        umask 077
+        {
+            if [[ -e "$EVIDENCE_FILE" ]]; then cat "$EVIDENCE_FILE" || exit 1; fi
+            docker logs --timestamps "$id" 2>&1 | awk '
+                / deletion\.(intent|committed|rolled_back) PrivacyAccountId=/ { print; next }
+                /SELECT 1/ {
+                    minute = substr($1, 1, 16)
+                    if (minute != last) { print $1 " health"; last = minute }
+                }
+            ' || exit 1
+            printf '%s saved gym-api container %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${id:0:12}"
+        } | LC_ALL=C sort -u > "$EVIDENCE_FILE.tmp"
+    ) || return 1
+    mv "$EVIDENCE_FILE.tmp" "$EVIDENCE_FILE"
+}
+
 echo "deploy: ${previous:-nothing} -> $tag"
 write_tag "$tag"
 
@@ -84,6 +127,18 @@ if ! compose pull --quiet; then
     restore_tag
     echo "deploy: could not pull $tag; nothing changed" >&2
     exit 75
+fi
+
+if ! save_evidence; then
+    rm -f "$EVIDENCE_FILE.tmp"
+    restore_tag
+    # `start`, not `up`: the same container comes back, with its log.
+    if compose start gym-api; then
+        echo "deploy: could not save gym-api's deletion evidence; nothing changed" >&2
+        exit 75
+    fi
+    echo "deploy: could not save gym-api's deletion evidence, and gym-api did not start again; see deploy/README.md § Deploy" >&2
+    exit 2
 fi
 
 # --wait returns once both services report healthy; gym-api's check includes
@@ -101,6 +156,14 @@ fi
 echo "deploy: $tag failed its health checks; rolling back to ${previous:-nothing}" >&2
 if [[ -z "$previous" ]]; then
     echo "deploy: no previous tag to roll back to" >&2
+    exit 2
+fi
+# The failed container served requests too, so its evidence is saved before
+# the rollback recreates it. If that fails, it stays stopped rather than lose
+# a deletion: the site is down until someone looks.
+if ! save_evidence; then
+    rm -f "$EVIDENCE_FILE.tmp"
+    echo "deploy: could not save the failed gym-api's deletion evidence; not rolling back, gym-api is stopped; see deploy/README.md § Deploy" >&2
     exit 2
 fi
 restore_tag

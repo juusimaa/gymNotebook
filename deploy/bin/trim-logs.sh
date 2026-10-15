@@ -17,15 +17,24 @@
 # read and the rewrite is lost. That is at most a line or two, once a day,
 # and the price of not stopping the container.
 #
+# It also trims the deletion evidence deploy.sh saves from each replaced
+# gym-api container (specs/005 T063), whose lines start with Docker's
+# timestamp. deploy.sh rewrites that file by rename, so this takes the same
+# lock as a deploy first; otherwise a deploy finishing mid-trim would have its
+# new lines overwritten.
+#
 # It only ever looks at containers labelled with our Compose project, never
 # the tracker's. It prints file names and line counts, never log content.
 #
-# GYMNOTEBOOK_LOG_CUTOFF exists only so deploy/tests/trim-logs-test.sh can
-# fix the cutoff; in production it is "now minus 30 days".
+# GYMNOTEBOOK_LOG_CUTOFF and GYMNOTEBOOK_STATE_DIR exist only so
+# deploy/tests/trim-logs-test.sh can fix the cutoff and the directory; in
+# production they are "now minus 30 days" and /var/lib/gymnotebook.
 
 set -euo pipefail
 
 cutoff="${GYMNOTEBOOK_LOG_CUTOFF:-$(date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%S)}"
+STATE_DIR="${GYMNOTEBOOK_STATE_DIR:-/var/lib/gymnotebook}"
+EVIDENCE_FILE="$STATE_DIR/deletion-evidence.log"
 
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
@@ -69,3 +78,20 @@ while read -r id; do
     done
     trim_file "$log" no
 done
+
+# The evidence file: the first field is the time. Rewritten in place, like
+# the logs, so it keeps its owner (gymdeploy) and mode (0600). The lock is
+# opened read-only: flock doesn't need write access, and root must not
+# create deploy.lock, or gymdeploy couldn't open it. A deploy created the
+# evidence file, so the lock exists whenever the file does.
+if [[ -e "$EVIDENCE_FILE" ]]; then
+    exec 9< "$STATE_DIR/deploy.lock"
+    flock 9
+    before=$(wc -l < "$EVIDENCE_FILE")
+    awk -v cutoff="$cutoff" '$1 >= cutoff' "$EVIDENCE_FILE" > "$tmp"
+    after=$(wc -l < "$tmp")
+    if (( after < before )); then
+        cat "$tmp" > "$EVIDENCE_FILE"
+        echo "trim-logs: $EVIDENCE_FILE: $((before - after)) of $before lines removed"
+    fi
+fi
