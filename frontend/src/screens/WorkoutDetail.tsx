@@ -132,11 +132,15 @@ export default function WorkoutDetail() {
   // No end time means the lifter is still at it, so the page's main action is
   // getting back into the editor rather than reading.
   const inProgress = workout.endedAt === null
-  const startedAt = formatWorkoutTime(workout.startedAt)
+  // A prepared page (specs/006) has no start yet. No screen links to one before
+  // the prepared-pages UI lands, which gives it its own plan heading; until then
+  // it just reads as not started.
   const timeRange =
-    workout.endedAt === null
-      ? `from ${startedAt}, in progress`
-      : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
+    workout.startedAt === null
+      ? 'not started'
+      : workout.endedAt === null
+        ? `from ${formatWorkoutTime(workout.startedAt)}, in progress`
+        : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
   const bodyweight =
     workout.bodyweightKg === null
       ? 'bodyweight not logged'
@@ -211,7 +215,9 @@ export default function WorkoutDetail() {
       <div className="workout-detail-content">
         <section className="workout-detail-heading">
           <p className="workout-detail-date num">
-            {formatWorkoutLongDate(workout.date)}
+            {workout.date === null
+              ? 'Plan'
+              : formatWorkoutLongDate(workout.date)}
           </p>
           <h1>
             {(detailsAllowed ? workout.title : null) ?? 'Untitled session'}

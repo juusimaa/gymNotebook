@@ -42,8 +42,10 @@ export interface WorkoutDetailResponse {
   // since (another device saved it), the write is refused with 409
   // page_changed and nothing is written (specs/003-durable-logging D3).
   revision: number
-  date: string
-  startedAt: string
+  // Both null on a prepared page, written ahead and not started yet (specs/006);
+  // both set on every started one.
+  date: string | null
+  startedAt: string | null
   endedAt: string | null
   title: string | null
   bodyweightKg: number | null
@@ -65,7 +67,8 @@ export interface CreateWorkoutRequest {
 
 // PATCH has two distinct states for nullable properties: undefined means omit the
 // JSON property and preserve its current value; null sends an explicit JSON null
-// and clears it. Date and startedAt cannot be null because a Workout requires them.
+// and clears it. Date and startedAt cannot be null: a started page keeps both, and a
+// prepared page gets them only from POST /workouts/{id}/start (400 not_started here).
 export interface UpdateWorkoutRequest {
   date?: string
   startedAt?: string
@@ -114,6 +117,26 @@ export interface WorkoutSummaryResponse {
   exerciseNames: string[]
 }
 
+// One row of GET /workouts/prepared: a page with no date or start yet. setCount is
+// every set on it; on a prepared page they are all planned.
+export interface PreparedWorkoutSummaryResponse {
+  id: number
+  title: string | null
+  createdAt: string
+  exerciseNames: string[]
+  exerciseCount: number
+  setCount: number
+}
+
+// POST /workouts/prepared takes only the heading: the date and start come later,
+// when the page is started. Blocks follow with replaceWorkoutExercises, as on any page.
+export interface CreatePreparedWorkoutRequest {
+  title: string | null
+  bodyweightKg: number | null
+  location: string | null
+  notes: string | null
+}
+
 // Keyset pagination uses the last workout id from the previous page as `before`.
 // URLSearchParams handles encoding and makes omission of the optional cursor explicit.
 export function listWorkouts(
@@ -132,6 +155,23 @@ export function createWorkout(
   body: CreateWorkoutRequest,
 ): Promise<WorkoutDetailResponse> {
   return request<WorkoutDetailResponse>('/workouts', {
+    method: 'POST',
+    body,
+  })
+}
+
+// The caller's prepared pages, newest written first. Unpaged: a handful of plans.
+export function listPreparedWorkouts(): Promise<
+  PreparedWorkoutSummaryResponse[]
+> {
+  return request<PreparedWorkoutSummaryResponse[]>('/workouts/prepared')
+}
+
+// Creates an empty prepared page; date, startedAt and endedAt come back null.
+export function createPreparedWorkout(
+  body: CreatePreparedWorkoutRequest,
+): Promise<WorkoutDetailResponse> {
+  return request<WorkoutDetailResponse>('/workouts/prepared', {
     method: 'POST',
     body,
   })

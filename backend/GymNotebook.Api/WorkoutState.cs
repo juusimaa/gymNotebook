@@ -13,8 +13,8 @@ public enum WorkoutState
 public static class WorkoutStates
 {
     // Prepared when nobody has started the page, in progress until it has an end time,
-    // finished after that. startedAt is nullable ahead of prepared pages (PR 3); until
-    // then every stored page has one, so no page is prepared yet.
+    // finished after that. A prepared page's date is null too (ck_workouts_started_pair),
+    // so the start alone decides.
     public static WorkoutState Of(DateTimeOffset? startedAt, DateTimeOffset? endedAt) =>
         startedAt is null ? WorkoutState.Prepared
         : endedAt is null ? WorkoutState.InProgress

@@ -71,7 +71,7 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         {
             Assert.Equal(expected.Id, actual.GetProperty("id").GetInt32());
             Assert.Equal(expected.UserId, actual.GetProperty("userId").GetInt32());
-            Assert.Equal(expected.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), actual.GetProperty("date").GetString());
+            Assert.Equal(expected.Date!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), actual.GetProperty("date").GetString());
             Assert.Equal(expected.StartedAt, Instant(actual.GetProperty("startedAt")));
             Assert.Equal(expected.EndedAt, NullableInstant(actual.GetProperty("endedAt")));
             Assert.Equal(expected.Title, NullableText(actual.GetProperty("title")));

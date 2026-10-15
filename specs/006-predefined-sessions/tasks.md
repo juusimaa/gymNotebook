@@ -98,21 +98,21 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ### Backend (PR 3)
 
-- [ ] T030 [US1] `backend/GymNotebook.Api/Workout.cs`: `DateOnly? Date`, `DateTimeOffset? StartedAt`. Fix every compile site in `Program.cs`, `NotebookExport.cs`, `NotebookRestore.cs` and `AccountLifecycle.cs`. Started-only reads use `.Value` after a started filter; comment why.
-- [ ] T031 [US1] In `backend/GymNotebook.Api/Data/AppDbContext.cs` add the check constraints:
+- [x] T030 [US1] `backend/GymNotebook.Api/Workout.cs`: `DateOnly? Date`, `DateTimeOffset? StartedAt`. Fix every compile site in `Program.cs`, `NotebookExport.cs`, `NotebookRestore.cs` and `AccountLifecycle.cs`. Started-only reads use `.Value` after a started filter; comment why.
+- [x] T031 [US1] In `backend/GymNotebook.Api/Data/AppDbContext.cs` add the check constraints:
   - `ck_workouts_started_pair`: `(date IS NULL) = (started_at IS NULL)`
   - `ck_workouts_ended_requires_start`: `ended_at IS NULL OR started_at IS NOT NULL`
-- [ ] T032 [US1] Generate migration `AllowPreparedWorkouts` in `backend/GymNotebook.Api/Migrations/`. Review that it only drops NOT NULL on `date` and `started_at` and adds the two constraints.
-- [ ] T033 [US1] Make `Date` and `StartedAt` nullable in `backend/GymNotebook.Api/WorkoutDetailResponse.cs`.
-- [ ] T034 [US1] `GET /workouts` in `Program.cs`:
+- [x] T032 [US1] Generate migration `AllowPreparedWorkouts` in `backend/GymNotebook.Api/Migrations/`. Review that it only drops NOT NULL on `date` and `started_at` and adds the two constraints.
+- [x] T033 [US1] Make `Date` and `StartedAt` nullable in `backend/GymNotebook.Api/WorkoutDetailResponse.cs`.
+- [x] T034 [US1] `GET /workouts` in `Program.cs`:
   - filter `StartedAt != null`
   - a prepared page's id as `before` returns 400, like a foreign cursor
   - ordering unchanged
-- [ ] T035 [US1] Create `PreparedWorkoutSummaryResponse.cs` and `CreatePreparedWorkoutRequest.cs` (Title?, BodyweightKg?, Location?, Notes?). Map in `Program.cs`:
+- [x] T035 [US1] Create `PreparedWorkoutSummaryResponse.cs` and `CreatePreparedWorkoutRequest.cs` (Title?, BodyweightKg?, Location?, Notes?). Map in `Program.cs`:
   - `GET /workouts/prepared`: caller's pages with `StartedAt == null`, `CreatedAt` desc, unpaged, one projection with `exerciseNames`, `exerciseCount`, `setCount`.
   - `POST /workouts/prepared`: same optional-details consent check as `POST /workouts`, 403 `optional_details_consent_required`. Returns 201 `WorkoutDetailResponse` with null date, start and end and revision 1.
-- [ ] T036 [US1] `PATCH /workouts/{id}` in `Program.cs`: on a prepared page, `date`, `startedAt` or `endedAt` returns 400 `ErrorResponse("not_started")`. Heading fields are allowed as today.
-- [ ] T037 [P] [US1] Tests in new `backend/GymNotebook.Tests/PreparedWorkoutTests.cs`:
+- [x] T036 [US1] `PATCH /workouts/{id}` in `Program.cs`: on a prepared page, `date`, `startedAt` or `endedAt` returns 400 `ErrorResponse("not_started")`. Heading fields are allowed as today.
+- [x] T037 [P] [US1] Tests in new `backend/GymNotebook.Tests/PreparedWorkoutTests.cs`:
   - `CreatePrepared_Valid_Returns201WithoutDateOrStart`
   - `CreatePrepared_TitleWithoutConsent_Returns403` (privacy factory)
   - `ListPrepared_ReturnsOnlyCallersPreparedNewestFirst`
@@ -125,12 +125,12 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - `DeletePrepared_Owner_Returns204`
   - `ListExercises_PreparedPage_NotCounted`
   - `Database_DateWithoutStart_ViolatesCheck`
-- [ ] T038 [P] [US1] Tests: in `backend/GymNotebook.Tests/DeletionTests.cs`, `DeleteAccount_WithPreparedPage_RemovesIt`; in `OptionalDetailsConsentTests.cs`, `WithdrawConsent_PreparedPage_ClearsDetails`.
-- [ ] T039 [US1] `frontend/src/api/workouts.ts`:
+- [x] T038 [P] [US1] Tests: in `backend/GymNotebook.Tests/DeletionTests.cs`, `DeleteAccount_WithPreparedPage_RemovesIt`; in `OptionalDetailsConsentTests.cs`, `WithdrawConsent_PreparedPage_ClearsDetails`.
+- [x] T039 [US1] `frontend/src/api/workouts.ts`:
   - `date` and `startedAt` become `string | null` in `WorkoutDetailResponse`
   - `listPreparedWorkouts()` and `createPreparedWorkout()`
   - fix the type errors in `frontend/src/screens/` via `npm run typecheck`, without changing behaviour for started pages
-- [ ] T040 [US1] `PLAN.md`: data model (nullable `date`/`started_at`, the derived three states, both constraints) and REST API (`GET`/`POST /workouts/prepared`, `not_started`).
+- [x] T040 [US1] `PLAN.md`: data model (nullable `date`/`started_at`, the derived three states, both constraints) and REST API (`GET`/`POST /workouts/prepared`, `not_started`).
 
 ### Frontend (PR 7, after T003)
 
@@ -170,20 +170,20 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ### Backend (PR 3)
 
-- [ ] T041 [US2] `POST /workouts/{id}/start` in `Program.cs` with new `StartWorkoutRequest.cs` (`DateOnly? Date`, `DateTimeOffset? StartedAt`, `int? ExpectedRevision`):
+- [x] T041 [US2] `POST /workouts/{id}/start` in `Program.cs` with new `StartWorkoutRequest.cs` (`DateOnly? Date`, `DateTimeOffset? StartedAt`, `int? ExpectedRevision`):
   - 400 `invalid_request` when date or start is missing
   - 404 when not found or not the caller's
   - 409 `ErrorResponse("already_started")` when the page isn't prepared
   - 409 `page_changed` on a stale revision, via `BumpWorkoutRevisionAsync`
   - sets `Date` and `StartedAt` (UTC), keeps sets planned, returns 200 `WorkoutDetailResponse`
-- [ ] T042 [P] [US2] Tests in `backend/GymNotebook.Tests/PreparedWorkoutTests.cs`:
+- [x] T042 [P] [US2] Tests in `backend/GymNotebook.Tests/PreparedWorkoutTests.cs`:
   - `Start_Prepared_SetsDateAndStartKeepsPlanned`
   - `Start_Twice_Returns409AlreadyStarted`
   - `Start_StaleRevision_Returns409PageChanged`
   - `Start_OtherUser_Returns404`
   - `Start_MissingStartedAt_Returns400`
   - `StartThenFinish_UnmarkedSets_BecomeSkipped`
-- [ ] T043 [US2] `PLAN.md` REST API: `POST /workouts/{id}/start` and `already_started`.
+- [x] T043 [US2] `PLAN.md` REST API: `POST /workouts/{id}/start` and `already_started`.
 
 ### Frontend (PR 6 and PR 7, after T003)
 
