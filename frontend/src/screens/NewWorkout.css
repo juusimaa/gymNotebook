@@ -708,3 +708,10 @@
     padding-inline: 4px;
   }
 }
+
+/* Save as template on a plan (specs/006): a quiet text button under the
+   exercise search, apart from the footer's Save plan and Start session. */
+.new-workout-save-template {
+  margin-top: 14px;
+  font-size: 15px;
+}

@@ -210,6 +210,22 @@
   letter-spacing: 0.22em;
 }
 
+/* The Planned label line also holds the Templates link, at its right. */
+.sessions-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.sessions-group-heading .sessions-group-label {
+  margin: 0;
+}
+
+.sessions-templates-link {
+  font-size: 13px;
+}
+
 .sessions-logged-label {
   margin-top: 22px;
 }
@@ -297,7 +313,51 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
+/* A template choice: its name as a choice reads, its exercises under it in
+   one cut-off line, so a long routine doesn't grow the chooser. */
+.plan-chooser-template {
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: left;
+  background: none;
+  border-width: 0 0 1px;
+  border-style: solid;
+  border-color: var(--color-divider);
+}
+
+.plan-chooser-template:disabled {
+  cursor: default;
+}
+
+.plan-chooser-summary {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--color-neutral-700);
+  font-family: var(--font-body);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-chooser-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-neutral-700);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.plan-chooser-note.form-message {
+  color: var(--color-error);
+}
+
 .plan-chooser-choice:focus-visible,
+.plan-chooser-actions a:focus-visible,
 .plan-chooser-actions button:focus-visible {
   outline: 2px solid var(--color-accent-700);
   outline-offset: 2px;
@@ -305,7 +365,13 @@
 
 .plan-chooser-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.plan-chooser-actions a {
+  justify-content: flex-start;
+  font-size: 13px;
 }
 
 .plan-chooser-actions button {
