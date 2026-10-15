@@ -44,8 +44,12 @@ const KEY_PREFIX = 'gymnotebook.draft.'
 // instead of being thrown away.
 const STORAGE_VERSION = 1
 
+// 'plan' is a new plan's page, /workouts/prepare (specs/006). It has a key of
+// its own, so a plan being written never restores into a new session page or
+// the other way round. A plan already saved uses its edit page's key, as any
+// page does.
 export type EditorDraftRoute =
-  { kind: 'new' } | { kind: 'edit'; workoutId: number }
+  { kind: 'new' } | { kind: 'plan' } | { kind: 'edit'; workoutId: number }
 
 // What the editor holds and the server doesn't know yet.
 export interface EditorDraftContent {
@@ -91,9 +95,10 @@ function browserStore(): DraftStore | null {
 }
 
 export function editorDraftKey(route: EditorDraftRoute): string {
-  return route.kind === 'new'
-    ? `${KEY_PREFIX}new`
-    : `${KEY_PREFIX}workout.${route.workoutId}`
+  if (route.kind === 'edit') {
+    return `${KEY_PREFIX}workout.${route.workoutId}`
+  }
+  return `${KEY_PREFIX}${route.kind}`
 }
 
 // — reading back —
@@ -248,18 +253,21 @@ export function countDraftSets(exercises: WorkoutExerciseDraft[]): number {
 // The question Cancel asks when the draft has changed. It names what goes
 // (PRODUCT.md: destructive actions name their consequences), and on a new
 // page whose heading already reached the server it says that part stays.
+// A plan (specs/006) is called one: "Discard this plan and its 7 sets?".
 export function describeDiscard(options: {
   isEditing: boolean
   setCount: number
   partlySaved: boolean
+  isPlan?: boolean
 }): string {
+  const noun = options.isPlan === true ? 'plan' : 'page'
   if (options.isEditing) {
-    return 'Discard your changes? The page stays as it was last saved.'
+    return `Discard your changes? The ${noun} stays as it was last saved.`
   }
   const question =
     options.setCount === 0
-      ? 'Discard this page?'
-      : `Discard this page and its ${formatCount(options.setCount, 'set')}?`
+      ? `Discard this ${noun}?`
+      : `Discard this ${noun} and its ${formatCount(options.setCount, 'set')}?`
   return options.partlySaved
     ? `${question} The part already saved stays in your notebook.`
     : question

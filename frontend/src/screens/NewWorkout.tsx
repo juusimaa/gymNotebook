@@ -25,14 +25,20 @@ import {
   type ExerciseResponse,
 } from '../api/exercises'
 import {
+  ALREADY_STARTED,
+  createPreparedWorkout,
   createWorkout,
   deleteWorkout,
   getWorkout,
   PAGE_CHANGED,
   replaceWorkoutExercises,
+  startWorkout,
   updateWorkout,
+  type CreatePreparedWorkoutRequest,
   type CreateWorkoutRequest,
+  type SetStatus,
   type UpdateWorkoutRequest,
+  type WorkoutDetailResponse,
 } from '../api/workouts'
 import {
   addSetToExercise,
@@ -44,13 +50,17 @@ import {
   createExistingWorkoutDraft,
   createInitialHeadingDraft,
   createLocalEndedAt,
+  createPlanHeadingDraft,
+  createStartTimes,
   createWorkoutExerciseDraft,
   describeHeadingWhen,
   dropOptionalDetails,
   findNextSet,
   needsExplicitFinishTime,
   prepareAutosaveDraft,
+  preparePlanDraft,
   prepareWorkoutDraft,
+  type PreparedPlanDraft,
   type PreparedWorkoutDraft,
   removeSetFromExercise,
   restoreSetToExercise,
@@ -191,7 +201,10 @@ const selectOnFocusProps = {
 // page (specs/003 D9). That is still the same page being written, so the
 // address change carries the new page's key in router state, and the editor
 // (with its focus, and the phone's keyboard) stays as it is.
+// A new plan (/workouts/prepare, specs/006) does the same on its first save,
+// under a key of its own.
 const KEEP_NEW_PAGE_EDITOR = { editorKey: 'new' }
+const KEEP_NEW_PLAN_EDITOR = { editorKey: 'plan' }
 
 function readEditorKey(state: unknown): string | null {
   return typeof state === 'object' &&
@@ -202,11 +215,17 @@ function readEditorKey(state: unknown): string | null {
     : null
 }
 
-export default function NewWorkout() {
+// mode 'plan' is /workouts/prepare: a new page written ahead of the gym. An
+// existing page's mode comes from the page itself once it has loaded.
+export default function NewWorkout({ mode }: { mode?: 'plan' }) {
   const { workoutId } = useParams()
   const location = useLocation()
+  const fallbackKey = mode === 'plan' ? 'plan' : 'new'
   return (
-    <WorkoutEditor key={readEditorKey(location.state) ?? workoutId ?? 'new'} />
+    <WorkoutEditor
+      key={readEditorKey(location.state) ?? workoutId ?? fallbackKey}
+      isNewPlan={mode === 'plan' && workoutId === undefined}
+    />
   )
 }
 
@@ -221,11 +240,23 @@ function pageProblemOf(error: unknown): PageProblem | null {
   return null
 }
 
+// The heading as last sent or loaded. A plan's has no date or start time
+// (specs/006); a started page's has both.
+type SavedHeading = CreatePreparedWorkoutRequest &
+  Partial<Pick<CreateWorkoutRequest, 'date' | 'startedAt'>>
+
 // What the server holds once a page is loaded (or reloaded after a conflict).
-function describeServerPage(draft: ExistingWorkoutDraft) {
-  const prepared = prepareAutosaveDraft(draft.heading, draft.exercises)
+// A plan is read the way Save plan sends it, a started page the way autosave
+// does, so an unchanged half is never sent again.
+function describeServerPage(draft: ExistingWorkoutDraft, isPlan: boolean) {
+  const prepared = isPlan
+    ? preparePlanDraft(draft.heading, draft.exercises)
+    : prepareAutosaveDraft(draft.heading, draft.exercises)
+  const heading: SavedHeading | null = prepared.ok
+    ? prepared.value.workout
+    : null
   return {
-    heading: prepared.ok ? prepared.value.workout : null,
+    heading,
     exercises: prepared.ok
       ? JSON.stringify(prepared.value.exercises.exercises)
       : null,
@@ -233,15 +264,32 @@ function describeServerPage(draft: ExistingWorkoutDraft) {
   }
 }
 
-// What a save sends: the prepared page, and which editor block each sent
-// block came from (an autosave leaves out blocks with no complete set).
+// What a save sends: the prepared page (or plan), and which editor block each
+// sent block came from (an autosave leaves out blocks with no complete set).
 interface DraftSnapshot {
-  prepared: PreparedWorkoutDraft
+  prepared: PreparedWorkoutDraft | PreparedPlanDraft
   blockIndexes: number[]
   exercises: WorkoutExerciseDraft[]
 }
 
-function WorkoutEditor() {
+// A started page's heading carries its date and start; a plan's has neither,
+// so its first save creates a prepared page instead (POST /workouts/prepared).
+function isStartedHeading(
+  workout: SavedHeading,
+): workout is SavedHeading & CreateWorkoutRequest {
+  return workout.date !== undefined && workout.startedAt !== undefined
+}
+
+// The 409 a start gets when the page has already been started elsewhere.
+function isAlreadyStarted(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    error.code === ALREADY_STARTED
+  )
+}
+
+function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
   const navigate = useNavigate()
   const user = useRouteLoaderData('auth') as MeResponse
   const params = useParams()
@@ -252,13 +300,23 @@ function WorkoutEditor() {
   const isEditing = workoutIdParam !== undefined
   const hasValidWorkoutId =
     Number.isSafeInteger(parsedWorkoutId) && parsedWorkoutId > 0
+  // Opened on /workouts/prepare. Read once too, for the same reason.
+  const [isNewPlan] = useState(isNewPlanProp)
+  // A new page's or a new plan's own stored copy, before it has an id.
+  const newRoute: EditorDraftRoute = isNewPlan
+    ? { kind: 'plan' }
+    : { kind: 'new' }
+  // A fresh heading: "now" for a page, empty for a plan, which has no date
+  // or start until Start session gives it both (specs/006).
+  const freshHeading = () =>
+    isNewPlan ? createPlanHeadingDraft() : createInitialHeadingDraft(new Date())
 
   // Draft safety (editorDraftStorage.ts): the editor keeps a copy of its draft
   // in this tab's sessionStorage, so a reload, a locked phone or an expired
   // sign-in doesn't lose a half-logged session. The copy this route left is
   // read once, at mount, and wins over a fresh page or the server's copy.
   const [initialRoute] = useState<EditorDraftRoute | null>(() => {
-    if (!isEditing) return { kind: 'new' }
+    if (!isEditing) return isNewPlan ? { kind: 'plan' } : { kind: 'new' }
     return hasValidWorkoutId
       ? { kind: 'edit', workoutId: parsedWorkoutId }
       : null
@@ -274,7 +332,7 @@ function WorkoutEditor() {
   // has loaded. Cancel asks before leaving only when the draft differs.
   const [baseline, setBaseline] = useState(() =>
     draftFingerprint({
-      heading: createInitialHeadingDraft(new Date()),
+      heading: freshHeading(),
       endTime: '',
       exercises: [],
     }),
@@ -287,7 +345,7 @@ function WorkoutEditor() {
   const [heading, setHeading] = useState(() =>
     !isEditing && restoredDraft !== null
       ? restoredDraft.heading
-      : createInitialHeadingDraft(new Date()),
+      : freshHeading(),
   )
   const [endTime, setEndTime] = useState('')
   const [exercises, setExercises] = useState<WorkoutExerciseDraft[]>(() =>
@@ -305,7 +363,7 @@ function WorkoutEditor() {
     string | null
   >(null)
   const [savingAction, setSavingAction] = useState<
-    'save' | 'finish' | 'tear-out' | 'keep' | null
+    'save' | 'finish' | 'tear-out' | 'keep' | 'plan' | 'start' | null
   >(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(isEditing)
@@ -368,17 +426,28 @@ function WorkoutEditor() {
   // page moves to its edit page's key once it exists on the server (D9).
   const draftRoute = useMemo<EditorDraftRoute | null>(() => {
     if (isEditing) return initialRoute
-    return savedWorkoutId === null
-      ? { kind: 'new' }
-      : { kind: 'edit', workoutId: savedWorkoutId }
-  }, [initialRoute, isEditing, savedWorkoutId])
+    if (savedWorkoutId !== null)
+      return { kind: 'edit', workoutId: savedWorkoutId }
+    return isNewPlan ? { kind: 'plan' } : { kind: 'new' }
+  }, [initialRoute, isEditing, isNewPlan, savedWorkoutId])
+
+  // — Prepare mode (specs/006) —
+  // A page written ahead of the gym: a new plan, or an existing page that
+  // hasn't started (startedAt null). It has no date, no done controls and no
+  // autosave; Save plan and Start session save it explicitly. Start session
+  // turns it into a session in progress, in this same editor.
+  const [isPlanning, setIsPlanning] = useState(isNewPlan)
+  // The status a new row starts with: planned on a plan, done everywhere
+  // else, so logging as you go costs no extra tap (research R14, Q5).
+  const newRowStatus: SetStatus = isPlanning ? 'planned' : 'done'
 
   // — Autosave (specs/003-durable-logging) —
   // A session still in progress saves itself: a new page, or an edit page
   // opened without a finish time. A finished page being corrected keeps the
-  // explicit Save changes. Decided when the page opens, so typing a finish
-  // time into the heading doesn't switch modes under the lifter's thumb.
-  const [isInProgress, setIsInProgress] = useState(!isEditing)
+  // explicit Save changes, and a plan its Save plan. Decided when the page
+  // opens (or starts), so typing a finish time into the heading doesn't
+  // switch modes under the lifter's thumb.
+  const [isInProgress, setIsInProgress] = useState(!isEditing && !isNewPlan)
   // The page revision this editor's changes are based on, sent with every
   // write as expectedRevision (FR-011). A restored copy brings the revision
   // it was made on.
@@ -387,7 +456,7 @@ function WorkoutEditor() {
   const serverRevision = useRef<number | null>(null)
   // What the server holds, as last sent or loaded, so a save sends only the
   // half that changed: the heading's fields, and the blocks as JSON.
-  const savedHeadingRef = useRef<CreateWorkoutRequest | null>(null)
+  const savedHeadingRef = useRef<SavedHeading | null>(null)
   const savedExercisesRef = useRef<string | null>(null)
   // Exercises created by a save whose bodyweight choice hasn't been stored
   // yet; retried with the next save if the PATCH fails.
@@ -406,9 +475,10 @@ function WorkoutEditor() {
   // screen alone.
   const isMounted = useRef(true)
 
-  // A page deleted elsewhere has no page of its own to go back to.
+  // A page deleted elsewhere has no page of its own to go back to. A plan is
+  // opened from the Planned group, so Cancel goes back there.
   const cancelTarget =
-    isEditing && pageProblem !== 'gone'
+    isEditing && pageProblem !== 'gone' && !isPlanning
       ? `/workouts/${parsedWorkoutId}`
       : '/workouts'
 
@@ -490,7 +560,7 @@ function WorkoutEditor() {
       // Back to the server's page, so back to its revision too.
       revisionRef.current = serverRevision.current
     } else {
-      const fresh = createInitialHeadingDraft(new Date())
+      const fresh = freshHeading()
       setBaseline(
         draftFingerprint({ heading: fresh, endTime: '', exercises: [] }),
       )
@@ -679,7 +749,7 @@ function WorkoutEditor() {
     const setClientId = createClientId()
     flushSync(() =>
       changeExercise(exercise.clientId, (current) =>
-        addSetToExercise(current, setClientId),
+        addSetToExercise(current, setClientId, newRowStatus),
       ),
     )
     focusSetEntry(exercise, setClientId)
@@ -863,11 +933,12 @@ function WorkoutEditor() {
 
   // Repeated exercise selections remain separate blocks by design.
   function selectExercise(exercise: ExerciseResponse) {
-    // "last time" on a new page and on a session still being logged; the
-    // edit page's search leaves the page itself out (excludeWorkoutId), so
-    // it's never one of this page's own sets. A finished page being
-    // corrected gets none: its "last time" could be a later session.
-    const isLogging = isInProgress
+    // "last time" on a new page, on a session still being logged and on a
+    // plan, which is written from it; the edit page's search leaves the page
+    // itself out (excludeWorkoutId), so it's never one of this page's own
+    // sets. A finished page being corrected gets none: its "last time" could
+    // be a later session.
+    const isLogging = isInProgress || isPlanning
     const draft = createWorkoutExerciseDraft(
       createClientId(),
       createClientId(),
@@ -876,6 +947,7 @@ function WorkoutEditor() {
       exercise.isBodyweight,
       isLogging ? exercise.lastSet : null,
       isLogging ? exercise.firstSet : null,
+      newRowStatus,
     )
 
     addExerciseBlock(draft)
@@ -910,6 +982,9 @@ function WorkoutEditor() {
       null,
       name,
       isBodyweight,
+      null,
+      null,
+      newRowStatus,
     )
 
     addExerciseBlock(draft)
@@ -939,13 +1014,16 @@ function WorkoutEditor() {
   // an unchanged heading costs no request. The four optional details are
   // left out entirely unless the account allows them: omitted keeps what the
   // server has, where null would clear it while consent is still loading.
-  function headingChanges(
-    workout: CreateWorkoutRequest,
-  ): UpdateWorkoutRequest | null {
+  // A plan has no date or start to send (the server refuses them on a page
+  // that hasn't started), so only its details can change.
+  function headingChanges(workout: SavedHeading): UpdateWorkoutRequest | null {
     const saved = savedHeadingRef.current
-    const fields: (keyof CreateWorkoutRequest)[] = detailsAllowed
-      ? ['date', 'startedAt', 'title', 'bodyweightKg', 'location', 'notes']
-      : ['date', 'startedAt']
+    const fields: (keyof SavedHeading)[] = [
+      ...(isStartedHeading(workout) ? (['date', 'startedAt'] as const) : []),
+      ...(detailsAllowed
+        ? (['title', 'bodyweightKg', 'location', 'notes'] as const)
+        : []),
+    ]
     const changes: UpdateWorkoutRequest = {}
     for (const field of fields) {
       if (saved === null || saved[field] !== workout[field]) {
@@ -962,6 +1040,7 @@ function WorkoutEditor() {
   // write carries the revision this editor holds and keeps the one that
   // comes back (FR-011), so a stale write is refused, not applied. A new
   // exercise saved as bodyweight gets that choice stored once it has an id.
+  // A plan is created as a prepared page (specs/006), with no date or start.
   // Returns the page's id and the exercise ids it learned, by block client
   // id; throws what the API threw.
   async function persistDraft(
@@ -973,7 +1052,9 @@ function WorkoutEditor() {
     const expected = () => revisionRef.current ?? undefined
 
     if (workoutId === null) {
-      const created = await createWorkout(workout)
+      const created = isStartedHeading(workout)
+        ? await createWorkout(workout)
+        : await createPreparedWorkout(workout)
       workoutId = created.id
       savedWorkoutIdRef.current = created.id
       revisionRef.current = created.revision
@@ -1033,7 +1114,7 @@ function WorkoutEditor() {
   function currentDraftRoute(): EditorDraftRoute | null {
     if (isEditing) return initialRoute
     const id = savedWorkoutIdRef.current
-    return id === null ? { kind: 'new' } : { kind: 'edit', workoutId: id }
+    return id === null ? newRoute : { kind: 'edit', workoutId: id }
   }
 
   // Consent was withdrawn elsewhere while this page was open, and the server
@@ -1092,9 +1173,11 @@ function WorkoutEditor() {
         const workout = await getWorkout(parsedWorkoutId)
         if (!cancelled) {
           const draft = createExistingWorkoutDraft(workout, createClientId)
+          // Not started yet: the page is a plan (specs/006).
+          const isPlan = workout.startedAt === null
           serverDraft.current = draft
           setBaseline(draftFingerprint(draft))
-          const known = describeServerPage(draft)
+          const known = describeServerPage(draft, isPlan)
           savedHeadingRef.current = known.heading
           savedExercisesRef.current = known.exercises
           seedTrigger(known.trigger)
@@ -1112,13 +1195,15 @@ function WorkoutEditor() {
           setExercises(shown.exercises)
           setRestoredAt(restoredDraft?.savedAt ?? null)
           setSavedWorkoutId(workout.id)
-          setIsInProgress(draft.endTime === '')
+          setIsPlanning(isPlan)
+          setIsInProgress(!isPlan && draft.endTime === '')
 
           // A session still in progress shows "last time" on the blocks it
-          // already has, as it does on blocks picked now; a finished page
-          // being corrected shows none, since its "last time" could be a
-          // later session. One request covers every block. It is only a
-          // hint, so a failure leaves the blocks without it and says nothing.
+          // already has, as it does on blocks picked now, and so does a plan
+          // (its endTime is empty too); a finished page being corrected
+          // shows none, since its "last time" could be a later session. One
+          // request covers every block. It is only a hint, so a failure
+          // leaves the blocks without it and says nothing.
           if (draft.endTime === '') {
             try {
               const found = await searchExercises('', workout.id)
@@ -1189,14 +1274,16 @@ function WorkoutEditor() {
   // A first save moved the new page onto the server: its address and its
   // stored copy move to the edit page (D9), without a new history entry, so
   // a reload or Continue logging opens this same page.
+  // A new plan does the same once its save has created it, so a reload opens
+  // the plan rather than an empty one.
   useEffect(() => {
     if (isEditing || savedWorkoutId === null || isDraftClosed.current) return
-    removeEditorDraft({ kind: 'new' })
+    removeEditorDraft(isNewPlan ? { kind: 'plan' } : { kind: 'new' })
     void navigate(`/workouts/${savedWorkoutId}/edit`, {
       replace: true,
-      state: KEEP_NEW_PAGE_EDITOR,
+      state: isNewPlan ? KEEP_NEW_PLAN_EDITOR : KEEP_NEW_PAGE_EDITOR,
     })
-  }, [isEditing, navigate, savedWorkoutId])
+  }, [isEditing, isNewPlan, navigate, savedWorkoutId])
 
   // Finish session flushes any pending save first (FR-007), so the question
   // is asked about a page the server already has. A conflict or a deleted
@@ -1328,12 +1415,128 @@ function WorkoutEditor() {
     }
   }
 
+  // — Save plan and Start session (specs/006) —
+
+  // The strict save of a plan, shared by both buttons: every row must be
+  // complete, as on Save changes, and the field at fault is pointed at.
+  // Returns the page's id, or null when nothing was saved (the message
+  // already says why). The caller holds savingAction.
+  async function persistPlan(): Promise<number | null> {
+    const prepared = preparePlanDraft(
+      detailsAllowed ? heading : dropOptionalDetails(heading),
+      exercises,
+    )
+    if (!prepared.ok) {
+      setSaveMessage(prepared.message)
+      pointAtProblem(prepared.at)
+      return null
+    }
+
+    setSaveMessage(null)
+    setInvalidField(null)
+    try {
+      const { workoutId } = await persistDraft({
+        prepared: prepared.value,
+        blockIndexes: exercises.map((_, index) => index),
+        exercises,
+      })
+      return workoutId
+    } catch (error: unknown) {
+      const problem = pageProblemOf(error)
+      if (problem !== null) {
+        setPageProblem(problem)
+      } else if (isOptionalDetailsConsentRequired(error)) {
+        dropWithdrawnDetails()
+      } else {
+        setSaveMessage(
+          savedWorkoutIdRef.current === null
+            ? 'The plan could not be saved. Please try again.'
+            : 'The plan was created but not fully saved. Your draft is still here; try again.',
+        )
+      }
+      return null
+    }
+  }
+
+  // Save plan: saved, the plan waits under Planned on Sessions, which says so.
+  async function savePlan() {
+    if (savingAction !== null) return
+    setSavingAction('plan')
+    const workoutId = await persistPlan()
+    if (!isMounted.current) return
+    setSavingAction(null)
+    if (workoutId === null) return
+
+    isDraftClosed.current = true
+    const route = currentDraftRoute()
+    if (route !== null) removeEditorDraft(route)
+    removeEditorDraft({ kind: 'plan' })
+    void navigate('/workouts', { state: routeNotice('Plan saved.') })
+  }
+
+  // Start session: save the plan first, so the session starts from what is
+  // on screen, then start it with the local date and this moment, against
+  // the revision that save left. The editor then carries on in progress, as
+  // Continue logging would open it: the done toggles appear and it saves
+  // itself from here on.
+  async function startSession() {
+    if (savingAction !== null) return
+    setSavingAction('start')
+    const workoutId = await persistPlan()
+    if (!isMounted.current) return
+    if (workoutId === null) {
+      setSavingAction(null)
+      return
+    }
+
+    const { date, startedAt } = createStartTimes(new Date())
+    try {
+      const started = await startWorkout(
+        workoutId,
+        date,
+        startedAt,
+        revisionRef.current ?? undefined,
+      )
+      if (!isMounted.current) return
+      adoptServerPage(started)
+      // The plan's fields (title and notes) fold away with it; the started
+      // page's heading has a date and time now.
+      setIsHeadingOpen(false)
+      // The plan as saved is the session's first save.
+      setLastSavedAt(new Date().toISOString())
+    } catch (error: unknown) {
+      if (!isMounted.current) return
+      if (isAlreadyStarted(error)) {
+        // Started elsewhere meanwhile (another tab, another device): show
+        // the page as it now is, in progress, rather than a dead end.
+        if (await reloadPage()) {
+          setSaveMessage(
+            'This session had already been started elsewhere. It is shown as it is now.',
+          )
+        }
+      } else {
+        const problem = pageProblemOf(error)
+        if (problem !== null) {
+          setPageProblem(problem)
+        } else {
+          setSaveMessage(
+            'The plan was saved, but the session could not be started. Please try again.',
+          )
+        }
+      }
+    } finally {
+      if (isMounted.current) setSavingAction(null)
+    }
+  }
+
   // Cancel on a new page that has already saved itself asks whether to tear
   // it out (Story 4): the page is on the server, so leaving can't quietly
   // drop it any more, and Cancel mustn't be able to lose a real session.
   // Not after a conflict: tearing out would take the other device's sets too.
+  // Not on a plan either: it is saved only by Save plan or Start session, so
+  // Cancel asks about the draft, as on a finished page.
   const keepsPageOnCancel =
-    !isEditing && savedWorkoutId !== null && pageProblem === null
+    !isEditing && savedWorkoutId !== null && pageProblem === null && !isPlanning
 
   useEffect(() => {
     if (confirmingTearOut) keepPageRef.current?.focus()
@@ -1388,51 +1591,63 @@ function WorkoutEditor() {
   // Reload page, after a conflict (D10): the server's page replaces the
   // draft, and the sets that existed only here are listed rather than
   // merged, so nothing vanishes without a trace.
-  async function reloadPage() {
+  // Returns whether the page was reloaded.
+  async function reloadPage(): Promise<boolean> {
     const workoutId = savedWorkoutIdRef.current
-    if (workoutId === null) return
+    if (workoutId === null) return false
     setSaveMessage(null)
     try {
       const workout = await getWorkout(workoutId)
-      if (!isMounted.current) return
-      const draft = createExistingWorkoutDraft(workout, createClientId)
-      // Keep the "last time" lines the blocks already showed.
-      const lastSets = new Map(
-        exercises.map((exercise) => [exercise.exerciseId, exercise.lastSet]),
-      )
-      const reloaded = draft.exercises.map((exercise) =>
-        lastSets.has(exercise.exerciseId)
-          ? { ...exercise, lastSet: lastSets.get(exercise.exerciseId) }
-          : exercise,
-      )
-      const lost = describeUnsavedSets(exercises, draft.exercises)
-
-      serverDraft.current = draft
-      serverRevision.current = workout.revision
-      revisionRef.current = workout.revision
-      const known = describeServerPage(draft)
-      savedHeadingRef.current = known.heading
-      savedExercisesRef.current = known.exercises
-      seedTrigger(known.trigger)
-      setHeading(draft.heading)
-      setEndTime(draft.endTime)
-      setExercises(reloaded)
-      setBaseline(draftFingerprint({ ...draft, exercises: reloaded }))
-      setIsInProgress(draft.endTime === '')
-      setRestoredAt(null)
-      setRemoval(null)
-      setInvalidField(null)
-      setLastSavedAt(null)
-      setPageProblem(null)
-      setUnsavedHere(lost.length === 0 ? null : lost)
-      scheduler.resume()
+      if (!isMounted.current) return false
+      adoptServerPage(workout)
+      return true
     } catch (error: unknown) {
       if (pageProblemOf(error) === 'gone') {
         setPageProblem('gone')
       } else {
         setSaveMessage('The page could not be reloaded. Please try again.')
       }
+      return false
     }
+  }
+
+  // The server's page replaces the draft: after a reload, and after Start
+  // session, whose answer is the page now in progress. Its state picks the
+  // mode again, so a plan started elsewhere opens in progress here too.
+  function adoptServerPage(workout: WorkoutDetailResponse) {
+    const draft = createExistingWorkoutDraft(workout, createClientId)
+    const isPlan = workout.startedAt === null
+    // Keep the "last time" lines the blocks already showed.
+    const lastSets = new Map(
+      exercises.map((exercise) => [exercise.exerciseId, exercise.lastSet]),
+    )
+    const reloaded = draft.exercises.map((exercise) =>
+      lastSets.has(exercise.exerciseId)
+        ? { ...exercise, lastSet: lastSets.get(exercise.exerciseId) }
+        : exercise,
+    )
+    const lost = describeUnsavedSets(exercises, draft.exercises)
+
+    serverDraft.current = draft
+    serverRevision.current = workout.revision
+    revisionRef.current = workout.revision
+    const known = describeServerPage(draft, isPlan)
+    savedHeadingRef.current = known.heading
+    savedExercisesRef.current = known.exercises
+    seedTrigger(known.trigger)
+    setHeading(draft.heading)
+    setEndTime(draft.endTime)
+    setExercises(reloaded)
+    setBaseline(draftFingerprint({ ...draft, exercises: reloaded }))
+    setIsPlanning(isPlan)
+    setIsInProgress(!isPlan && draft.endTime === '')
+    setRestoredAt(null)
+    setRemoval(null)
+    setInvalidField(null)
+    setLastSavedAt(null)
+    setPageProblem(null)
+    setUnsavedHere(lost.length === 0 ? null : lost)
+    scheduler.resume()
   }
 
   // The add-as choice appears once a search has answered and stays put while
@@ -1471,6 +1686,7 @@ function WorkoutEditor() {
   // finished page. Other planned sets need none; their dashed fields and
   // hollow toggle already say "not yet".
   const setNote = (set: WorkoutSetDraft): string | null => {
+    if (isPlanning) return null
     if (set.status === 'skipped') return 'skipped'
     return nextSet?.setClientId === set.clientId ? 'next' : null
   }
@@ -1523,7 +1739,9 @@ function WorkoutEditor() {
         >
           ← Cancel
         </Link>
-        <h1>{isEditing ? 'Edit page' : 'New page'}</h1>
+        <h1>
+          {isPlanning ? 'Plan a session' : isEditing ? 'Edit page' : 'New page'}
+        </h1>
         <span className="new-workout-header-spacer" aria-hidden="true"></span>
       </header>
 
@@ -1534,6 +1752,7 @@ function WorkoutEditor() {
               isEditing,
               setCount: countDraftSets(exercises),
               partlySaved: !isEditing && savedWorkoutId !== null,
+              isPlan: isPlanning,
             })}
           </p>
           <div>
@@ -1565,7 +1784,8 @@ function WorkoutEditor() {
             {restoredAt !== null && (
               <p className="new-workout-restored" role="status">
                 <span>
-                  Restored your unsaved {isEditing ? 'changes' : 'page'} from{' '}
+                  Restored your unsaved{' '}
+                  {isEditing ? 'changes' : isNewPlan ? 'plan' : 'page'} from{' '}
                   <span className="num">
                     {describeDraftSavedAt(restoredAt, new Date())}
                   </span>
@@ -1605,15 +1825,18 @@ function WorkoutEditor() {
                 onClick={() => setIsHeadingOpen((open) => !open)}
               >
                 <span className="new-workout-heading-line">
+                  {/* A plan has no date or time yet: it reads "Plan". */}
                   <span className="num">
-                    {describeHeadingWhen(heading, endTime, new Date())}
+                    {isPlanning
+                      ? 'Plan'
+                      : describeHeadingWhen(heading, endTime, new Date())}
                   </span>
                   {summaryTitle !== '' && <> · {summaryTitle}</>}
                 </span>
                 <span className="new-workout-heading-action">
                   {isHeadingOpen
                     ? 'hide'
-                    : isEditing || summaryTitle !== ''
+                    : (isEditing && !isPlanning) || summaryTitle !== ''
                       ? 'edit details'
                       : 'add details'}
                 </span>
@@ -1621,14 +1844,17 @@ function WorkoutEditor() {
               {/* The save state (contracts/ui.md). Outside the button, so the
                   button's name stays the date; a polite live region that is
                   always there, so a change in it is announced. A conflict or
-                  a deleted page needs action and is announced at once. */}
+                  a deleted page needs action and is announced at once. A
+                  plan doesn't save itself, so it has no save line. */}
               {pageProblem === null ? (
-                <p
-                  className={`new-workout-save-state${saveState?.isError === true ? ' is-error' : ''}`}
-                  role="status"
-                >
-                  {saveState?.text}
-                </p>
+                !isPlanning && (
+                  <p
+                    className={`new-workout-save-state${saveState?.isError === true ? ' is-error' : ''}`}
+                    role="status"
+                  >
+                    {saveState?.text}
+                  </p>
+                )
               ) : (
                 <p className="new-workout-save-state is-error" role="alert">
                   {pageProblem === 'conflict'
@@ -1641,49 +1867,54 @@ function WorkoutEditor() {
                   )}
                 </p>
               )}
+              {/* A plan opens only Title and Notes: no date or start, since
+                  it has no time yet, and no bodyweight or gym, which can
+                  change by the day and are filled in once it starts. */}
               {isHeadingOpen && (
                 <div className="form-stack" id="page-heading-fields">
-                  <div className="new-workout-field-pair">
-                    <div className="field">
-                      <label className="label" htmlFor="workout-date">
-                        Date
-                      </label>
-                      <input
-                        className="input num"
-                        id="workout-date"
-                        type="date"
-                        required
-                        {...invalidProps({ kind: 'heading', field: 'date' })}
-                        value={heading.date}
-                        onChange={(event) =>
-                          updateHeadingField('date', event.target.value)
-                        }
-                      />
+                  {!isPlanning && (
+                    <div className="new-workout-field-pair">
+                      <div className="field">
+                        <label className="label" htmlFor="workout-date">
+                          Date
+                        </label>
+                        <input
+                          className="input num"
+                          id="workout-date"
+                          type="date"
+                          required
+                          {...invalidProps({ kind: 'heading', field: 'date' })}
+                          value={heading.date}
+                          onChange={(event) =>
+                            updateHeadingField('date', event.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label className="label" htmlFor="startTime">
+                          Started
+                        </label>
+                        <input
+                          className="input num"
+                          id="startTime"
+                          type="time"
+                          required
+                          {...invalidProps({
+                            kind: 'heading',
+                            field: 'startTime',
+                          })}
+                          value={heading.startTime}
+                          onChange={(event) =>
+                            updateHeadingField('startTime', event.target.value)
+                          }
+                        />
+                      </div>
                     </div>
-                    <div className="field">
-                      <label className="label" htmlFor="startTime">
-                        Started
-                      </label>
-                      <input
-                        className="input num"
-                        id="startTime"
-                        type="time"
-                        required
-                        {...invalidProps({
-                          kind: 'heading',
-                          field: 'startTime',
-                        })}
-                        value={heading.startTime}
-                        onChange={(event) =>
-                          updateHeadingField('startTime', event.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
+                  )}
                   {/* Only on a finished page: an in-progress one is finished
                       with Finish session, which saves; a time typed here
                       would never be. */}
-                  {isEditing && !isInProgress && (
+                  {isEditing && !isInProgress && !isPlanning && (
                     <div className="field">
                       <label className="label" htmlFor="endTime">
                         Finished
@@ -1726,44 +1957,49 @@ function WorkoutEditor() {
                           }
                         />
                       </div>
-                      <div className="new-workout-field-pair">
-                        <div className="field">
-                          <label className="label" htmlFor="bodyweightKg">
-                            Bodyweight (kg)
-                          </label>
-                          <input
-                            className="input num"
-                            id="bodyweightKg"
-                            type="text"
-                            inputMode="decimal"
-                            {...invalidProps({
-                              kind: 'heading',
-                              field: 'bodyweightKg',
-                            })}
-                            value={heading.bodyweightKg}
-                            onChange={(event) =>
-                              updateHeadingField(
-                                'bodyweightKg',
-                                event.target.value,
-                              )
-                            }
-                          />
+                      {!isPlanning && (
+                        <div className="new-workout-field-pair">
+                          <div className="field">
+                            <label className="label" htmlFor="bodyweightKg">
+                              Bodyweight (kg)
+                            </label>
+                            <input
+                              className="input num"
+                              id="bodyweightKg"
+                              type="text"
+                              inputMode="decimal"
+                              {...invalidProps({
+                                kind: 'heading',
+                                field: 'bodyweightKg',
+                              })}
+                              value={heading.bodyweightKg}
+                              onChange={(event) =>
+                                updateHeadingField(
+                                  'bodyweightKg',
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="field">
+                            <label className="label" htmlFor="location">
+                              Gym
+                            </label>
+                            <input
+                              className="input"
+                              id="location"
+                              type="text"
+                              value={heading.location}
+                              onChange={(event) =>
+                                updateHeadingField(
+                                  'location',
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </div>
                         </div>
-                        <div className="field">
-                          <label className="label" htmlFor="location">
-                            Gym
-                          </label>
-                          <input
-                            className="input"
-                            id="location"
-                            type="text"
-                            value={heading.location}
-                            onChange={(event) =>
-                              updateHeadingField('location', event.target.value)
-                            }
-                          />
-                        </div>
-                      </div>
+                      )}
                       <div className="field">
                         <label className="label" htmlFor="notes">
                           Notes
@@ -1876,7 +2112,12 @@ function WorkoutEditor() {
                       </button>
                     )}
 
-                    <div className="new-workout-sets has-done">
+                    {/* has-done adds the Done column. A plan has none: its
+                        sets are all still to do, so its rows keep the plain
+                        layout and solid fields (docs/ui/README.md → Plan). */}
+                    <div
+                      className={`new-workout-sets${isPlanning ? '' : ' has-done'}`}
+                    >
                       {/* One column header per block instead of a caption on
                           every row. Hidden from screen readers: each input
                           already names its exercise, set and column. */}
@@ -1901,7 +2142,7 @@ function WorkoutEditor() {
                             removal.index === setIndex &&
                             renderUndo('new-workout-undo-set')}
                           <div
-                            className={`new-workout-set${set.status === 'done' ? '' : ' is-not-done'}`}
+                            className={`new-workout-set${set.status === 'done' || isPlanning ? '' : ' is-not-done'}`}
                           >
                             <span className="new-workout-set-number num">
                               {setIndex + 1}
@@ -2012,44 +2253,48 @@ function WorkoutEditor() {
                                 not, like Warm-up. Released, a set goes back
                                 to planned, or to skipped on a finished page
                                 (toggleSetDone). Marking one done saves at
-                                once (useWorkoutAutosave). */}
-                            <button
-                              className={`new-workout-set-done${nextSet?.setClientId === set.clientId ? ' is-next' : ''}${set.status === 'skipped' ? ' is-skipped' : ''}`}
-                              type="button"
-                              aria-pressed={set.status === 'done'}
-                              aria-label="Done"
-                              aria-describedby={
-                                setNote(set) === null
-                                  ? undefined
-                                  : `${set.clientId}-note`
-                              }
-                              onClick={() =>
-                                changeSet(exercise.clientId, set.clientId, {
-                                  status: toggleSetDone(
-                                    set.status,
-                                    !isInProgress,
-                                  ),
-                                })
-                              }
-                            >
-                              {set.status === 'done' ? (
-                                <svg
-                                  width="20"
-                                  height="20"
-                                  viewBox="0 0 20 20"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  aria-hidden="true"
-                                >
-                                  <path d="M4 10.5l4 4 8-9" />
-                                </svg>
-                              ) : (
-                                'Done'
-                              )}
-                            </button>
+                                once (useWorkoutAutosave). Not on a plan:
+                                nothing can be done before the session
+                                starts. */}
+                            {!isPlanning && (
+                              <button
+                                className={`new-workout-set-done${nextSet?.setClientId === set.clientId ? ' is-next' : ''}${set.status === 'skipped' ? ' is-skipped' : ''}`}
+                                type="button"
+                                aria-pressed={set.status === 'done'}
+                                aria-label="Done"
+                                aria-describedby={
+                                  setNote(set) === null
+                                    ? undefined
+                                    : `${set.clientId}-note`
+                                }
+                                onClick={() =>
+                                  changeSet(exercise.clientId, set.clientId, {
+                                    status: toggleSetDone(
+                                      set.status,
+                                      !isInProgress,
+                                    ),
+                                  })
+                                }
+                              >
+                                {set.status === 'done' ? (
+                                  <svg
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="M4 10.5l4 4 8-9" />
+                                  </svg>
+                                ) : (
+                                  'Done'
+                                )}
+                              </button>
+                            )}
                           </div>
                           {setNote(set) !== null && (
                             <p
@@ -2282,8 +2527,27 @@ function WorkoutEditor() {
               <div className="new-workout-action-buttons">
                 {/* One action. In progress: Finish session, with no Save
                     button, since the page saves itself (owner, 2026-10-07).
-                    Finished: Save changes, as before autosave. */}
-                {isInProgress ? (
+                    Finished: Save changes, as before autosave. A plan has
+                    two: Save plan, and Start session, which saves first and
+                    outranks it, since starting is what a plan is for. */}
+                {isPlanning ? (
+                  <>
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      onClick={() => void savePlan()}
+                    >
+                      {savingAction === 'plan' ? 'Saving…' : 'Save plan'}
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      onClick={() => void startSession()}
+                    >
+                      {savingAction === 'start' ? 'Starting…' : 'Start session'}
+                    </button>
+                  </>
+                ) : isInProgress ? (
                   <button
                     className="btn btn-primary"
                     type="button"

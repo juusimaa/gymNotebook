@@ -83,6 +83,10 @@ export const router = createBrowserRouter([
         children: [
           { path: '/workouts', element: <Sessions /> },
           { path: '/workouts/new', element: <NewWorkout /> },
+          // A new plan, written ahead of the gym (specs/006): the same
+          // editor in prepare mode. A static segment, so it ranks above
+          // /workouts/:workoutId below.
+          { path: '/workouts/prepare', element: <NewWorkout mode="plan" /> },
           { path: '/workouts/:workoutId/edit', element: <NewWorkout /> },
           { path: '/workouts/:workoutId', element: <WorkoutDetail /> },
           { path: '/progress', element: <Progress /> },
