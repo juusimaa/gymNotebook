@@ -1,5 +1,6 @@
 import type { ExerciseResponse } from '../api/exercises'
 import type {
+  CreatePreparedWorkoutRequest,
   CreateWorkoutRequest,
   PutWorkoutExercisesRequest,
   SetStatus,
@@ -542,32 +543,19 @@ export function needsExplicitFinishTime(
   return elapsedMs < 0 || elapsedMs > FINISH_NOW_WINDOW_HOURS * 60 * 60 * 1000
 }
 
-type PrepareHeadingResult =
-  | { ok: true; value: CreateWorkoutRequest }
+type PrepareHeadingResult<T> =
+  | { ok: true; value: T }
   | {
       ok: false
       at: Extract<DraftFieldRef, { area: 'heading' }>
       message: string
     }
 
-// The heading half of a save: date and start time as one instant, the
-// optional texts trimmed to null, bodyweight as a number.
-function prepareHeading(heading: WorkoutHeadingDraft): PrepareHeadingResult {
-  const startedAt = createLocalStartedAt(heading.date, heading.startTime)
-
-  if (startedAt === null) {
-    // One message covers both fields; point at the date only when the date
-    // itself is malformed, otherwise the time is the one that doesn't exist.
-    return {
-      ok: false,
-      at: {
-        area: 'heading',
-        field: /^\d{4}-\d{2}-\d{2}$/.test(heading.date) ? 'startTime' : 'date',
-      },
-      message: 'Enter a valid date and start time.',
-    }
-  }
-
+// The heading's optional details: the texts trimmed to null, bodyweight as a
+// number. A plan's whole heading (specs/006), since it has no date or start.
+function prepareHeadingDetails(
+  heading: WorkoutHeadingDraft,
+): PrepareHeadingResult<CreatePreparedWorkoutRequest> {
   let bodyweightKg: number | null = null
   if (heading.bodyweightKg.trim() !== '') {
     bodyweightKg = parseNonNegativeDecimal(heading.bodyweightKg)
@@ -583,13 +571,42 @@ function prepareHeading(heading: WorkoutHeadingDraft): PrepareHeadingResult {
   return {
     ok: true,
     value: {
-      date: heading.date,
-      startedAt,
       title: optionalText(heading.title),
       bodyweightKg,
       location: optionalText(heading.location),
       notes: optionalText(heading.notes),
     },
+  }
+}
+
+// The heading half of a save: date and start time as one instant, then the
+// optional details.
+function prepareHeading(
+  heading: WorkoutHeadingDraft,
+): PrepareHeadingResult<CreateWorkoutRequest> {
+  const startedAt = createLocalStartedAt(heading.date, heading.startTime)
+
+  if (startedAt === null) {
+    // One message covers both fields; point at the date only when the date
+    // itself is malformed, otherwise the time is the one that doesn't exist.
+    return {
+      ok: false,
+      at: {
+        area: 'heading',
+        field: /^\d{4}-\d{2}-\d{2}$/.test(heading.date) ? 'startTime' : 'date',
+      },
+      message: 'Enter a valid date and start time.',
+    }
+  }
+
+  const details = prepareHeadingDetails(heading)
+  if (!details.ok) {
+    return details
+  }
+
+  return {
+    ok: true,
+    value: { date: heading.date, startedAt, ...details.value },
   }
 }
 
@@ -636,6 +653,96 @@ export function prepareWorkoutDraft(
     return workout
   }
 
+  const exercises = prepareExerciseInputs(exerciseDrafts)
+  if (!exercises.ok) {
+    return exercises
+  }
+
+  return {
+    ok: true,
+    value: {
+      workout: workout.value,
+      exercises: { exercises: exercises.value },
+    },
+  }
+}
+
+// A plan (specs/006) as Save plan and Start session send it: the heading
+// without a date or start, which a plan doesn't have yet, and the blocks as
+// strictly as prepareWorkoutDraft takes them, since a planned set needs its
+// reps (and weight, by the usual rule) like any other (Q3). Every set goes as
+// planned, whatever the row holds: a prepared page holds nothing else
+// (research R3), and the server would refuse the save otherwise.
+export interface PreparedPlanDraft {
+  workout: CreatePreparedWorkoutRequest
+  exercises: PutWorkoutExercisesRequest
+}
+
+export type PreparePlanDraftResult =
+  | { ok: true; value: PreparedPlanDraft }
+  | { ok: false; at: DraftFieldRef; message: string }
+
+export function preparePlanDraft(
+  heading: WorkoutHeadingDraft,
+  exerciseDrafts: WorkoutExerciseDraft[],
+): PreparePlanDraftResult {
+  const workout = prepareHeadingDetails(heading)
+  if (!workout.ok) {
+    return workout
+  }
+
+  const exercises = prepareExerciseInputs(exerciseDrafts)
+  if (!exercises.ok) {
+    return exercises
+  }
+
+  return {
+    ok: true,
+    value: {
+      workout: workout.value,
+      exercises: {
+        exercises: exercises.value.map((exercise) => ({
+          ...exercise,
+          sets: exercise.sets.map((set) => ({ ...set, status: 'planned' })),
+        })),
+      },
+    },
+  }
+}
+
+// The heading a new plan starts from: everything empty. Unlike a new page it
+// has no date or start time to default to "now"; Start session gives it both.
+export function createPlanHeadingDraft(): WorkoutHeadingDraft {
+  return {
+    date: '',
+    startTime: '',
+    title: '',
+    bodyweightKg: '',
+    location: '',
+    notes: '',
+  }
+}
+
+// What Start sends: the local calendar day of the tap, and the tap as an
+// instant. Local getters, as in createInitialHeadingDraft: a session started
+// at 23.50 belongs to that evening's date, not to the UTC one.
+export function createStartTimes(now: Date): {
+  date: string
+  startedAt: string
+} {
+  return {
+    date: createInitialHeadingDraft(now).date,
+    startedAt: now.toISOString(),
+  }
+}
+
+// The blocks half of a strict save. Every block needs a name and a set, and
+// every set must be complete; the first that isn't is pointed at.
+function prepareExerciseInputs(
+  exerciseDrafts: WorkoutExerciseDraft[],
+):
+  | { ok: true; value: PutWorkoutExercisesRequest['exercises'] }
+  | { ok: false; at: DraftFieldRef; message: string } {
   if (exerciseDrafts.length === 0) {
     return {
       ok: false,
@@ -696,10 +803,7 @@ export function prepareWorkoutDraft(
     })
   }
 
-  return {
-    ok: true,
-    value: { workout: workout.value, exercises: { exercises } },
-  }
+  return { ok: true, value: exercises }
 }
 
 // What an autosave sends (specs/003 FR-002): the heading, and only the sets

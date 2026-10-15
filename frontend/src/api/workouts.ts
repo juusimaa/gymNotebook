@@ -217,3 +217,31 @@ export function replaceWorkoutExercises(
     body,
   })
 }
+
+// POST /workouts/{id}/start: a prepared page gets its date and start time and
+// becomes a session in progress; its sets stay planned (specs/006). The client
+// sends its own calendar day and the moment of the tap, as when it creates a
+// page. expectedRevision is optional, as on every write: the editor sends the
+// revision it holds, while Start on a Sessions row has none to send.
+export interface StartWorkoutRequest {
+  date: string
+  startedAt: string
+  expectedRevision?: number
+}
+
+export function startWorkout(
+  id: number,
+  date: string,
+  startedAt: string,
+  expectedRevision?: number,
+): Promise<WorkoutDetailResponse> {
+  const body: StartWorkoutRequest = { date, startedAt, expectedRevision }
+  return request<WorkoutDetailResponse>(`/workouts/${id}/start`, {
+    method: 'POST',
+    body,
+  })
+}
+
+// The 409 a start gets when the page has already been started, on another
+// device or in another tab. There is no way back to prepared.
+export const ALREADY_STARTED = 'already_started'

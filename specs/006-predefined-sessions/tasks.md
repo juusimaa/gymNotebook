@@ -144,20 +144,22 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - status defaults per mode
   - status is sent in both payloads
   - a legacy stored row reads as done
-- [ ] T063 [US1] `frontend/src/screens/NewWorkout.tsx`, prepare mode (`/workouts/prepare`, and `/workouts/:id/edit` when `startedAt === null`):
+- [x] T063 [US1] `frontend/src/screens/NewWorkout.tsx`, prepare mode (`/workouts/prepare`, and `/workouts/:id/edit` when `startedAt === null`):
   - a dateline without a date
   - no done controls, no autosave
   - footer **Save plan** using the strict `prepareWorkoutDraft` path (`createPreparedWorkout`, then `replaceWorkoutExercises`)
   - Cancel and discard as on a finished page
   - layout per the approved mock
-- [ ] T064 [US1] Add the `/workouts/prepare` route behind the notice gate in `frontend/src/routes.tsx`.
-- [ ] T065 [US1] `frontend/src/screens/Sessions.tsx` (+ `Sessions.css`):
+  - PR 7: the mock calls these "plans" and the group "Planned"; the code follows it. Save as template (T083) is left to PR 8.
+- [x] T064 [US1] Add the `/workouts/prepare` route behind the notice gate in `frontend/src/routes.tsx`.
+- [x] T065 [US1] `frontend/src/screens/Sessions.tsx` (+ `Sessions.css`):
   - a Prepared group above the history list from `listPreparedWorkouts()`
   - each row: title or "Untitled plan", exercise summary, set count, opening `/workouts/{id}/edit`
   - a "Prepare a page" entry
   - loading, empty and error states
-- [ ] T066 [US1] `frontend/src/screens/WorkoutDetail.tsx`: a prepared page (`startedAt === null`) shows a plan heading instead of a date and no e1RM bests.
-- [ ] T067 [US1] Update `docs/ui/README.md` "as built" notes for anything that differs from the mock.
+  - PR 7: "Plan a session" opens the mock's inline chooser with only "A blank page"; its template entries, All templates and the group's Templates link are PR 8 (T084).
+- [x] T066 [US1] `frontend/src/screens/WorkoutDetail.tsx`: a prepared page (`startedAt === null`) shows a plan heading instead of a date and no e1RM bests.
+- [x] T067 [US1] Update `docs/ui/README.md` "as built" notes for anything that differs from the mock.
 
 **Checkpoint**: Story 1 independent test passes on the local stack.
 
@@ -188,7 +190,7 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ### Frontend (PR 6 and PR 7, after T003)
 
-- [ ] T068 [US2] `startWorkout(id, date, startedAt, expectedRevision)` in `frontend/src/api/workouts.ts`.
+- [x] T068 [US2] `startWorkout(id, date, startedAt, expectedRevision)` in `frontend/src/api/workouts.ts`.
 - [x] T069 [US2] `frontend/src/screens/newWorkoutDraft.ts`:
   - `findNextSet(draft)`: the first planned set in page order
   - `countNotDone(draft)` for the finish summary
@@ -203,7 +205,7 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - skipped sets get a "skipped" tag and are demoted like warm-ups
   - in progress, planned sets show as to do
   - the block best (`frontend/src/screens/workoutFormat.ts`) ignores non-done sets, with Vitest in `workoutFormat.test.ts`
-- [ ] T073 [US2] **PR 7** **Start session** in prepare mode in `NewWorkout.tsx`: save first, then `startWorkout` with the local date and now, then switch to in-progress mode with autosave. Also a **Start** on each Prepared row in `frontend/src/screens/Sessions.tsx`.
+- [x] T073 [US2] **PR 7** **Start session** in prepare mode in `NewWorkout.tsx`: save first, then `startWorkout` with the local date and now, then switch to in-progress mode with autosave. Also a **Start** on each Prepared row in `frontend/src/screens/Sessions.tsx`.
 - [x] T074 [US2] **PR 6** `frontend/src/screens/Sessions.tsx`: the meta line uses `notDoneSetCount` per the mock ("9 sets · 2 skipped" / "4 of 9 done").
 - [x] T075 [US2] `docs/ui/README.md`: done toggle, next set, finish summary, skipped display (as built).
 

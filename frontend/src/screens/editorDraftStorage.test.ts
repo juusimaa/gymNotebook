@@ -570,3 +570,42 @@ describe('describeTearOut', () => {
     expect(describeTearOut(0)).toBe('Tear out this page?')
   })
 })
+
+// Prepare mode (specs/006 PR 7).
+describe('plan drafts', () => {
+  it('describeDiscard_NewPlan_NamesThePlanAndItsSets', () => {
+    expect(
+      describeDiscard({
+        isEditing: false,
+        setCount: 7,
+        partlySaved: false,
+        isPlan: true,
+      }),
+    ).toBe('Discard this plan and its 7 sets?')
+  })
+
+  it('describeDiscard_EditedPlan_KeepsItsLastSavedVersion', () => {
+    expect(
+      describeDiscard({
+        isEditing: true,
+        setCount: 7,
+        partlySaved: false,
+        isPlan: true,
+      }),
+    ).toBe('Discard your changes? The plan stays as it was last saved.')
+  })
+
+  it('editorDraftKey_NewPlan_HasItsOwnKey', () => {
+    // Arrange
+    const store = fakeStore()
+    const newPlan: EditorDraftRoute = { kind: 'plan' }
+
+    // Act
+    saveSample(store, newPlan)
+
+    // Assert: a plan never restores into a new page, or the other way round.
+    expect(editorDraftKey(newPlan)).not.toBe(editorDraftKey(newPage))
+    expect(loadEditorDraft(newPage, 7, store)).toBeNull()
+    expect(loadEditorDraft(newPlan, 7, store)).not.toBeNull()
+  })
+})
