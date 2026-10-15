@@ -1093,14 +1093,17 @@ exercises.MapGet("/{id:int}/history", async (int id, DateOnly? from, DateOnly? t
               // Only lifted sets are progress: a planned or skipped set is a number
               // somebody wrote down, not one they did (specs/006 research R4).
               && setEntry.Status == SetStatus.Done
+              // Done sets only exist on started pages (SetStatusRules), so this filter
+              // drops nothing; it is what lets the .Value reads below assume a date.
+              && workout.StartedAt != null
               // An added-weight bodyweight set is a different metric from plain reps;
               // PLAN.md deliberately defers charting that mixed load.
               && (exercise.IsBodyweight ? setEntry.Weight == null : setEntry.Weight != null)
         select new
         {
             WorkoutId = workout.Id,
-            workout.Date,
-            workout.StartedAt,
+            Date = workout.Date!.Value,
+            StartedAt = workout.StartedAt!.Value,
             SetEntryId = setEntry.Id,
             setEntry.Weight,
             setEntry.Reps,
@@ -1282,16 +1285,19 @@ workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, App
     const int MaxLimit = 100;
     var take = Math.Clamp(limit ?? DefaultLimit, 1, MaxLimit);
 
-    var query = db.Workouts.Where(w => w.UserId == userId);
+    // The history list holds started pages only. A prepared page has no date to order
+    // by, and it isn't training yet; GET /workouts/prepared lists those (specs/006 R5).
+    // The filter is also what lets the .Value reads below assume a date and a start.
+    var query = db.Workouts.Where(w => w.UserId == userId && w.StartedAt != null);
 
     if (before.HasValue)
     {
-        var anchor = await db.Workouts.SingleOrDefaultAsync(w => w.Id == before && w.UserId == userId, ct);
+        var anchor = await query.SingleOrDefaultAsync(w => w.Id == before, ct);
         if (anchor is null)
         {
-            // A cursor that doesn't exist or isn't the caller's own workout is a bad
-            // request, not "no results" — silently starting over from page one would
-            // hide the real problem from the client.
+            // A cursor that doesn't exist, isn't the caller's own workout or is a
+            // prepared page (never on this list) is a bad request, not "no results":
+            // silently starting over from page one would hide the real problem.
             return Results.BadRequest();
         }
 
@@ -1314,8 +1320,8 @@ workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, App
         .Take(take)
         .Select(w => new WorkoutSummaryResponse(
             w.Id,
-            w.Date,
-            w.StartedAt,
+            w.Date!.Value,
+            w.StartedAt!.Value,
             w.EndedAt,
             w.Title,
             w.WorkoutExercises.Count,
@@ -1331,9 +1337,137 @@ workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, App
 })
    .WithName("ListWorkouts")
    .WithSummary("Lists the caller's workouts")
-   .WithDescription("Pages newest first (date desc, then started_at desc). `before` is the id of the last workout from the previous page. Each row carries the exercise names (in position order), the exercise count, the done set count and the not-done (planned or skipped) set count, and the end time, so the list can render without fetching each workout.")
+   .WithDescription("Lists started pages only (prepared ones are under GET /workouts/prepared). Pages newest first (date desc, then started_at desc). `before` is the id of the last workout from the previous page; a prepared page's id is 400. Each row carries the exercise names (in position order), the exercise count, the done set count and the not-done (planned or skipped) set count, and the end time, so the list can render without fetching each workout.")
    .Produces<List<WorkoutSummaryResponse>>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest);
+
+// Prepared pages (specs/006 research R5): written before the gym, started later. They
+// are ordinary workouts rows with no date or start, so GET, PUT /exercises, DELETE,
+// ownership, revisions and consent all work on them unchanged. Only listing, creating
+// and starting need routes of their own, because the history list orders by date.
+workouts.MapGet("/prepared", async (ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    // Unpaged: a lifter keeps a handful of plans, not a history. One projection, as in
+    // GET /workouts, so the names and counts don't cost a query per row.
+    var results = await db.Workouts
+        .AsNoTracking()
+        .Where(w => w.UserId == userId && w.StartedAt == null)
+        .OrderByDescending(w => w.CreatedAt)
+        .ThenByDescending(w => w.Id)
+        .Select(w => new PreparedWorkoutSummaryResponse(
+            w.Id,
+            w.Title,
+            w.CreatedAt,
+            w.WorkoutExercises
+                .OrderBy(we => we.Position)
+                .Select(we => db.Exercises.Where(e => e.Id == we.ExerciseId).Select(e => e.Name).Single())
+                .ToList(),
+            w.WorkoutExercises.Count,
+            w.WorkoutExercises.Sum(we => we.SetEntries.Count)))
+        .ToListAsync(ct);
+
+    return Results.Ok(results);
+})
+   .WithName("ListPreparedWorkouts")
+   .WithSummary("Lists the caller's prepared pages")
+   .WithDescription("Pages that have not started yet (no date or start), newest written first, unpaged. Each row carries the exercise names in position order, the exercise count and the set count.")
+   .Produces<List<PreparedWorkoutSummaryResponse>>(StatusCodes.Status200OK);
+
+workouts.MapPost("/prepared", async (CreatePreparedWorkoutRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+
+    // The same optional-details consent check as POST /workouts: a plan's title is
+    // the same kind of detail as a session's.
+    var decision = await OptionalDetails.DecideAsync(db, userId, privacyLifecycleEnabled,
+        request.Title, request.BodyweightKg, request.Location, request.Notes, ct);
+    if (decision == OptionalDetailsDecision.Reject)
+    {
+        return OptionalDetails.ConsentRequired();
+    }
+    var storeAsNull = decision == OptionalDetailsDecision.StoreAsNull;
+
+    // Date and StartedAt stay null: that is what makes the page prepared.
+    var workout = new Workout
+    {
+        UserId = userId,
+        Title = storeAsNull ? null : request.Title,
+        BodyweightKg = request.BodyweightKg,
+        Location = storeAsNull ? null : request.Location,
+        Notes = storeAsNull ? null : request.Notes,
+    };
+
+    db.Workouts.Add(workout);
+    await db.SaveChangesAsync(ct);
+
+    var response = new WorkoutDetailResponse(workout.Id, workout.Revision, workout.Date, workout.StartedAt, workout.EndedAt,
+        workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, Exercises: []);
+
+    return Results.Created($"/workouts/{workout.Id}", response);
+})
+   .WithName("CreatePreparedWorkout")
+   .WithSummary("Prepares a new page")
+   .WithDescription("Creates a page with no date or start, to fill with planned sets via PUT /workouts/{id}/exercises and start later with POST /workouts/{id}/start. With the privacy feature on, a non-empty title, location, notes or bodyweight without optional-details consent gets 403 optional_details_consent_required and nothing is stored.")
+   .Produces<WorkoutDetailResponse>(StatusCodes.Status201Created)
+   .Produces<ErrorResponse>(StatusCodes.Status403Forbidden);
+
+workouts.MapPost("/{id:int}/start", async (int id, StartWorkoutRequest request, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
+{
+    var userId = ParseUserId(caller);
+    var workout = await db.Workouts.SingleOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
+
+    if (workout is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (request.Date is null || request.StartedAt is null)
+    {
+        return Results.Json(new ErrorResponse("invalid_request"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    // Claim the revision first: its UPDATE locks the row until this transaction ends, so
+    // a second start from another device waits here. Only then read the start time, fresh
+    // from the database rather than from the entity loaded above. The second request
+    // then sees the first one's start and gets 409, instead of overwriting it. Any error
+    // below rolls the claimed revision back with everything else (the lifecycle filter
+    // commits only a 2xx).
+    var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
+    if (revisionError is not null) return revisionError;
+
+    var startedAt = await db.Workouts.AsNoTracking()
+        .Where(w => w.Id == workout.Id)
+        .Select(w => w.StartedAt)
+        .SingleAsync(ct);
+    if (startedAt is not null)
+    {
+        // There is no way back to prepared, and starting twice would move a session
+        // that may already hold done sets to another day.
+        return Results.Json(new ErrorResponse("already_started"), statusCode: StatusCodes.Status409Conflict);
+    }
+
+    // Both together, as ck_workouts_started_pair requires. The sets stay planned: the
+    // page is now in progress, where planned is allowed, and ticking them off is the
+    // lifter's job. Normalized to UTC for timestamptz, as in POST /workouts.
+    workout.Date = request.Date.Value;
+    workout.StartedAt = request.StartedAt.Value.ToUniversalTime();
+    await db.SaveChangesAsync(ct);
+
+    var workoutExercises = await GetWorkoutExercisesAsync(db, workout.Id, ct);
+
+    var response = new WorkoutDetailResponse(workout.Id, revision, workout.Date, workout.StartedAt, workout.EndedAt,
+        workout.Title, workout.BodyweightKg, workout.Location, workout.Notes, workoutExercises);
+    return Results.Ok(response);
+})
+   .WithName("StartWorkout")
+   .WithSummary("Starts a prepared page")
+   .WithDescription("Gives a prepared page its date and start time, making it an in-progress session; its sets stay planned. 400 invalid_request when date or startedAt is missing, 409 already_started when the page has already started, 409 page_changed on a stale expectedRevision.")
+   .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+   .Produces<ErrorResponse>(StatusCodes.Status409Conflict)
+   .Produces(StatusCodes.Status404NotFound);
 
 workouts.MapGet("/{id:int}", async (int id, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
 {
@@ -1369,7 +1503,17 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
         return Results.NotFound();
     }
 
-    // Date and StartedAt are required on a Workout, so an explicit JSON null is a
+    // A prepared page gets its date and start from POST /workouts/{id}/start, which
+    // checks it really is prepared and sets both together. Taking them here too would
+    // be a second way to start, without that check; an end time would finish a page
+    // that never began (specs/006 contracts/api.md). Heading fields stay editable.
+    if (WorkoutStates.Of(workout.StartedAt, workout.EndedAt) == WorkoutState.Prepared &&
+        (request.HasDate || request.HasStartedAt || request.HasEndedAt))
+    {
+        return Results.Json(new ErrorResponse("not_started"), statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    // A started page always keeps its date and start, so an explicit JSON null is a
     // malformed update. Omitted properties remain unchanged; nullable properties
     // below deliberately accept explicit null so the client can clear them.
     if ((request.HasDate && !request.Date.HasValue) ||
@@ -1465,9 +1609,9 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 })
     .WithName("UpdateWorkout")
     .WithSummary("Updates an existing workout")
-    .WithDescription("Modifies only supplied fields. Optional expectedRevision rejects a stale page with 409 page_changed. Explicit null clears nullable fields; date and startedAt cannot be null. With the privacy feature on, setting optional details without consent gets 403 optional_details_consent_required. Finishing an in-progress page turns its planned sets into skipped; reopening a finished page turns skipped back into planned.")
+    .WithDescription("Modifies only supplied fields. Optional expectedRevision rejects a stale page with 409 page_changed. Explicit null clears nullable fields; date and startedAt cannot be null. On a prepared page, date, startedAt or endedAt is 400 not_started (use POST /workouts/{id}/start). With the privacy feature on, setting optional details without consent gets 403 optional_details_consent_required. Finishing an in-progress page turns its planned sets into skipped; reopening a finished page turns skipped back into planned.")
     .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
-    .Produces(StatusCodes.Status400BadRequest)
+    .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
     .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
     .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
     .Produces(StatusCodes.Status404NotFound);

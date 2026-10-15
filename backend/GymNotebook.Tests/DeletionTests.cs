@@ -127,6 +127,35 @@ public class DeletionTests(TwoHostGymNotebookFixture db)
     }
 
     [Fact]
+    public async Task DeleteAccount_WithPreparedPage_RemovesIt()
+    {
+        // Arrange: one of A's pages turned into a prepared one (no date, start or end;
+        // planned sets), the shape specs/006 adds to workouts.
+        await using var host = db.CreateHost(ExportTestSupport.FlagOn());
+        var userId = await SeedAccountAsync();
+        await db.ExecuteAsync(
+            """
+            WITH page AS (SELECT min(id) AS id FROM workouts WHERE user_id = @id)
+            UPDATE workouts SET date = NULL, started_at = NULL, ended_at = NULL
+            WHERE id = (SELECT id FROM page);
+            UPDATE set_entries SET status = 'planned'
+            WHERE workout_exercise_id IN (
+                SELECT we.id FROM workout_exercises we
+                WHERE we.workout_id = (SELECT min(id) FROM workouts WHERE user_id = @id));
+            """,
+            userId);
+        var aRows = await DeletionTestSupport.RowIdsAsync(db, userId);
+        using var client = host.ClientFor(userId);
+
+        // Act
+        var response = await DeletionTestSupport.DeleteAsync(client);
+
+        // Assert: the prepared page went with everything else.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(0, await DeletionTestSupport.CountRemainingAsync(db, aRows));
+    }
+
+    [Fact]
     public async Task Delete_Success_EveryOldTokenGets401OnEveryProtectedRoute()
     {
         // Arrange: two sessions of A, both valid before the deletion.

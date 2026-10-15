@@ -70,6 +70,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(w => w.BodyweightKg).HasPrecision(5, 2);
             entity.Property(w => w.CreatedAt).HasDefaultValueSql("now()");
 
+            // A prepared page has neither a date nor a start; a started one has both
+            // (specs/006 data model). Nothing can end before it starts, so an end time
+            // needs a start. The API already refuses these, the database makes sure.
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint(
+                    "ck_workouts_started_pair",
+                    "(date IS NULL) = (started_at IS NULL)");
+                t.HasCheckConstraint(
+                    "ck_workouts_ended_requires_start",
+                    "ended_at IS NULL OR started_at IS NOT NULL");
+            });
+
             entity.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(w => w.UserId);

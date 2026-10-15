@@ -370,7 +370,7 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
          join set in db.SetEntries on block.Id equals set.WorkoutExerciseId
          where workout.UserId == userId
          orderby workout.StartedAt, block.Position, set.SetNumber
-         select new RoundTripRow(workout.Date, workout.StartedAt, workout.EndedAt,
+         select new RoundTripRow(workout.Date!.Value, workout.StartedAt!.Value, workout.EndedAt,
              workout.Title, workout.Location, workout.Notes, workout.BodyweightKg,
              block.Position, exercise.Name, exercise.IsBodyweight,
              set.SetNumber, set.Weight, set.Reps, set.IsWarmup)).ToListAsync();

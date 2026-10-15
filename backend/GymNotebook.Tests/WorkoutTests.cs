@@ -179,7 +179,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
         var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
         Assert.Equal(localDate, body!.Date);
         Assert.Equal(expectedUtc, body.StartedAt);
-        Assert.Equal(TimeSpan.Zero, body.StartedAt.Offset);
+        Assert.Equal(TimeSpan.Zero, body.StartedAt!.Value.Offset);
     }
 
     [Fact]
@@ -435,7 +435,7 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
         var body = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
         Assert.Equal(localDate, body!.Date);
         Assert.Equal(new DateTimeOffset(2026, 9, 14, 21, 30, 0, TimeSpan.Zero), body.StartedAt);
-        Assert.Equal(TimeSpan.Zero, body.StartedAt.Offset);
+        Assert.Equal(TimeSpan.Zero, body.StartedAt!.Value.Offset);
         Assert.Equal(new DateTimeOffset(2026, 9, 14, 22, 45, 0, TimeSpan.Zero), body.EndedAt);
         Assert.Equal(TimeSpan.Zero, body.EndedAt!.Value.Offset);
     }

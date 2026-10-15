@@ -210,8 +210,9 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
 
         var fileTimes = file.Workouts!.Select(w => w.StartedAt!.Value.ToUniversalTime()).Distinct().ToArray();
         var existingTimes = fileTimes.Length == 0 ? [] : await db.Workouts.AsNoTracking()
-            .Where(w => w.UserId == userId && fileTimes.Contains(w.StartedAt))
-            .Select(w => w.StartedAt).ToArrayAsync(ct);
+            // A prepared page has no start, so it can never match a page in the file.
+            .Where(w => w.UserId == userId && w.StartedAt != null && fileTimes.Contains(w.StartedAt.Value))
+            .Select(w => w.StartedAt!.Value).ToArrayAsync(ct);
         var present = existingTimes.ToHashSet();
         var addedPages = file.Workouts!.Where(w => !present.Contains(w.StartedAt!.Value.ToUniversalTime())).ToList();
         var skipped = file.Workouts!.Count - addedPages.Count;

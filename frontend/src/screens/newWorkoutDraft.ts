@@ -119,8 +119,10 @@ export function createExistingWorkoutDraft(
 ): ExistingWorkoutDraft {
   return {
     heading: {
-      date: workout.date,
-      startTime: formatLocalTime(workout.startedAt),
+      // Empty on a prepared page (specs/006), as endTime is on an unfinished one.
+      date: workout.date ?? '',
+      startTime:
+        workout.startedAt === null ? '' : formatLocalTime(workout.startedAt),
       title: workout.title ?? '',
       bodyweightKg:
         workout.bodyweightKg === null ? '' : String(workout.bodyweightKg),

@@ -239,8 +239,11 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
             {
                 json.WriteNumber("id", row.Id);
                 json.WriteNumber("userId", row.UserId);
-                // The stored local calendar day, never recomputed from startedAt.
-                json.WriteString("date", row.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                // The stored local calendar day, never recomputed from startedAt. Null with
+                // startedAt on a prepared page (specs/006); format version 2 (PR 5)
+                // documents that, and until then no client creates prepared pages.
+                if (row.Date is null) json.WriteNull("date");
+                else json.WriteString("date", row.Date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 WriteInstant(json, "startedAt", row.StartedAt);
                 WriteInstant(json, "endedAt", row.EndedAt);
                 WriteText(json, "title", row.Title);
@@ -405,7 +408,7 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
     private sealed record ExerciseRow(int Id, int UserId, string Name, bool IsBodyweight, DateTimeOffset CreatedAt);
 
     private sealed record WorkoutRow(
-        int Id, int UserId, DateOnly Date, DateTimeOffset StartedAt, DateTimeOffset? EndedAt,
+        int Id, int UserId, DateOnly? Date, DateTimeOffset? StartedAt, DateTimeOffset? EndedAt,
         string? Title, string? Location, string? Notes, decimal? BodyweightKg, DateTimeOffset CreatedAt);
 
     private sealed record BlockRow(int Id, int WorkoutId, int ExerciseId, int Position);
