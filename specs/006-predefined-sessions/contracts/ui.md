@@ -1,5 +1,7 @@
 # UI Contract: Predefined Sessions
 
+> **Revised (research R15, 2026-10-15).** There is no prepare mode, `/workouts/prepare` route or Prepared group any more. Sessions has **From template** beside **Start a new page**: a chooser of templates, each starting a session at once (SC-007: Open the notebook, From template, the template). The template list has **Start** on each row, and the template editor's secondary action is **Start session**. Everything about the in-progress editor, the finished-page editor, the session page and templates below still holds; `docs/ui/README.md` is the as-built record.
+
 **Status**: brief for the UI mock. Issue #165 requires a mock made with `/impeccable` and approved by the owner before any frontend work. The mock updates `docs/ui/README.md` and `docs/ui/prototype.html` in its own PR. This file lists what the mock must cover and the rules it must keep. Layout, copy and visual treatment are the mock's to propose. All copy below is a placeholder.
 
 ## Routes (proposed)

@@ -145,3 +145,18 @@ Restore accepts 1 and 2. A version 1 file has no status, so its sets restore as 
 **Decision (proposed for the UI mock)**: On an in-progress page, a row the user adds, by "Add set" or a new exercise, starts **done**, as every row does today (FR-011). Only rows written while preparing start planned. Tapping a done row's toggle makes it planned again. **owner: accepted 2026-10-15**
 
 **Rationale**: One rule for every in-progress page, whether or not it was prepared, and no extra tap for anyone who logs as they go. The alternative, rows added to a prepared page starting planned, would make the same "Add set" button behave differently depending on how the page began.
+
+## R15 — Templates replace prepared pages (owner walkthrough, 2026-10-15)
+
+**Decision** (owner): After using plans and templates on a phone (T091), the owner found the prepared state added nothing that templates don't already give. A template *is* the session written ahead, and it can be edited at home whenever the routine changes. So:
+- There is no prepared page any more. At the gym the lifter picks a template and a session starts at once: `POST /templates/{id}/start { date, startedAt }` creates an in-progress page with the client's local date and the moment of the tap, holding a copy of the template's blocks and sets, every set `planned`. This replaces `POST /templates/{id}/prepare` (PR 9).
+- The set status, the done toggle, "next", skipped sets on finish and done-only metrics (R2–R4, R14) stay exactly as they are: they are what makes ticking a template off at the gym work.
+- `GET/POST /workouts/prepared`, `POST /workouts/{id}/start`, the `Prepared` page state and the `not_started` PATCH refusal go (PR 10). `workouts.date` and `started_at` become NOT NULL again, so R1's nullable timestamps and R5's separate list are superseded.
+- Existing prepared pages are not lost: the PR 10 migration turns each into a template (its title as the name, or "Plan *created date*" without one, with " (2)", " (3)"… added on a name clash after normalization), then deletes the page. A version 2 backup that still holds prepared pages restores them the same way, as templates. The export keeps format version 2 and simply never writes a prepared page again.
+
+**Rationale**: One way to prepare instead of two. A plan had to be re-made or re-saved for every session anyway, while a template carries over week to week; starting from it costs the same three taps from the cover (SC-007). Keeping set status means none of the gym-side value is lost.
+
+**Alternatives considered**:
+- *Keep both.* Two concepts for the same job, with the Planned group, Save plan and Start session to maintain and explain. Rejected by the owner.
+- *Copy template sets in as done.* Simpler, but an untouched set would count as training and break SC-004. Rejected by the owner.
+- *Delete existing prepared pages in the migration.* Simplest, but it could silently lose a plan the owner wrote. Rejected by the owner in favour of converting them.

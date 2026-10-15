@@ -8,9 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GymNotebook.Tests;
 
-// specs/006 user story 4 (backend): named per-user templates, prepare a page from one,
+// specs/006 user story 4 (backend): named per-user templates, start a session from one,
 // save a page as one. Copies are never linked, so a change on either side never reaches
-// the other (research R8). The consent rule for a prepared page's title needs the privacy
+// the other (research R8). The consent rule for a started page's title needs the privacy
 // flag on, so those tests sit in OptionalDetailsConsentTests with that factory.
 public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebookFactory>
 {
@@ -70,8 +70,12 @@ public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     private Task<TemplateDetailResponse> CreateTemplateAsync(string token, SaveTemplateRequest request) =>
         ReadAsync<TemplateDetailResponse>(HttpMethod.Post, "/templates", token, request);
 
-    private Task<WorkoutDetailResponse> PrepareAsync(string token, int templateId) =>
-        ReadAsync<WorkoutDetailResponse>(HttpMethod.Post, $"/templates/{templateId}/prepare", token);
+    // The local day and the moment of the tap, as the client sends them.
+    private static StartFromTemplateRequest StartNow =>
+        new(new DateOnly(2026, 10, 15), new DateTimeOffset(2026, 10, 15, 17, 30, 0, TimeSpan.FromHours(3)));
+
+    private Task<WorkoutDetailResponse> StartAsync(string token, int templateId) =>
+        ReadAsync<WorkoutDetailResponse>(HttpMethod.Post, $"/templates/{templateId}/start", token, StartNow);
 
     [Fact]
     public async Task CreateTemplate_Valid_Returns201()
@@ -213,13 +217,13 @@ public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         // Act: every route that takes a template id, as B.
         var get = await SendAsync(HttpMethod.Get, $"/templates/{template.Id}", tokenB);
         var put = await SendAsync(HttpMethod.Put, $"/templates/{template.Id}", tokenB, PushA("Mine now"));
-        var prepare = await SendAsync(HttpMethod.Post, $"/templates/{template.Id}/prepare", tokenB);
+        var start = await SendAsync(HttpMethod.Post, $"/templates/{template.Id}/start", tokenB, StartNow);
         var delete = await SendAsync(HttpMethod.Delete, $"/templates/{template.Id}", tokenB);
 
         // Assert: 404, never 403, and A's template untouched.
         Assert.Equal(
             [HttpStatusCode.NotFound, HttpStatusCode.NotFound, HttpStatusCode.NotFound, HttpStatusCode.NotFound],
-            [get.StatusCode, put.StatusCode, prepare.StatusCode, delete.StatusCode]);
+            [get.StatusCode, put.StatusCode, start.StatusCode, delete.StatusCode]);
         var stored = await ReadAsync<TemplateDetailResponse>(HttpMethod.Get, $"/templates/{template.Id}", tokenA);
         Assert.Equal("Push A", stored.Name);
     }
@@ -246,17 +250,17 @@ public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     }
 
     [Fact]
-    public async Task DeleteTemplate_LeavesPreparedPages()
+    public async Task DeleteTemplate_LeavesStartedPages()
     {
         // Arrange
         var (token, _) = await RegisterAndGetUserAsync();
         var template = await CreateTemplateAsync(token, PushA());
-        var page = await PrepareAsync(token, template.Id);
+        var page = await StartAsync(token, template.Id);
 
         // Act
         var response = await SendAsync(HttpMethod.Delete, $"/templates/{template.Id}", token);
 
-        // Assert: the template is gone, the page it prepared is whole.
+        // Assert: the template is gone, the page started from it is whole.
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(HttpMethod.Get, $"/templates/{template.Id}", token)).StatusCode);
         var stored = await ReadAsync<WorkoutDetailResponse>(HttpMethod.Get, $"/workouts/{page.Id}", token);
@@ -264,37 +268,62 @@ public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     }
 
     [Fact]
-    public async Task Prepare_CopiesBlocksAsPlanned()
+    public async Task Start_CopiesBlocksAsPlannedInProgress()
     {
         // Arrange
         var (token, _) = await RegisterAndGetUserAsync();
         var template = await CreateTemplateAsync(token, PushA());
 
         // Act
-        var response = await SendAsync(HttpMethod.Post, $"/templates/{template.Id}/prepare", token);
+        var response = await SendAsync(HttpMethod.Post, $"/templates/{template.Id}/start", token, StartNow);
 
-        // Assert: a prepared page titled after the template, with every set copied as planned.
+        // Assert: an in-progress page dated and started as sent (the start in UTC), titled
+        // after the template, with every set copied as planned.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var page = (await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>())!;
-        Assert.Null(page.Date);
-        Assert.Null(page.StartedAt);
+        Assert.Equal($"/workouts/{page.Id}", response.Headers.Location?.OriginalString);
+        Assert.Equal(StartNow.Date, page.Date);
+        Assert.Equal(StartNow.StartedAt!.Value.ToUniversalTime(), page.StartedAt);
+        Assert.Null(page.EndedAt);
         Assert.Equal("Push A", page.Title);
         Assert.Equal(["Bench Press", "Overhead Press"], page.Exercises.Select(e => e.ExerciseName));
         Assert.Equal(
             template.Exercises.SelectMany(e => e.Sets.Select(s => (s.SetNumber, s.Weight, s.Reps, s.IsWarmup))),
             page.Exercises.SelectMany(e => e.Sets.Select(s => (s.SetNumber, s.Weight, s.Reps, s.IsWarmup))));
         Assert.All(page.Exercises.SelectMany(e => e.Sets), s => Assert.Equal("planned", s.Status));
-        var prepared = await ReadAsync<List<PreparedWorkoutSummaryResponse>>(HttpMethod.Get, "/workouts/prepared", token);
-        Assert.Contains(prepared, p => p.Id == page.Id);
+        // Listed with the history, in progress, with nothing done yet.
+        var history = await ReadAsync<List<WorkoutSummaryResponse>>(HttpMethod.Get, "/workouts", token);
+        var row = Assert.Single(history, w => w.Id == page.Id);
+        Assert.Equal((0, 3), (row.SetCount, row.NotDoneSetCount));
     }
 
-    [Fact]
-    public async Task Prepare_ThenEditPage_TemplateUnchanged()
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Start_MissingDateOrStart_Returns400AndWritesNothing(bool sendDate, bool sendStartedAt)
     {
         // Arrange
         var (token, _) = await RegisterAndGetUserAsync();
         var template = await CreateTemplateAsync(token, PushA());
-        var page = await PrepareAsync(token, template.Id);
+        var body = new StartFromTemplateRequest(
+            sendDate ? StartNow.Date : null,
+            sendStartedAt ? StartNow.StartedAt : null);
+
+        // Act
+        var response = await SendAsync(HttpMethod.Post, $"/templates/{template.Id}/start", token, body);
+
+        // Assert
+        await AssertErrorAsync(response, HttpStatusCode.BadRequest, "invalid_request");
+        Assert.Empty(await ReadAsync<List<WorkoutSummaryResponse>>(HttpMethod.Get, "/workouts", token));
+    }
+
+    [Fact]
+    public async Task Start_ThenEditPage_TemplateUnchanged()
+    {
+        // Arrange
+        var (token, _) = await RegisterAndGetUserAsync();
+        var template = await CreateTemplateAsync(token, PushA());
+        var page = await StartAsync(token, template.Id);
 
         // Act: a heavier bench on the page.
         var put = await SendAsync(HttpMethod.Put, $"/workouts/{page.Id}/exercises", token,
@@ -308,12 +337,12 @@ public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     }
 
     [Fact]
-    public async Task EditTemplate_AfterPrepare_PageUnchanged()
+    public async Task EditTemplate_AfterStart_PageUnchanged()
     {
         // Arrange
         var (token, _) = await RegisterAndGetUserAsync();
         var template = await CreateTemplateAsync(token, PushA());
-        var page = await PrepareAsync(token, template.Id);
+        var page = await StartAsync(token, template.Id);
 
         // Act: a heavier bench in the template.
         var put = await SendAsync(HttpMethod.Put, $"/templates/{template.Id}", token, PushA(benchWeight: 85m));
@@ -372,7 +401,7 @@ public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         var (tokenA, _) = await RegisterAndGetUserAsync();
         var (tokenB, _) = await RegisterAndGetUserAsync();
         var template = await CreateTemplateAsync(tokenA, PushA());
-        var page = await PrepareAsync(tokenA, template.Id);
+        var page = await StartAsync(tokenA, template.Id);
 
         // Act
         var response = await SendAsync(HttpMethod.Post, $"/workouts/{page.Id}/template", tokenB, new SaveAsTemplateRequest("Stolen"));
@@ -406,10 +435,11 @@ public class TemplateTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
     [Fact]
     public async Task Templates_NeverAffectExerciseSessionCount()
     {
-        // Arrange: an exercise that exists only in a template and the page prepared from it.
+        // Arrange: an exercise that exists only in a template and the page started from it,
+        // where no set has been ticked done yet.
         var (token, _) = await RegisterAndGetUserAsync();
         var template = await CreateTemplateAsync(token, new SaveTemplateRequest("Legs", [new("Front Squat", [new(70m, 5, false)])]));
-        await PrepareAsync(token, template.Id);
+        await StartAsync(token, template.Id);
 
         // Act
         var exercises = await ReadAsync<List<ExerciseResponse>>(HttpMethod.Get, "/exercises?search=front", token);

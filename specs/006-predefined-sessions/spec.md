@@ -17,37 +17,45 @@
 - Q: May two templates share a name? → A: No. Names are unique per user, normalized like exercise names; a clash is refused, never merged.
 - Planning questions (plan.md Q1–Q5), accepted as proposed: reopening a finished page turns skipped sets back to planned; restore always adds prepared pages; a saved planned set needs reps; templates are last-write-wins; rows added during a session start done.
 
+### Session 2026-10-15 (owner walkthrough, research R15)
+
+- Q: Is a separate prepared (planned) session needed, now that templates exist? → A: No. Templates are the way to prepare: they are edited at home, and at the gym the lifter picks one and a session starts at once, in progress, with every set planned. Prepared pages, the Planned group, Save plan and Start session are removed.
+- Q: Do the template's sets arrive as done? → A: No. They arrive planned and are ticked off with the done toggle, so set status, skipped sets and done-only metrics stay as they are.
+- Q: What happens to prepared pages that already exist? → A: They are converted into templates, by the migration and by restore of an older backup, so nothing is lost.
+
+**Revision note**: User Stories 1 and 4 and FR-001–FR-005, FR-013, FR-014 and FR-017 below are revised by this session. Where the text still says "prepared session", read "template" for what is written ahead, and "session started from a template" for what is ticked off.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Prepare a session before the gym (Priority: P1)
 
-As a lifter at home the evening before, I write out tomorrow's session: the exercises in order, and for each one the sets I intend to do with their weight and reps. Nothing is logged as done yet; it is a plan on a page.
+As a lifter at home the evening before, I write out tomorrow's session as a template: the exercises in order, and for each one the sets I intend to do with their weight and reps. Nothing is logged; it is a routine I can start at the gym. *(Revised 2026-10-15, R15: the session is written as a template, not as an undated page.)*
 
-**Why this priority**: Without a prepared session there is nothing to tick off at the gym. This is the half of the feature that moves typing out of the gym.
+**Why this priority**: Without something written ahead there is nothing to tick off at the gym. This is the half of the feature that moves typing out of the gym.
 
-**Independent Test**: Prepare a session with two exercises and three sets each, leave the app, come back on another device: the prepared session is there with every planned set, none marked done, and it does not appear in the logged history or on any progress chart.
+**Independent Test**: Write a template with two exercises and three sets each, leave the app, come back on another device: the template is there with every set, and nothing from it appears in the logged history or on any progress chart.
 
 **Acceptance Scenarios**:
 
-1. **Given** I'm signed in, **When** I choose to prepare a session, **Then** I can add exercises (with the same exercise suggestions as when logging) and planned sets with weight, reps and warm-up flag, and keep it without starting it.
-2. **Given** a prepared session, **When** I open my notebook, **Then** I can find it separately from logged sessions, with its title and planned exercises visible.
-3. **Given** a prepared session, **When** I reopen it before the gym, **Then** I can still add, remove, reorder and change exercises and sets.
-4. **Given** a prepared session nobody has started, **When** I view an exercise's progress, **Then** its planned sets do not appear.
-5. **Given** a prepared session I no longer want, **When** I delete it, **Then** it is gone after confirmation, and no logged history changes.
+1. **Given** I'm signed in, **When** I write a template, **Then** I can add exercises (with the same exercise suggestions as when logging) and sets with weight, reps and warm-up flag, and keep it.
+2. **Given** a template, **When** I open my notebook, **Then** I can find it from the sessions list, with its name and exercises visible.
+3. **Given** a template, **When** I reopen it before the gym, **Then** I can still add, remove and change exercises and sets.
+4. **Given** a template nobody has started, **When** I view an exercise's progress, **Then** its sets do not appear.
+5. **Given** a template I no longer want, **When** I delete it, **Then** it is gone after confirmation, and no logged history changes.
 
 ---
 
 ### User Story 2 - Tick sets off at the gym (Priority: P1)
 
-As a lifter at the rack, I open my prepared session, start it, and after each set I tap once to mark it done. That is all I have to do when the set went as planned.
+As a lifter at the rack, I pick my template, which starts the session, and after each set I tap once to mark it done. That is all I have to do when the set went as planned.
 
 **Why this priority**: This is the outcome the issue asks for: the only action at the gym is marking a set done. Together with Story 1 it is the MVP.
 
-**Independent Test**: Start a prepared session, mark two of its sets done with one tap each, close the tab, reopen on another device: those two sets are recorded as done with their planned weight and reps, the session is in progress, and the rest are still waiting.
+**Independent Test**: Start a session from a template, mark two of its sets done with one tap each, close the tab, reopen on another device: those two sets are recorded as done with their planned weight and reps, the session is in progress, and the rest are still waiting.
 
 **Acceptance Scenarios**:
 
-1. **Given** a prepared session, **When** I start it, **Then** it becomes an in-progress session dated and timed when I started, not when I prepared it.
+1. **Given** a template, **When** I start a session from it, **Then** a new in-progress session is dated and timed when I started, holding a copy of the template's exercises and sets, none done.
 2. **Given** an in-progress session with planned sets, **When** I tap a set's done control, **Then** the set is recorded as done with its planned weight and reps, and it is saved like any other logged set (within seconds, without a Save button).
 3. **Given** a set marked done by mistake, **When** I tap it again, **Then** it returns to not done.
 4. **Given** an in-progress session, **When** I look at it, **Then** I can tell at a glance which sets are done and which are still to do, and which set is next.
@@ -62,7 +70,7 @@ As a lifter mid-session, the bar felt heavy so I take 2.5 kg off, or I managed o
 
 **Why this priority**: Plans rarely survive the gym unchanged; the issue names changing weight and reps and adding exercises explicitly. A plan that can't be adjusted would push the user back to logging by hand.
 
-**Independent Test**: In a started prepared session, change one planned set's weight and another's reps, mark both done, add a new exercise with one set and mark it done: all three are recorded as done with the changed values.
+**Independent Test**: In a session started from a template, change one planned set's weight and another's reps, mark both done, add a new exercise with one set and mark it done: all three are recorded as done with the changed values.
 
 **Acceptance Scenarios**:
 
@@ -76,25 +84,25 @@ As a lifter mid-session, the bar felt heavy so I take 2.5 kg off, or I managed o
 
 ### User Story 4 - Keep my routines as named templates (Priority: P3)
 
-As a lifter following a routine, I don't want to type the same "Push A" every week. I keep named templates ("Push A", "Legs B") with their exercises and sets, and prepare a session from one, changing only what differs this time.
+As a lifter following a routine, I don't want to type the same "Push A" every week. I keep named templates ("Push A", "Legs B") with their exercises and sets, and start a session from one, changing only what differs this time.
 
-**Why this priority**: Saves the most typing for routine lifters, but Story 1 already delivers the core value without it.
+**Why this priority**: Saves the most typing for routine lifters. Since R15 it is also how Story 1 is delivered.
 
-**Independent Test**: Create a template "Push A" with three exercises, prepare a session from it, change one weight in the session: the prepared session has the template's exercises and sets in order, none done, with the changed weight; the template still has the original weight.
+**Independent Test**: Create a template "Push A" with three exercises, start a session from it, change one weight in the session: the session has the template's exercises and sets in order, none done, with the changed weight; the template still has the original weight.
 
 **Acceptance Scenarios**:
 
 1. **Given** I'm signed in, **When** I open my templates, **Then** I can create, rename, edit and delete named templates, each holding ordered exercises with planned sets (weight, reps, warm-up flag).
-2. **Given** a template, **When** I prepare a session from it, **Then** a new prepared session holds a copy of its name (as the title), exercises and sets, all not done.
-3. **Given** a session prepared from a template, **When** I change the session, **Then** the template is untouched; **When** I change the template, **Then** sessions already prepared or logged from it are untouched.
-4. **Given** an earlier logged or prepared session, **When** I choose to save it as a template, **Then** a new template holds its exercises and sets with the values as they were (done state not copied), named from the session title by default.
-5. **Given** a template I delete, **When** sessions were prepared from it, **Then** those sessions remain as they are.
+2. **Given** a template, **When** I start a session from it, **Then** a new in-progress session holds a copy of its name (as the title), exercises and sets, all not done.
+3. **Given** a session started from a template, **When** I change the session, **Then** the template is untouched; **When** I change the template, **Then** sessions already started from it are untouched.
+4. **Given** an earlier logged session, **When** I choose to save it as a template, **Then** a new template holds its exercises and sets with the values as they were (done state not copied), named from the session title by default.
+5. **Given** a template I delete, **When** sessions were started from it, **Then** those sessions remain as they are.
 6. **Given** my templates, **When** I look at history, progress charts or session counts, **Then** templates never appear there.
 
 ### Edge Cases
 
-- Two prepared sessions exist at once (e.g. Monday and Wednesday planned on Sunday): both are kept, and I choose which to start.
-- A prepared session is started on another device at the same time: the existing stale-save protection applies; the second device is told the page changed and offered a reload.
+- Two routines planned ahead (e.g. Monday and Wednesday): two templates, and I choose which to start. *(Revised by R15.)*
+- The same template is started on two devices: each start makes its own session; nothing links them. *(Revised by R15: there is no shared prepared page to race over.)*
 - A planned set has no weight (bodyweight exercise) or only added weight: marking it done records it like a logged bodyweight set.
 - A planned set has incomplete values (weight but no reps): it stays in the editor's draft, as an incomplete row does today, and the plan can't be saved until it is complete or removed. *Narrowed in planning (research R12): a saved planned set always has reps.*
 - Every planned set gets removed during the session and nothing is marked done: finishing behaves as for an empty page today (the user is offered to tear it out).
@@ -103,7 +111,7 @@ As a lifter following a routine, I don't want to type the same "Push A" every we
 - Backup and restore: prepared sessions are either included and restored as prepared, or excluded; they must never be restored as logged history.
 - Another user's prepared session or template is requested: it is reported as not found, exactly like another user's workout.
 - A finished session where every set was skipped: it stays as a finished page showing only skipped sets; it adds nothing to progress charts and does not count as a session in which those exercises were trained.
-- A template with no exercises: it can be saved (a name to fill in later), and preparing from it gives an empty prepared session.
+- A template with no exercises: starting from it gives an empty session in progress. *(As built, the template editor asks for at least one exercise before Save.)*
 - Two templates with the same name: refused. Names are unique per user and compared like exercise names (ignoring case and extra whitespace), so "Push A" and " push a " clash; different users may each have a "Push A". Creating, renaming or saving a session as a template onto a taken name tells the user the name is in use and keeps their input; nothing is merged or overwritten.
 - An exercise used only in templates: deleting it follows the same rule as for sets in sessions (refused while referenced), and a rename or merge carries through to templates.
 
@@ -111,11 +119,11 @@ As a lifter following a routine, I don't want to type the same "Push A" every we
 
 ### Functional Requirements
 
-- **FR-001**: Users MUST be able to create a prepared session with optional heading fields (title and the other existing optional heading fields, subject to the existing optional-details consent) and an ordered list of exercises, each with ordered planned sets carrying weight, reps and warm-up flag.
+- **FR-001** *(revised by R15: met by templates, FR-016)*: Users MUST be able to create a prepared session with optional heading fields (title and the other existing optional heading fields, subject to the existing optional-details consent) and an ordered list of exercises, each with ordered planned sets carrying weight, reps and warm-up flag.
 - **FR-002**: Exercises in a prepared session MUST be chosen and created the same way as when logging (same suggestions, same bodyweight handling, same name normalization).
-- **FR-003**: Users MUST be able to edit and delete a prepared session before starting it.
-- **FR-004**: Prepared sessions MUST be listed apart from logged sessions, and MUST NOT count as sessions in history counts, exercise session counts, "last time" hints, or progress charts until started.
-- **FR-005**: Users MUST be able to start a prepared session; starting sets its date and start time to the moment of starting and makes it an in-progress session with the existing autosave behavior.
+- **FR-003** *(revised by R15: met by templates, FR-016)*: Users MUST be able to edit and delete a prepared session before starting it.
+- **FR-004** *(revised by R15: templates are listed on their own screen and count as nothing, FR-019)*: Prepared sessions MUST be listed apart from logged sessions, and MUST NOT count as sessions in history counts, exercise session counts, "last time" hints, or progress charts until started.
+- **FR-005** *(revised by R15)*: Users MUST be able to start a session from a template; starting dates and times it at the moment of starting and makes it an in-progress session, every set not done, with the existing autosave behavior.
 - **FR-006**: In an in-progress session, every set MUST have a done state that the user can toggle with a single tap.
 - **FR-007**: Only sets marked done MUST count as logged training (progress chart, "last time" hints, best-set calculations, exports labelled as training data).
 - **FR-008**: Users MUST be able to change a set's weight and reps before or after marking it done, and add or remove exercises and sets during the session.
@@ -124,11 +132,11 @@ As a lifter following a routine, I don't want to type the same "Push A" every we
 - **FR-010a**: When correcting a finished page, users MUST be able to mark a skipped set done or remove it.
 - **FR-011**: Sets logged on a page that was not prepared (the existing "new page" flow) MUST keep working as today; a set entered directly is recorded as done, so existing logging is not slowed by an extra tap.
 - **FR-012**: Existing logged sessions MUST be treated as fully done after this feature ships; no history changes meaning.
-- **FR-013**: Prepared sessions MUST be scoped to their owner with the same not-found behavior as workouts, and MUST be removed with the account.
-- **FR-014**: Backup export and restore MUST handle prepared sessions and the done state so that a restore never turns planned sets into logged ones.
+- **FR-013** *(revised by R15: no prepared sessions remain; FR-018 covers templates)*: Prepared sessions MUST be scoped to their owner with the same not-found behavior as workouts, and MUST be removed with the account.
+- **FR-014**: Backup export and restore MUST handle the done state so that a restore never turns planned sets into logged ones. *(Revised by R15: a prepared session in an older backup is restored as a template.)*
 - **FR-015**: Prepared sessions and templates MUST be available on any device the user signs in on (stored with the account, not only in the browser).
 - **FR-016**: Users MUST be able to create, rename, edit and delete named templates of ordered exercises with planned sets. A template name MUST be non-empty and unique per user, compared the same way as exercise names (case and whitespace insensitive), while keeping the casing the user typed for display.
-- **FR-017**: Users MUST be able to prepare a session from a template and to save an existing session as a new template; both are copies, and later changes to one never affect the other.
+- **FR-017** *(revised by R15)*: Users MUST be able to start a session from a template and to save an existing session as a new template; both are copies, and later changes to one never affect the other.
 - **FR-018**: Templates MUST be scoped to their owner with the same not-found behavior as workouts, MUST be removed with the account, and MUST be included in backup export and restored as templates.
 - **FR-019**: Templates MUST NOT appear in history, session counts, "last time" hints or progress charts.
 
@@ -149,7 +157,7 @@ As a lifter following a routine, I don't want to type the same "Push A" every we
 - **SC-004**: Zero planned-but-not-done sets appear on progress charts, "last time" hints or logged-session counts, verified across preparing, starting, finishing and backup/restore.
 - **SC-005**: A set marked done survives closing the tab or losing the phone, and is visible on another device within seconds, as logged sets do today.
 - **SC-006**: All existing sessions and charts look the same after the feature ships as before it.
-- **SC-007**: Preparing a session from a template takes at most three taps from the notebook cover, with no typing.
+- **SC-007**: Starting a session from a template takes at most three taps from the notebook cover, with no typing. *(Revised by R15: started, not prepared.)*
 - **SC-008**: On a finished page, every skipped set is identifiable as skipped without opening it, and none is counted on any progress chart.
 
 ## Assumptions

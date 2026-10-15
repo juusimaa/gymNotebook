@@ -2,9 +2,9 @@ import { request } from './client'
 import type { WorkoutDetailResponse } from './workouts'
 
 // Wire types and calls for /templates (specs/006 contracts/api.md). A template
-// is a named set of exercise blocks and sets to plan a session from. Planning
-// copies it into a new prepared page; the two are never linked afterwards, so
-// editing one leaves the other as it was.
+// is a named set of exercise blocks and sets to start a session from. Starting
+// copies it into a new page in progress; the two are never linked afterwards,
+// so editing one leaves the other as it was.
 
 // One row of GET /templates: enough to list it without fetching each one.
 export interface TemplateSummaryResponse {
@@ -84,19 +84,23 @@ export function updateTemplate(
   })
 }
 
-// Pages already planned from it stay as they are.
+// Pages already started from it stay as they are.
 export function deleteTemplate(id: number): Promise<void> {
   return request<void>(`/templates/${id}`, { method: 'DELETE' })
 }
 
-// A new prepared page holding a copy of the template, every set planned. Its
-// title is the template's name, or null when the account doesn't allow
-// optional details.
-export function prepareFromTemplate(
+// A new page in progress, dated and started with the local date and moment
+// the client sends (createStartTimes), holding a copy of the template with
+// every set planned, to tick off as done. Its title is the template's name,
+// or null when the account doesn't allow optional details.
+export function startFromTemplate(
   id: number,
+  date: string,
+  startedAt: string,
 ): Promise<WorkoutDetailResponse> {
-  return request<WorkoutDetailResponse>(`/templates/${id}/prepare`, {
+  return request<WorkoutDetailResponse>(`/templates/${id}/start`, {
     method: 'POST',
+    body: { date, startedAt },
   })
 }
 

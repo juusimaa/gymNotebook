@@ -244,7 +244,6 @@ export default function WorkoutDetail() {
             // Copies the page as stored: every block and set, whatever each
             // set's status, so a skipped set is still part of the routine.
             await saveWorkoutAsTemplate(workout.id, name)
-            return 'saved'
           }}
           onClose={() => {
             setSavingAsTemplate(false)

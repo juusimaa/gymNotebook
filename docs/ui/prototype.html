@@ -1719,8 +1719,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     );
 
     // Predefined sessions and templates (specs/006 contracts/ui.md, T003).
-    // Prepared pages, the editor's four modes (prepare, in progress, finished
-    // edit, template), done/next/skipped sets and the template screens. All of
+    // Starting a session from a template, the editor's three modes (in
+    // progress, finished edit, template), done/next/skipped sets and the
+    // template screens. All of
     // it is sample data in memory; nothing is saved. Same anchor discipline as
     // the patches above: fail visibly if the bundled source moves. This code
     // sits inside template literals, so it avoids backticks, dollar-brace and
@@ -1748,22 +1749,12 @@ document.addEventListener('DOMContentLoaded', async function() {
       '{ name: "Overhead Press", sets: [[20,8,true],[35,6,false],[35,6,false,"planned"]] }'
     );
 
-    // State: the editor's mode, the prepared pages and the templates.
+    // State: the editor's mode and the templates.
     replaceSessionsAnchor(
       '    detailsCleared: 0,\n    draft: [',
       `    detailsCleared: 0,
     editorMode: "progress",
-    planId: null,
-    planTitle: "",
-    plans: [
-      { id: 2, title: "Push A", blocks: [
-        { name: "Bench Press", sets: [{ weight: "40", reps: "8", warmup: true }, { weight: "60", reps: "5", warmup: false }, { weight: "65", reps: "5", warmup: false }, { weight: "65", reps: "5", warmup: false }] },
-        { name: "Overhead Press", sets: [{ weight: "35", reps: "6", warmup: false }, { weight: "35", reps: "6", warmup: false }, { weight: "35", reps: "6", warmup: false }] }
-      ] },
-      { id: 1, title: "", blocks: [
-        { name: "Back Squat", sets: [{ weight: "80", reps: "5", warmup: false }, { weight: "80", reps: "5", warmup: false }, { weight: "80", reps: "5", warmup: false }] }
-      ] }
-    ],
+    draftTitle: "",
     templates: [
       { id: 1, name: "Legs B", blocks: [
         { name: "Back Squat", sets: [{ weight: "60", reps: "5", warmup: true }, { weight: "80", reps: "5", warmup: false }, { weight: "90", reps: "3", warmup: false }, { weight: "90", reps: "3", warmup: false }] },
@@ -1787,13 +1778,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     tplNameError: "",
     tplDeleteAsk: false,
     saveTplOpen: false,
-    saveTplFrom: "page",
     saveTplName: "",
     saveTplError: "",
     saveTplDone: "",
     draft: [`
     );
-    // The sample draft is a page in progress that started from a plan: two
+    // The sample draft is a page in progress that started from a template: two
     // sets done, the rest still to do.
     replaceSessionsAnchor(
       `{ name: "Back Squat", sets: [{ weight: "60", reps: "5", warmup: true }, { weight: "80", reps: "5", warmup: false }, { weight: "90", reps: "3", warmup: false }] },
@@ -1845,13 +1835,13 @@ document.addEventListener('DOMContentLoaded', async function() {
       `  // ── Predefined sessions (specs/006) ──
   enter = (mode, draft, extra) => this.setState({
     screen: "new", editorMode: mode, draft, removed: null, headingOpen: false, confirmDiscard: false, confirmFinish: false,
-    chooser: false, notice: "", saveTplOpen: false, saveTplDone: "", saveTplError: "", tplDeleteAsk: false, ...extra
+    chooser: false, notice: "", saveTplOpen: false, saveTplDone: "", saveTplError: "", tplDeleteAsk: false, draftTitle: "", ...extra
   });
   clone = (blocks) => blocks.map((b) => ({ name: b.name, sets: b.sets.map((x) => ({ weight: x.weight, reps: x.reps, warmup: x.warmup })) }));
   draftFromPage = (w) => w.blocks.map((b) => ({ name: b.name, sets: b.sets.map((s) => ({
     weight: s[0] == null ? "" : String(s[0]), reps: String(s[1]), warmup: !!s[2], done: !(s[3] === "skipped" || s[3] === "planned")
   })) }));
-  openPage = (w, mode) => (e) => { if (e && e.preventDefault) e.preventDefault(); this.enter(mode, this.draftFromPage(w), {}); };
+  openPage = (w, mode) => (e) => { if (e && e.preventDefault) e.preventDefault(); this.enter(mode, this.draftFromPage(w), { draftTitle: w.title || "" }); };
   startBlank = (e) => {
     if (e) e.preventDefault();
     this.enter("progress", [
@@ -1863,32 +1853,12 @@ document.addEventListener('DOMContentLoaded', async function() {
   editCurrent = (e) => this.openPage(DATA.find((x) => x.id === this.state.pageId) || DATA[0], "finished")(e);
   openChooser = (e) => { if (e) e.preventDefault(); this.setState({ chooser: true }); };
   closeChooser = (e) => { if (e) e.preventDefault(); this.setState({ chooser: false }); };
-  prepareFrom = (tpl) => (e) => {
-    if (e) e.preventDefault();
-    this.enter("prepare", tpl ? this.clone(tpl.blocks) : [], { planId: null, planTitle: tpl ? tpl.name : "" });
-  };
-  openPlan = (p) => (e) => { if (e) e.preventDefault(); this.enter("prepare", this.clone(p.blocks), { planId: p.id, planTitle: p.title }); };
-  startPlan = (p) => (e) => {
-    if (e) e.preventDefault();
-    this.enter("progress", this.clone(p.blocks).map((b) => ({ ...b, sets: b.sets.map((x) => ({ ...x, done: false })) })), {});
-    this.setState((s) => ({ plans: s.plans.filter((x) => x.id !== p.id) }));
-  };
-  savePlan = (e) => {
-    if (e) e.preventDefault();
-    this.setState((s) => {
-      const plan = { id: s.planId || Math.max(0, ...s.plans.map((x) => x.id)) + 1, title: s.planTitle, blocks: this.clone(s.draft) };
-      const plans = s.planId ? s.plans.map((x) => x.id === s.planId ? plan : x) : [plan, ...s.plans];
-      return { plans, screen: "history", notice: "Plan saved." };
-    });
-  };
-  startSession = (e) => {
-    if (e) e.preventDefault();
-    this.setState((s) => ({
-      editorMode: "progress", headingOpen: false,
-      plans: s.planId ? s.plans.filter((x) => x.id !== s.planId) : s.plans,
-      draft: s.draft.map((b) => ({ ...b, sets: b.sets.map((x) => ({ ...x, done: false })) }))
-    }));
-  };
+  // Starting from a template opens a session right away: dated today, in
+  // progress, titled with the template's name, every set still to do.
+  startFromTemplate = (t) =>
+    this.enter("progress", this.clone(t.blocks).map((b) => ({ ...b, sets: b.sets.map((x) => ({ ...x, done: false })) })), { draftTitle: t.name });
+  startFrom = (tpl) => (e) => { if (e) e.preventDefault(); this.startFromTemplate(tpl); };
+  setDraftTitle = (e) => this.setState({ draftTitle: e.target.value });
   toggleDone = (bi, si) => () => this.setState((s) => ({
     draft: s.draft.map((b, i) => i !== bi ? b : { ...b, sets: b.sets.map((x, j) => j !== si ? x : { ...x, done: x.done === false }) })
   }));
@@ -1901,7 +1871,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const mode = this.state.editorMode;
     const done = s.done !== false;
     const next = mode === "progress" && !done && this.firstNotDone() === bi + "-" + si;
-    const note = done || mode === "prepare" || mode === "template" ? "" : next ? "next" : mode === "finished" ? "skipped" : "";
+    const note = done || mode === "template" ? "" : next ? "next" : mode === "finished" ? "skipped" : "";
     const base = "width:44px;height:44px;padding:0;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:11px;";
     return {
       isDone: done, isNotDone: !done, donePressed: String(done), hasNote: !!note, note,
@@ -1913,11 +1883,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       toggleDone: this.toggleDone(bi, si)
     };
   };
-  // Save as template: from the session page or the prepared page's editor.
-  openSaveTpl = (from) => (e) => {
+  // Save as template: from the session page.
+  openSaveTpl = (e) => {
     if (e) e.preventDefault();
     const w = DATA.find((x) => x.id === this.state.pageId) || DATA[0];
-    this.setState({ saveTplOpen: true, saveTplFrom: from, saveTplName: from === "page" ? w.title : this.state.planTitle, saveTplError: "", saveTplDone: "" });
+    this.setState({ saveTplOpen: true, saveTplName: w.title, saveTplError: "", saveTplDone: "" });
   };
   setSaveTplName = (e) => this.setState({ saveTplName: e.target.value, saveTplError: "" });
   closeSaveTpl = (e) => { if (e) e.preventDefault(); this.setState({ saveTplOpen: false, saveTplDone: "", saveTplError: "" }); };
@@ -1929,7 +1899,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const taken = this.takenName(name, null);
     if (taken) { this.setState({ saveTplError: "You already have a template called " + taken.name + "." }); return; }
     const w = DATA.find((x) => x.id === s.pageId) || DATA[0];
-    const blocks = s.saveTplFrom === "page" ? this.clone(this.draftFromPage(w)) : this.clone(s.draft);
+    const blocks = this.clone(this.draftFromPage(w));
     this.setState({
       templates: [...s.templates, { id: Math.max(0, ...s.templates.map((t) => t.id)) + 1, name, blocks }],
       saveTplDone: "Saved as template " + name + "."
@@ -1939,21 +1909,27 @@ document.addEventListener('DOMContentLoaded', async function() {
   openTemplate = (t) => (e) => { if (e) e.preventDefault(); this.enter("template", this.clone(t.blocks), { tplId: t.id, tplName: t.name, tplNameError: "" }); };
   newTemplate = (e) => { if (e) e.preventDefault(); this.enter("template", [], { tplId: null, tplName: "", tplNameError: "" }); };
   setTplName = (e) => this.setState({ tplName: e.target.value, tplNameError: "" });
+  // Saves the template being edited; returns it, or null when the name is
+  // missing or taken (the error shows under the name field).
+  storeTemplate = () => {
+    const s = this.state, name = s.tplName.trim();
+    if (!name) { this.setState({ tplNameError: "Name the template." }); return null; }
+    const taken = this.takenName(name, s.tplId);
+    if (taken) { this.setState({ tplNameError: "You already have a template called " + taken.name + "." }); return null; }
+    const t = { id: s.tplId || Math.max(0, ...s.templates.map((x) => x.id)) + 1, name, blocks: this.clone(s.draft) };
+    this.setState({ templates: s.tplId ? s.templates.map((x) => x.id === s.tplId ? t : x) : [...s.templates, t], tplId: t.id });
+    return t;
+  };
   saveTemplate = (e) => {
     if (e) e.preventDefault();
-    const s = this.state, name = s.tplName.trim();
-    if (!name) { this.setState({ tplNameError: "Name the template." }); return; }
-    const taken = this.takenName(name, s.tplId);
-    if (taken) { this.setState({ tplNameError: "You already have a template called " + taken.name + "." }); return; }
-    const t = { id: s.tplId || Math.max(0, ...s.templates.map((x) => x.id)) + 1, name, blocks: this.clone(s.draft) };
-    this.setState({
-      templates: s.tplId ? s.templates.map((x) => x.id === s.tplId ? t : x) : [...s.templates, t],
-      screen: "templates", notice: "Template saved."
-    });
+    if (this.storeTemplate()) this.setState({ screen: "templates", notice: "Template saved." });
   };
-  prepareFromEditor = (e) => {
+  // Start session in the template editor: save the template first, then
+  // start a session from it.
+  startFromEditor = (e) => {
     if (e) e.preventDefault();
-    this.enter("prepare", this.clone(this.state.draft), { planId: null, planTitle: this.state.tplName });
+    const t = this.storeTemplate();
+    if (t) this.startFromTemplate(t);
   };
   askDeleteTpl = (e) => { if (e) e.preventDefault(); this.setState({ tplDeleteAsk: true }); };
   cancelDeleteTpl = (e) => { if (e) e.preventDefault(); this.setState({ tplDeleteAsk: false }); };
@@ -1963,7 +1939,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   };
   sessionValues() {
     const s = this.state, mode = s.editorMode;
-    const isProg = mode === "progress", isPrep = mode === "prepare", isFin = mode === "finished", isTpl = mode === "template";
+    const isProg = mode === "progress", isFin = mode === "finished", isTpl = mode === "template";
     const setN = (blocks) => blocks.reduce((n, b) => n + b.sets.length, 0);
     const exN = (blocks) => blocks.length + (blocks.length === 1 ? " exercise" : " exercises");
     const notDone = s.draft.reduce((n, b) => n + b.sets.filter((x) => x.done === false).length, 0);
@@ -1971,14 +1947,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     const sortedTpls = s.templates.slice().sort((a, b) => a.name.localeCompare(b.name));
     return {
       isTemplates: s.screen === "templates",
-      isProgMode: isProg, isPrep, isFinMode: isFin, isTpl, showDone,
+      isProgMode: isProg, isFinMode: isFin, isTpl, showDone,
       cols: showDone ? "18px 1fr 1fr 62px 44px 44px" : "26px 1fr 1fr 80px 48px",
       gap: showDone ? "6px" : "8px",
-      editorTitle: isPrep ? "Plan a session" : isTpl ? (s.tplId ? "Template" : "New template") : isFin ? "Edit page" : "New page",
-      datelineText: isPrep ? "Plan" : isFin ? "9 Sep 07.10–08.05" : "Today 07.15",
+      editorTitle: isTpl ? (s.tplId ? "Template" : "New template") : isFin ? "Edit page" : "New page",
+      datelineText: isFin ? "9 Sep 07.10–08.05" : "Today 07.15",
       datelineDisplay: isTpl ? "none" : "flex",
-      dateFieldsDisplay: isPrep ? "none" : "grid",
-      bwGymDisplay: isPrep ? "none" : "grid",
+      draftTitle: s.draftTitle, setDraftTitle: this.setDraftTitle,
       showSaved: isProg,
       headingOpen: !!s.headingOpen && !isTpl,
       // The header's old "Save" predates autosave (specs/003): a page in
@@ -1988,13 +1963,13 @@ document.addEventListener('DOMContentLoaded', async function() {
       noHeaderAction: !(isTpl && !!s.tplId),
       headerLabel: "Delete",
       headerAction: this.askDeleteTpl,
-      discardQuestion: isTpl ? "Discard your changes to this template?" : isPrep ? "Discard this plan and its " + setN(s.draft) + " sets?" : "Discard this page and its " + setN(s.draft) + " sets?",
+      discardQuestion: isTpl ? "Discard your changes to this template?" : "Discard this page and its " + setN(s.draft) + " sets?",
       discard: (e) => { if (e) e.preventDefault(); this.setState({ confirmDiscard: false, screen: isTpl ? "templates" : "history" }); },
       finishQuestion: notDone
         ? notDone + " planned " + (notDone === 1 ? "set" : "sets") + " will be kept as skipped. The current time will be saved."
         : "Finish this session now? The current time will be saved.",
       finish: (e) => { if (e) e.preventDefault(); this.setState({ confirmFinish: false, screen: "history", notice: "Session finished and saved." }); },
-      savePlan: this.savePlan, startSession: this.startSession, saveTemplate: this.saveTemplate, prepareFromEditor: this.prepareFromEditor,
+      saveTemplate: this.saveTemplate, startFromEditor: this.startFromEditor,
       saveChanges: (e) => { if (e) e.preventDefault(); this.setState({ screen: "detail" }); },
       // Template name
       tplName: s.tplName, setTplName: this.setTplName, tplNameError: s.tplNameError,
@@ -2009,25 +1984,17 @@ document.addEventListener('DOMContentLoaded', async function() {
       saveTplStyle: s.saveTplError ? "border:2px solid var(--color-error)" : "",
       saveTplForm: s.saveTplOpen && !s.saveTplDone,
       setSaveTplName: this.setSaveTplName, closeSaveTpl: this.closeSaveTpl, confirmSaveTpl: this.confirmSaveTpl,
-      openSaveTplPage: this.openSaveTpl("page"), openSaveTplEditor: this.openSaveTpl("editor"),
+      openSaveTplPage: this.openSaveTpl,
       // Sessions
       startBlank: this.startBlank, continueCurrent: this.continueCurrent, editCurrent: this.editCurrent,
       goTemplates: this.go("templates"),
       notice: s.notice, hasNotice: !!s.notice,
       chooserOpen: s.chooser, openChooser: this.openChooser, closeChooser: this.closeChooser,
-      chooseBlank: this.prepareFrom(null),
-      chooserTemplates: sortedTpls.map((t) => ({ name: t.name, summary: t.blocks.map((b) => b.name).join(" · "), pick: this.prepareFrom(t) })),
-      hasPlans: s.plans.length > 0, noPlans: s.plans.length === 0,
-      plans: s.plans.map((p) => ({
-        title: p.title || "Untitled plan",
-        titleInk: p.title ? "var(--color-text)" : "var(--color-neutral-700)",
-        summary: p.blocks.map((b) => b.name).join(" · "),
-        meta: exN(p.blocks) + " · " + setN(p.blocks) + " sets",
-        open: this.openPlan(p), start: this.startPlan(p), startLabel: "Start " + (p.title || "untitled plan")
-      })),
+      chooserTemplates: sortedTpls.map((t) => ({ name: t.name, summary: t.blocks.map((b) => b.name).join(" · "), pick: this.startFrom(t) })),
       templateRows: sortedTpls.map((t) => ({
         name: t.name, summary: t.blocks.map((b) => b.name).join(" · "),
-        meta: exN(t.blocks) + " · " + setN(t.blocks) + " sets", open: this.openTemplate(t)
+        meta: exN(t.blocks) + " · " + setN(t.blocks) + " sets", open: this.openTemplate(t),
+        start: this.startFrom(t), startLabel: "Start a session from " + t.name
       })),
       hasTemplates: s.templates.length > 0, noTemplates: s.templates.length === 0, newTemplate: this.newTemplate
     };
@@ -2045,7 +2012,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       '      workouts, page, draft, suggestions,\n      ...this.sessionValues()\n    };'
     );
 
-    // Markup. Sessions: the Prepared group, the arrival notice, the footer.
+    // Markup. Sessions: the arrival notice, the footer and its template chooser.
     const bandStart = '<div style="padding:14px 22px;border-bottom:1px solid var(--color-divider);background:var(--color-surface)">';
     const saveTplBand = `
         <sc-if value="{{ saveTplOpen }}" hint-placeholder-val="{{ false }}">
@@ -2081,25 +2048,6 @@ document.addEventListener('DOMContentLoaded', async function() {
       '        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:4px 22px 96px">\n          <sc-for list="{{ workouts }}"',
       noticeLine + `
         <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:4px 22px 96px">
-          <div style="display:flex;align-items:center;justify-content:space-between;min-height:44px;margin-top:6px">
-            <div style="` + groupLabel + `">Planned</div>
-            <a href="#" class="header-link" sc-camel-on-click="{{ goTemplates }}" style="font-size:13px">Templates</a>
-          </div>
-          <sc-if value="{{ noPlans }}" hint-placeholder-val="{{ false }}">
-            <p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:var(--color-neutral-700);border-bottom:1px solid var(--color-divider);padding-bottom:14px">Nothing planned. Use Plan a session to set one up ahead.</p>
-          </sc-if>
-          <sc-for list="{{ plans }}" as="p" hint-placeholder-count="2">
-            <div style="display:grid;grid-template-columns:56px 1fr auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--color-divider)">
-              <div sc-camel-on-click="{{ p.open }}" style="text-align:right;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-700);cursor:pointer">Plan</div>
-              <div sc-camel-on-click="{{ p.open }}" style="min-width:0;cursor:pointer">
-                <div style="font-family:var(--font-heading);font-size:19px;color:{{ p.titleInk }}">{{ p.title }}</div>
-                <div style="font-size:13px;color:var(--color-neutral-700);line-height:1.5;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.summary }}</div>
-                <div style="font-size:12px;color:var(--color-neutral-700);margin-top:5px;font-variant-numeric:tabular-nums">{{ p.meta }}</div>
-              </div>
-              <button class="btn btn-secondary" sc-camel-on-click="{{ p.start }}" aria-label="{{ p.startLabel }}" style="min-height:44px;min-width:68px;padding:0 14px;font-size:15px">Start</button>
-            </div>
-          </sc-for>
-          <div style="margin-top:22px;min-height:32px;` + groupLabel + `">Logged</div>
           <sc-for list="{{ workouts }}"`
     );
     replaceSessionsAnchor(
@@ -2107,9 +2055,11 @@ document.addEventListener('DOMContentLoaded', async function() {
           <button class="btn btn-primary" sc-camel-on-click="{{ goNew }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Start a new page</button>`,
       `        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;gap:10px">
           <sc-if value="{{ chooserOpen }}" hint-placeholder-val="{{ false }}">
-            <div role="group" aria-label="Plan a session from" style="position:absolute;left:22px;right:22px;bottom:82px;padding:12px 14px 6px;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-md)">
-              <div style="` + groupLabel + `;margin-bottom:2px">Plan a session from</div>
-              <button sc-camel-on-click="{{ chooseBlank }}" style="width:100%;min-height:48px;display:flex;align-items:center;padding:0;border:0;border-bottom:1px solid var(--color-divider);background:none;cursor:pointer;text-align:left;font-family:var(--font-heading);font-size:18px;color:var(--color-text)">A blank page</button>
+            <div role="group" aria-label="Start a session from" style="position:absolute;left:22px;right:22px;bottom:82px;padding:12px 14px 6px;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-md)">
+              <div style="` + groupLabel + `;margin-bottom:2px">Start a session from</div>
+              <sc-if value="{{ noTemplates }}" hint-placeholder-val="{{ false }}">
+                <p style="margin:6px 0 8px;padding-bottom:12px;border-bottom:1px solid var(--color-divider);font-size:14px;line-height:1.55;color:var(--color-neutral-700)">No templates yet. Write one under All templates, or save a session page as one.</p>
+              </sc-if>
               <sc-for list="{{ chooserTemplates }}" as="t" hint-placeholder-count="3">
                 <button sc-camel-on-click="{{ t.pick }}" style="width:100%;min-height:52px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;padding:4px 0;border:0;border-bottom:1px solid var(--color-divider);background:none;cursor:pointer;text-align:left;color:var(--color-text);font-family:var(--font-body)">
                   <span style="font-family:var(--font-heading);font-size:18px">{{ t.name }}</span>
@@ -2122,7 +2072,7 @@ document.addEventListener('DOMContentLoaded', async function() {
               </div>
             </div>
           </sc-if>
-          <button class="btn btn-secondary" sc-camel-on-click="{{ openChooser }}" aria-expanded="{{ chooserOpen }}" style="flex:1;min-height:48px;font-size:15px">Plan a session</button>
+          <button class="btn btn-secondary" sc-camel-on-click="{{ openChooser }}" aria-expanded="{{ chooserOpen }}" style="flex:1;min-height:48px;font-size:15px">From template</button>
           <button class="btn btn-primary" sc-camel-on-click="{{ startBlank }}" style="flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Start a new page</button>`
     );
 
@@ -2191,20 +2141,11 @@ document.addEventListener('DOMContentLoaded', async function() {
       '<p role="status" style="margin:-4px 0 0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)">Saved 07.42</p>',
       '<sc-if value="{{ showSaved }}" hint-placeholder-val="{{ true }}"><p role="status" style="margin:-4px 0 0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)">Saved 07.42</p></sc-if>'
     );
+    // The page title, controlled so a session started from a template opens
+    // with the template's name as its title.
     replaceSessionsAnchor(
-      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <label style="display:flex;flex-direction:column;gap:5px">
-              <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Date</span>`,
-      `<div style="display:{{ dateFieldsDisplay }};grid-template-columns:1fr 1fr;gap:12px">
-            <label style="display:flex;flex-direction:column;gap:5px">
-              <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Date</span>`
-    );
-
-    // A plan has a title and notes, but no bodyweight or gym: both can change
-    // by the day, so they are filled in once the session starts.
-    replaceSessionsAnchor(
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">',
-      '<div style="display:{{ bwGymDisplay }};grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">'
+      '<input class="input" type="text" placeholder="Leg day"',
+      '<input class="input" type="text" sc-camel-value="{{ draftTitle }}" sc-camel-on-change="{{ setDraftTitle }}" placeholder="Leg day"'
     );
 
     // Set rows: the Done toggle, the next / skipped note, dashed inputs for
@@ -2252,35 +2193,14 @@ document.addEventListener('DOMContentLoaded', async function() {
           <sc-if value="{{ isFinMode }}" hint-placeholder-val="{{ false }}">
             <button class="btn btn-primary" sc-camel-on-click="{{ saveChanges }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Save changes</button>
           </sc-if>
-          <sc-if value="{{ isPrep }}" hint-placeholder-val="{{ false }}">
-            <button class="btn btn-secondary" sc-camel-on-click="{{ savePlan }}" style="flex:1;min-height:48px;font-size:15px">Save plan</button>
-            <button class="btn btn-primary" sc-camel-on-click="{{ startSession }}" style="flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px">Start session</button>
-          </sc-if>
           <sc-if value="{{ isTpl }}" hint-placeholder-val="{{ false }}">
-            <button class="btn btn-secondary" sc-camel-on-click="{{ prepareFromEditor }}" style="flex:1;min-height:48px;font-size:15px">Plan a session</button>
+            <button class="btn btn-secondary" sc-camel-on-click="{{ startFromEditor }}" style="flex:1;min-height:48px;font-size:15px">Start session</button>
             <button class="btn btn-primary" sc-camel-on-click="{{ saveTemplate }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Save</button>
           </sc-if>`
     );
-    // Prepare mode: Save as template under the add-exercise suggestions.
-    replaceSessionsAnchor(
-      `            </sc-for>
-          </div>
-
-        </div>
-
-        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;gap:10px">`,
-      `            </sc-for>
-          </div>
-          <sc-if value="{{ isPrep }}" hint-placeholder-val="{{ false }}">
-            <button class="btn btn-ghost" sc-camel-on-click="{{ openSaveTplEditor }}" style="margin-top:14px;min-height:44px;font-size:15px">Save as template</button>
-          </sc-if>
-
-        </div>
-
-        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;gap:10px">`
-    );
-
-    // Templates list.
+    // Templates list. Each row's Start sits beside the row link, not inside
+    // it, and shares the row's bottom rule, like an in-progress session's
+    // Continue logging; it starts a session from that template.
     replaceSessionsAnchor(
       '    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">',
       `    <sc-if value="{{ isTemplates }}" hint-placeholder-val="{{ false }}">
@@ -2290,15 +2210,18 @@ document.addEventListener('DOMContentLoaded', async function() {
           <a href="#" class="header-link" sc-camel-on-click="{{ goHistory }}" style="font-size:13px">← Sessions</a>
         </div>` + noticeLine + `
         <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:14px 22px 96px">
-          <p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">A template is a set of exercises and sets to plan a session from. Planning from one copies it; the template stays as it is.</p>
+          <p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">A template is a set of exercises and sets to start a session from. Starting one copies it; the template stays as it is.</p>
           <sc-if value="{{ noTemplates }}" hint-placeholder-val="{{ false }}">
-            <p style="margin:18px 0;font-size:14px;line-height:1.6;color:var(--color-neutral-800)">No templates yet. Save one from a session page or a planned session, or write one here.</p>
+            <p style="margin:18px 0;font-size:14px;line-height:1.6;color:var(--color-neutral-800)">No templates yet. Save one from a session page, or write one here.</p>
           </sc-if>
           <sc-for list="{{ templateRows }}" as="t" hint-placeholder-count="3">
-            <div sc-camel-on-click="{{ t.open }}" style="padding:16px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
-              <div style="font-family:var(--font-heading);font-size:19px;color:var(--color-text)">{{ t.name }}</div>
-              <div style="font-size:13px;color:var(--color-neutral-700);line-height:1.5;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.summary }}</div>
-              <div style="font-size:12px;color:var(--color-neutral-700);margin-top:5px;font-variant-numeric:tabular-nums">{{ t.meta }}</div>
+            <div style="display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--color-divider)">
+              <div sc-camel-on-click="{{ t.open }}" style="flex:1;min-width:0;padding:16px 0;cursor:pointer">
+                <div style="font-family:var(--font-heading);font-size:19px;color:var(--color-text)">{{ t.name }}</div>
+                <div style="font-size:13px;color:var(--color-neutral-700);line-height:1.5;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.summary }}</div>
+                <div style="font-size:12px;color:var(--color-neutral-700);margin-top:5px;font-variant-numeric:tabular-nums">{{ t.meta }}</div>
+              </div>
+              <button class="btn btn-secondary" sc-camel-on-click="{{ t.start }}" aria-label="{{ t.startLabel }}" style="min-height:44px;min-width:68px;padding:0 14px;font-size:15px">Start</button>
             </div>
           </sc-for>
         </div>

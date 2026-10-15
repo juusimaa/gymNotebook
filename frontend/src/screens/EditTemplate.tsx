@@ -11,7 +11,7 @@ import {
   deleteTemplate,
   getTemplate,
   listTemplates,
-  prepareFromTemplate,
+  startFromTemplate,
   TEMPLATE_NAME_TAKEN,
   updateTemplate,
   type SaveTemplateRequest,
@@ -20,6 +20,7 @@ import { createClientId } from './clientId'
 import { ExerciseBlockList } from './ExerciseBlockList'
 import { ExercisePicker } from './ExercisePicker'
 import {
+  createStartTimes,
   createWorkoutExerciseDraft,
   type WorkoutExerciseDraft,
 } from './newWorkoutDraft'
@@ -69,7 +70,7 @@ function TemplateEditor({ templateId }: { templateId: string | undefined }) {
   const [isLoading, setIsLoading] = useState(!isNew)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
   const [savingAction, setSavingAction] = useState<
-    'save' | 'plan' | 'delete' | null
+    'save' | 'start' | 'delete' | null
   >(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   // A taken name is said at the field, not in the footer.
@@ -84,7 +85,7 @@ function TemplateEditor({ templateId }: { templateId: string | undefined }) {
   // its first save, so a retry after a later failure updates it rather than
   // creating a second.
   const savedIdRef = useRef<number | null>(isNew ? null : parsedId)
-  // What the server holds, as last loaded or saved, so Plan a session on an
+  // What the server holds, as last loaded or saved, so Start session on an
   // unchanged template doesn't write it again first.
   const savedRequestRef = useRef<string | null>(null)
   // Exercises a save created whose bodyweight choice hasn't been stored yet;
@@ -312,23 +313,25 @@ function TemplateEditor({ templateId }: { templateId: string | undefined }) {
     void navigate('/templates', { state: routeNotice('Template saved.') })
   }
 
-  // Plan a session copies the template as saved, so it saves first, as Start
-  // session does on a plan, then opens the new plan in the editor.
-  async function planSession() {
+  // Start session copies the template as saved, so it saves first, then
+  // starts a session from it with the local date and this moment and opens
+  // it in the editor, in progress, to tick the sets off.
+  async function startSession() {
     if (savingAction !== null) return
-    setSavingAction('plan')
+    setSavingAction('start')
     const id = await persist()
     if (id === null) {
       setSavingAction(null)
       return
     }
+    const { date, startedAt } = createStartTimes(new Date())
     try {
-      const plan = await prepareFromTemplate(id)
-      void navigate(`/workouts/${plan.id}/edit`)
+      const session = await startFromTemplate(id, date, startedAt)
+      void navigate(`/workouts/${session.id}/edit`)
     } catch {
       setSavingAction(null)
       setSaveMessage(
-        'The template is saved, but the plan could not be made. Please try again.',
+        'The template is saved, but the session could not be started. Please try again.',
       )
     }
   }
@@ -506,15 +509,15 @@ function TemplateEditor({ templateId }: { templateId: string | undefined }) {
                 {saveMessage}
               </p>
             )}
-            {/* Save outranks Plan a session here: keeping the routine is
+            {/* Save outranks Start session here: keeping the routine is
                 what this screen is for. */}
             <div className="new-workout-action-buttons">
               <button
                 className="btn btn-secondary"
                 type="button"
-                onClick={() => void planSession()}
+                onClick={() => void startSession()}
               >
-                {savingAction === 'plan' ? 'Planning…' : 'Plan a session'}
+                {savingAction === 'start' ? 'Starting…' : 'Start session'}
               </button>
               <button
                 className="btn btn-primary"

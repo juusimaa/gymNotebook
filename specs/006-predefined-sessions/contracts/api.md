@@ -2,6 +2,8 @@
 
 All routes require authentication and the account lifecycle filter, like the existing `/workouts` and `/exercises` groups. A missing or foreign id is 404, never 403. Errors use the existing `ErrorResponse { code }` body.
 
+> **Revised (research R15, 2026-10-15).** `POST /templates/{id}/start` replaces `POST /templates/{id}/prepare` (PR 9). Prepared pages are then removed (PR 10): `GET/POST /workouts/prepared`, `POST /workouts/{id}/start`, the `prepared` page state, its row in the status table and the `not_started` refusal go; `date` and `startedAt` are never null again, and a `before` cursor no longer has a prepared page to refuse. The sections below that describe prepared pages are kept for the record and marked as removed.
+
 ## Set status on existing routes
 
 `SetEntryResponse` gains `status: "planned" | "done" | "skipped"`.
@@ -46,7 +48,7 @@ When `status` is omitted it defaults to `planned` on a prepared page and `done` 
 
 A rename onto an existing name also re-points that exercise's template blocks.
 
-## New: prepared pages
+## Removed in PR 10 (R15): prepared pages
 
 ### `GET /workouts/prepared`
 
@@ -116,12 +118,18 @@ Blocks and sets are then saved with `PUT /workouts/{id}/exercises`, as today.
 
 ### `DELETE /templates/{id}`
 
-204. Pages prepared from it are untouched.
+204. Pages started from it are untouched.
 
-### `POST /templates/{id}/prepare`
+### `POST /templates/{id}/start` (R15, replaces `POST /templates/{id}/prepare`)
 
-- 201: `WorkoutDetailResponse` for a new prepared page holding a copy of the template's blocks and sets, all `planned`.
+```json
+{ "date": "2026-10-16", "startedAt": "2026-10-16T07:12:00+03:00" }
+```
+
+- 201: `WorkoutDetailResponse` for a new in-progress page, dated and started as sent (`startedAt` stored in UTC), holding a copy of the template's blocks and sets, all `planned`. `Location` is `/workouts/{id}`.
 - `title` is the template name, or null when the privacy feature is on and the account lacks optional-details consent.
+- 400: `invalid_request` when `date` or `startedAt` is missing.
+- 404: template not found or not the caller's.
 
 ### `POST /workouts/{id}/template`
 

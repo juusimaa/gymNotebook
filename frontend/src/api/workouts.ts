@@ -120,26 +120,6 @@ export interface WorkoutSummaryResponse {
   exerciseNames: string[]
 }
 
-// One row of GET /workouts/prepared: a page with no date or start yet. setCount is
-// every set on it; on a prepared page they are all planned.
-export interface PreparedWorkoutSummaryResponse {
-  id: number
-  title: string | null
-  createdAt: string
-  exerciseNames: string[]
-  exerciseCount: number
-  setCount: number
-}
-
-// POST /workouts/prepared takes only the heading: the date and start come later,
-// when the page is started. Blocks follow with replaceWorkoutExercises, as on any page.
-export interface CreatePreparedWorkoutRequest {
-  title: string | null
-  bodyweightKg: number | null
-  location: string | null
-  notes: string | null
-}
-
 // Keyset pagination uses the last workout id from the previous page as `before`.
 // URLSearchParams handles encoding and makes omission of the optional cursor explicit.
 export function listWorkouts(
@@ -158,23 +138,6 @@ export function createWorkout(
   body: CreateWorkoutRequest,
 ): Promise<WorkoutDetailResponse> {
   return request<WorkoutDetailResponse>('/workouts', {
-    method: 'POST',
-    body,
-  })
-}
-
-// The caller's prepared pages, newest written first. Unpaged: a handful of plans.
-export function listPreparedWorkouts(): Promise<
-  PreparedWorkoutSummaryResponse[]
-> {
-  return request<PreparedWorkoutSummaryResponse[]>('/workouts/prepared')
-}
-
-// Creates an empty prepared page; date, startedAt and endedAt come back null.
-export function createPreparedWorkout(
-  body: CreatePreparedWorkoutRequest,
-): Promise<WorkoutDetailResponse> {
-  return request<WorkoutDetailResponse>('/workouts/prepared', {
     method: 'POST',
     body,
   })
@@ -217,31 +180,3 @@ export function replaceWorkoutExercises(
     body,
   })
 }
-
-// POST /workouts/{id}/start: a prepared page gets its date and start time and
-// becomes a session in progress; its sets stay planned (specs/006). The client
-// sends its own calendar day and the moment of the tap, as when it creates a
-// page. expectedRevision is optional, as on every write: the editor sends the
-// revision it holds, while Start on a Sessions row has none to send.
-export interface StartWorkoutRequest {
-  date: string
-  startedAt: string
-  expectedRevision?: number
-}
-
-export function startWorkout(
-  id: number,
-  date: string,
-  startedAt: string,
-  expectedRevision?: number,
-): Promise<WorkoutDetailResponse> {
-  const body: StartWorkoutRequest = { date, startedAt, expectedRevision }
-  return request<WorkoutDetailResponse>(`/workouts/${id}/start`, {
-    method: 'POST',
-    body,
-  })
-}
-
-// The 409 a start gets when the page has already been started, on another
-// device or in another tab. There is no way back to prepared.
-export const ALREADY_STARTED = 'already_started'
