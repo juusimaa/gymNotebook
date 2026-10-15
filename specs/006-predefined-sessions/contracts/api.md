@@ -144,7 +144,7 @@ Blocks and sets are then saved with `PUT /workouts/{id}/exercises`, as today.
 ## Changed: backup
 
 - `POST /account/export` writes `formatVersion: 2` ([data-model.md](../data-model.md#export-format-version-2-changed)).
-- `POST /account/restore` accepts versions 1 and 2. Its result gains `preparedPagesAdded`, `templatesAdded` and `templatesAlreadyPresent`.
+- `POST /account/restore` accepts versions 1 and 2. Its result gains `templatesAdded` and `templatesAlreadyPresent`. *(R15: `preparedPagesAdded` is gone; an older file's prepared pages become templates and count in `templatesAdded`. The export writes no prepared pages.)*
 - New `backup_invalid` reasons:
   - a prepared page with a date, start or end
   - a set status its page's state doesn't allow

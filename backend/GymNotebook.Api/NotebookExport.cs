@@ -13,8 +13,8 @@ using Npgsql;
 namespace GymNotebook.Api;
 
 // POST /account/export (specs/001 user story 3): the caller's whole notebook as one JSON
-// file, format version 2 (specs/006 research R10: prepared pages, set status and
-// templates; version 1 is in specs/001 contracts/api.md). Three requirements shape the code:
+// file, format version 2 (specs/006 research R10: set status and templates, and until R15
+// prepared pages; version 1 is in specs/001 contracts/api.md). Three requirements shape the code:
 //
 //   1. One consistent snapshot. Every table is read in a single read-only REPEATABLE READ
 //      transaction, so an edit made while the download runs can't produce a file that is
@@ -240,11 +240,10 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
             {
                 json.WriteNumber("id", row.Id);
                 json.WriteNumber("userId", row.UserId);
-                // The stored local calendar day, never recomputed from startedAt. Null with
-                // startedAt on a prepared page (specs/006), which is why the format is
-                // version 2: a version 1 reader expects both on every page.
-                if (row.Date is null) json.WriteNull("date");
-                else json.WriteString("date", row.Date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                // The stored local calendar day, never recomputed from startedAt. Version 2
+                // files written before research R15 may also hold prepared pages with both
+                // null; since R15 there are none to write.
+                json.WriteString("date", row.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 WriteInstant(json, "startedAt", row.StartedAt);
                 WriteInstant(json, "endedAt", row.EndedAt);
                 WriteText(json, "title", row.Title);
@@ -462,7 +461,7 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
     private sealed record ExerciseRow(int Id, int UserId, string Name, bool IsBodyweight, DateTimeOffset CreatedAt);
 
     private sealed record WorkoutRow(
-        int Id, int UserId, DateOnly? Date, DateTimeOffset? StartedAt, DateTimeOffset? EndedAt,
+        int Id, int UserId, DateOnly Date, DateTimeOffset StartedAt, DateTimeOffset? EndedAt,
         string? Title, string? Location, string? Notes, decimal? BodyweightKg, DateTimeOffset CreatedAt);
 
     private sealed record BlockRow(int Id, int WorkoutId, int ExerciseId, int Position);

@@ -14,7 +14,7 @@ public static class ExportFieldGuide
     public static readonly object Content = new
     {
         about = "A copy of one Gym Notebook account: its exercises, workouts, the exercise blocks within each workout and their sets, its templates, plus the account's privacy records. It contains no password, password hash, sign-in token or any other account's data.",
-        formatVersion = "Integer. The version of this file's layout; this layout is version 2. Version 2 added prepared workouts (date and startedAt null), a status on every set, and templates.",
+        formatVersion = "Integer. The version of this file's layout; this layout is version 2. Version 2 added a status on every set and templates. Files written before prepared workouts were removed may also hold prepared workouts (date and startedAt null); restoring one turns it into a template.",
         snapshotAt = "UTC instant. When the database snapshot this file was read from was taken. Every record in the file reflects the notebook at that single moment; it is not a claim that every record was created then.",
         conventions = new[]
         {
@@ -48,9 +48,9 @@ public static class ExportFieldGuide
             order = "By id.",
             id = "Integer. Referenced by workoutExercises[].workoutId.",
             userId = "The owning account's id.",
-            date = "YYYY-MM-DD. The local calendar day the workout belongs to, stored separately. It is not derived from startedAt and may differ from startedAt's UTC date. Null on a prepared workout.",
-            startedAt = "UTC instant the workout started, or null on a prepared workout: one written ahead as a plan and not started yet. date and startedAt are both null or both set.",
-            endedAt = "UTC instant the workout ended, or null if it was never finished. Null does not mean snapshotAt. Always null on a prepared workout.",
+            date = "YYYY-MM-DD. The local calendar day the workout belongs to, stored separately. It is not derived from startedAt and may differ from startedAt's UTC date.",
+            startedAt = "UTC instant the workout started.",
+            endedAt = "UTC instant the workout ended, or null if it was never finished. Null does not mean snapshotAt.",
             title = "Optional text, or null when none was recorded.",
             location = "Optional text, or null when none was recorded.",
             notes = "Optional text, or null when none was recorded.",
@@ -75,12 +75,12 @@ public static class ExportFieldGuide
             weight = "Decimal number in kilograms, as stored without rounding, or null when no weight was recorded. Null is not zero. On a bodyweight exercise this is the added load only.",
             reps = "Integer. The repetitions recorded.",
             isWarmup = "Boolean. Whether the set was marked as a warm-up.",
-            status = "\"planned\", \"done\" or \"skipped\". done: the set was lifted. planned: written ahead and not lifted yet (on a prepared or unfinished workout). skipped: still planned when the workout was finished, kept as part of the plan. Only done sets are training; planned and skipped sets count toward no history or progress.",
+            status = "\"planned\", \"done\" or \"skipped\". done: the set was lifted. planned: not lifted yet, on a workout still in progress (as a session started from a template is). skipped: still planned when the workout was finished, kept as part of the plan. Only done sets are training; planned and skipped sets count toward no history or progress.",
         },
         templates = new
         {
             order = "By id.",
-            note = "Named routines to prepare workouts from. A template is never linked to the workouts prepared from it.",
+            note = "Named routines to start workouts from. A template is never linked to the workouts started from it.",
             id = "Integer. Referenced by templateExercises[].templateId.",
             userId = "The owning account's id.",
             name = "The template's name as entered. Unique within the account, ignoring case and extra spaces.",

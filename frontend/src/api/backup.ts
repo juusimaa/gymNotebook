@@ -75,16 +75,17 @@ export interface RestoreResult {
   // Pages whose title, gym, notes and bodyweight were left out because the
   // account doesn't allow optional workout details.
   optionalDetailsDropped: number
-  // specs/006, version 2 files. Prepared pages are always added (pagesAdded
-  // counts started ones); a template is added unless the account already
-  // uses its name, in which case the account's own is kept.
-  preparedPagesAdded: number
+  // specs/006, version 2 files. A template is added unless the account
+  // already uses its name, in which case the account's own is kept. A
+  // prepared page in an older file becomes a template and counts here
+  // (research R15).
   templatesAdded: number
   templatesAlreadyPresent: number
 }
 
 // POST /account/restore: adds the pages from a backup file (version 1 or 2)
-// that the notebook doesn't have, every prepared page, and templates by name,
+// that the notebook doesn't have, and templates by name (a prepared page in an
+// older version 2 file becomes one),
 // in one transaction (all or nothing). The file is sent byte for
 // byte, exactly as it was saved. No password (plan D8).
 //

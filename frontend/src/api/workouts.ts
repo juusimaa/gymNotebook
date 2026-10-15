@@ -41,10 +41,8 @@ export interface WorkoutDetailResponse {
   // since (another device saved it), the write is refused with 409
   // page_changed and nothing is written (specs/003-durable-logging D3).
   revision: number
-  // Both null on a prepared page, written ahead and not started yet (specs/006);
-  // both set on every started one.
-  date: string | null
-  startedAt: string | null
+  date: string
+  startedAt: string
   endedAt: string | null
   title: string | null
   bodyweightKg: number | null
@@ -66,8 +64,7 @@ export interface CreateWorkoutRequest {
 
 // PATCH has two distinct states for nullable properties: undefined means omit the
 // JSON property and preserve its current value; null sends an explicit JSON null
-// and clears it. Date and startedAt cannot be null: a started page keeps both, and a
-// prepared page gets them only from POST /workouts/{id}/start (400 not_started here).
+// and clears it. Date and startedAt cannot be null: a page keeps both.
 export interface UpdateWorkoutRequest {
   date?: string
   startedAt?: string
@@ -95,8 +92,8 @@ export interface PutWorkoutExerciseInput {
 
 // Weight is null for an unloaded bodyweight set. Set number is intentionally absent:
 // the backend assigns it from this array's order rather than trusting the client.
-// Status may be omitted (the server then uses the page's default: planned on a
-// prepared page, done otherwise); the editor always sends it. One the page's state
+// Status may be omitted (the server then saves it as done); the editor always
+// sends it. One the page's state
 // doesn't allow is refused with 400 invalid_set_status (specs/006 research R3).
 export interface PutSetInput {
   weight: number | null

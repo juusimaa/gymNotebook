@@ -68,8 +68,9 @@ export function toCsv(file: BackupFile, options: CsvOptions): string {
     sets.set(set.workoutExerciseId, entries)
   }
 
-  // Logged pages oldest first; prepared pages (no date yet, specs/006) after
-  // them in the order they were written, with the date and times left blank.
+  // Logged pages oldest first. A file from before research R15 may still hold
+  // prepared pages (no date yet, specs/006): after them in the order they were
+  // written, with the date and times left blank.
   const workouts = [...file.workouts].sort((a, b) => {
     if (a.date === null || b.date === null)
       return a.date === b.date ? a.id - b.id : a.date === null ? 1 : -1

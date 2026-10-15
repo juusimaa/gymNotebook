@@ -360,11 +360,11 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ### PR 10: prepared pages leave the data model
 
-- [ ] T097 Migration: each prepared page becomes a template (title as name, or "Plan *created date*"; " (2)", " (3)"… on a normalized-name clash), blocks and sets copied in order, then the page is deleted; `workouts.date` and `started_at` NOT NULL again and `ck_workouts_started_pair` dropped. Review before applying.
-- [ ] T098 Backend: remove `GET/POST /workouts/prepared`, `POST /workouts/{id}/start`, `CreatePreparedWorkoutRequest`, `PreparedWorkoutSummaryResponse`, `StartWorkoutRequest`, `WorkoutState.Prepared` and its `SetStatusRules` row, the `not_started` PATCH refusal and the prepared-cursor check; `Workout.Date`/`StartedAt` and the responses non-nullable again.
-- [ ] T099 Backup: export stays version 2 and writes no prepared pages; restore turns a version 2 file's prepared pages into templates (same naming as T097); `preparedPagesAdded` leaves the restore result; field guide, CSV and Backup screen updated.
-- [ ] T100 [P] Tests: remove `PreparedWorkoutTests` and the prepared cases elsewhere; add migration-conversion and restore-mapping tests.
-- [ ] T101 Frontend: `date`/`startedAt` non-null in `api/workouts.ts`; the session page's plan reading and backup's plan counts go.
+- [x] T097 Migration: each prepared page becomes a template (title as name, or "Plan *created date*"; " (2)", " (3)"… on a normalized-name clash), blocks and sets copied in order, then the page is deleted; `workouts.date` and `started_at` NOT NULL again and `ck_workouts_started_pair` dropped. Review before applying.
+- [x] T098 Backend: remove `GET/POST /workouts/prepared`, `POST /workouts/{id}/start`, `CreatePreparedWorkoutRequest`, `PreparedWorkoutSummaryResponse`, `StartWorkoutRequest`, `WorkoutState.Prepared` and its `SetStatusRules` row, the `not_started` PATCH refusal and the prepared-cursor check; `Workout.Date`/`StartedAt` and the responses non-nullable again.
+- [x] T099 Backup: export stays version 2 and writes no prepared pages; restore turns a version 2 file's prepared pages into templates (same naming as T097); `preparedPagesAdded` leaves the restore result; field guide, CSV and Backup screen updated.
+- [x] T100 [P] Tests: remove `PreparedWorkoutTests` and the prepared cases elsewhere; add migration-conversion and restore-mapping tests. *As built:* `RemovePreparedWorkoutsMigrationTests` (`Migrate_PreparedPages_BecomeTemplates`, `Migrate_AfterwardsPageWithoutStart_IsRefused`) and, in `RestoreTests`, `Restore_V2PreparedPage_BecomesTemplate`, `Restore_V2PreparedPageTitleTaken_AddsNumber` and `Restore_PreparedTwice_AddsTwoTemplates`. The restore result's `preparedPagesAdded` is gone; converted plans count in `templatesAdded`.
+- [x] T101 Frontend: `date`/`startedAt` non-null in `api/workouts.ts`; the session page's plan reading and backup's plan counts go.
 - [ ] T102 Owner phone walkthrough of the revised flow (quickstart), on the local stack and after deploy.
 
 ---

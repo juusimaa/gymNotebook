@@ -6,12 +6,13 @@ namespace GymNotebook.Api;
 //
 //   page state   | allowed          | when the client omits status
 //   -------------|------------------|-----------------------------
-//   prepared     | planned          | planned
 //   in progress  | planned, done    | done
 //   finished     | done, skipped    | done
 //
-// A done set on a page nobody started, or a planned set on a finished page, would
-// mean nothing, so such a write is refused with 400 invalid_set_status, never coerced.
+// A skipped set on a page still being logged, or a planned set on a finished page,
+// would mean nothing, so such a write is refused with 400 invalid_set_status, never
+// coerced. (A third state, prepared, held only planned sets until research R15
+// replaced prepared pages with templates.)
 // The transitions between states (finish: planned → skipped, reopen: skipped → planned)
 // live in PATCH /workouts/{id}, next to the timestamp change that causes them.
 public static class SetStatusRules
@@ -20,16 +21,14 @@ public static class SetStatusRules
 
     public static bool IsAllowed(WorkoutState state, SetStatus status) => state switch
     {
-        WorkoutState.Prepared => status == SetStatus.Planned,
         WorkoutState.InProgress => status is SetStatus.Planned or SetStatus.Done,
         WorkoutState.Finished => status is SetStatus.Done or SetStatus.Skipped,
         _ => false,
     };
 
-    // Omitted status keeps every existing client working: today's editor never sends
-    // one, and on a started page it means "I lifted this", as it always has.
-    public static SetStatus DefaultFor(WorkoutState state) =>
-        state == WorkoutState.Prepared ? SetStatus.Planned : SetStatus.Done;
+    // Omitted status keeps every existing client working: it means "I lifted this", as
+    // it always has, in either state.
+    public const SetStatus DefaultStatus = SetStatus.Done;
 
     // The wire and column form. Lowercase words rather than enum names or numbers, so
     // psql, the API and the export file all read "skipped" (research R2).
@@ -66,7 +65,7 @@ public static class SetStatusRules
     {
         if (requested is null)
         {
-            return DefaultFor(state);
+            return DefaultStatus;
         }
 
         return TryParse(requested, out var status) && IsAllowed(state, status) ? status : null;

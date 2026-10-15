@@ -361,7 +361,7 @@ namespace GymNotebook.Api.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<DateOnly?>("Date")
+                    b.Property<DateOnly>("Date")
                         .HasColumnType("date")
                         .HasColumnName("date");
 
@@ -383,7 +383,7 @@ namespace GymNotebook.Api.Migrations
                         .HasDefaultValue(1)
                         .HasColumnName("revision");
 
-                    b.Property<DateTimeOffset?>("StartedAt")
+                    b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
 
@@ -401,12 +401,7 @@ namespace GymNotebook.Api.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_workouts_user_id");
 
-                    b.ToTable("workouts", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_workouts_ended_requires_start", "ended_at IS NULL OR started_at IS NOT NULL");
-
-                            t.HasCheckConstraint("ck_workouts_started_pair", "(date IS NULL) = (started_at IS NULL)");
-                        });
+                    b.ToTable("workouts", (string)null);
                 });
 
             modelBuilder.Entity("GymNotebook.Api.WorkoutExercise", b =>
