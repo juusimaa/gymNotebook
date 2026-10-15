@@ -30,6 +30,7 @@ import {
   type UpdateWorkoutRequest,
   type WorkoutDetailResponse,
 } from '../api/workouts'
+import { saveWorkoutAsTemplate } from '../api/templates'
 import {
   countNotDone,
   type DraftFieldRef,
@@ -73,6 +74,10 @@ import {
 import { ExerciseBlockList } from './ExerciseBlockList'
 import { ExercisePicker } from './ExercisePicker'
 import { OptionalDetailsChoice } from './OptionalDetailsConsent'
+import {
+  SaveAsTemplateBand,
+  type SaveAsTemplateOutcome,
+} from './SaveAsTemplateBand'
 import { formatCount } from './workoutFormat'
 import {
   autosaveTrigger,
@@ -266,8 +271,19 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
     !isEditing && restoredDraft !== null ? restoredDraft.exercises : [],
   )
   const [savingAction, setSavingAction] = useState<
-    'save' | 'finish' | 'tear-out' | 'keep' | 'plan' | 'start' | null
+    | 'save'
+    | 'finish'
+    | 'tear-out'
+    | 'keep'
+    | 'plan'
+    | 'start'
+    | 'template'
+    | null
   >(null)
+  // Save as template's band, on a plan only (specs/006). Closing it hands
+  // focus back to the button under the exercise search that opened it.
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false)
+  const saveAsTemplateButtonRef = useRef<HTMLButtonElement>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(isEditing)
   const [loadMessage, setLoadMessage] = useState<string | null>(null)
@@ -1091,6 +1107,24 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
     void navigate('/workouts', { state: routeNotice('Plan saved.') })
   }
 
+  // Save as template from a plan: the template copies the plan as saved
+  // (POST /workouts/{id}/template), so the plan is saved first, as Save plan
+  // would, and as the template editor's Plan a session saves the template
+  // before copying it. A plan that doesn't validate yet stops here with the
+  // usual message at the field at fault, and the band waits.
+  async function saveAsTemplate(name: string): Promise<SaveAsTemplateOutcome> {
+    if (savingAction !== null) return 'stopped'
+    setSavingAction('template')
+    try {
+      const workoutId = await persistPlan()
+      if (workoutId === null) return 'stopped'
+      await saveWorkoutAsTemplate(workoutId, name)
+      return 'saved'
+    } finally {
+      if (isMounted.current) setSavingAction(null)
+    }
+  }
+
   // Start session: save the plan first, so the session starts from what is
   // on screen, then start it with the local date and this moment, against
   // the revision that save left. The editor then carries on in progress, as
@@ -1371,6 +1405,19 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
             </button>
           </div>
         </section>
+      )}
+
+      {/* Outside the editor's form: the band is a small form of its own,
+          and forms don't nest. */}
+      {isPlanning && savingAsTemplate && (
+        <SaveAsTemplateBand
+          initialName={detailsAllowed ? heading.title.trim() : ''}
+          onSave={saveAsTemplate}
+          onClose={() => {
+            setSavingAsTemplate(false)
+            saveAsTemplateButtonRef.current?.focus()
+          }}
+        />
       )}
 
       <form
@@ -1684,6 +1731,18 @@ function WorkoutEditor({ isNewPlan: isNewPlanProp }: { isNewPlan: boolean }) {
                 onSelect={selectExercise}
                 onSelectNew={selectNewExercise}
               />
+
+              {isPlanning && (
+                <button
+                  ref={saveAsTemplateButtonRef}
+                  className="btn btn-ghost new-workout-save-template"
+                  type="button"
+                  aria-expanded={savingAsTemplate}
+                  onClick={() => setSavingAsTemplate(true)}
+                >
+                  Save as template
+                </button>
+              )}
             </section>
           </div>
 

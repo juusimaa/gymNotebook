@@ -7,6 +7,7 @@ import {
   type SetEntryResponse,
   type WorkoutDetailResponse,
 } from '../api/workouts'
+import { saveWorkoutAsTemplate } from '../api/templates'
 import {
   formatBestSet,
   formatSetLoad,
@@ -16,6 +17,7 @@ import {
 } from './workoutFormat'
 import { routeNotice, useRouteNotice } from './routeNotice'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
+import { SaveAsTemplateBand } from './SaveAsTemplateBand'
 import './WorkoutDetail.css'
 
 export default function WorkoutDetail() {
@@ -47,6 +49,10 @@ export default function WorkoutDetail() {
   // account has none stored anyway, apart from one still facing the
   // transition question, which the notebook gate stops before this screen.
   const detailsAllowed = useOptionalDetailsAllowed().status === 'allowed'
+  // Save as template's band (specs/006). Closing it hands focus back to the
+  // header button that opened it, as Keep does for Delete.
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false)
+  const saveAsTemplateButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -170,11 +176,28 @@ export default function WorkoutDetail() {
               Edit
             </Link>
           )}
+          {/* One band at a time: each opens under the header in the
+              same place, so opening one closes the other. */}
+          <button
+            ref={saveAsTemplateButtonRef}
+            className="header-link workout-detail-save-template"
+            type="button"
+            aria-expanded={savingAsTemplate}
+            onClick={() => {
+              setConfirmingDelete(false)
+              setSavingAsTemplate(true)
+            }}
+          >
+            Save as template
+          </button>
           <button
             ref={deleteButtonRef}
             className="header-link"
             type="button"
-            onClick={() => setConfirmingDelete(true)}
+            onClick={() => {
+              setSavingAsTemplate(false)
+              setConfirmingDelete(true)
+            }}
           >
             Delete
           </button>
@@ -210,6 +233,24 @@ export default function WorkoutDetail() {
             </button>
           </div>
         </section>
+      )}
+
+      {savingAsTemplate && (
+        <SaveAsTemplateBand
+          // The title is the name to start from, but only where the account
+          // shows titles at all; otherwise the field starts empty.
+          initialName={(detailsAllowed ? workout.title : null) ?? ''}
+          onSave={async (name) => {
+            // Copies the page as stored: every block and set, whatever each
+            // set's status, so a skipped set is still part of the routine.
+            await saveWorkoutAsTemplate(workout.id, name)
+            return 'saved'
+          }}
+          onClose={() => {
+            setSavingAsTemplate(false)
+            saveAsTemplateButtonRef.current?.focus()
+          }}
+        />
       )}
 
       {notice !== null && (

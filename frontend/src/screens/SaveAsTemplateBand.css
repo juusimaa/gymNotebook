@@ -1,0 +1,31 @@
+/* Save as template's inline band (specs/006): a ruled strip under the
+   header, like the session page's delete confirm, so it reads as part of the
+   page rather than a dialog laid over it. */
+.template-band {
+  padding: 14px 22px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.template-band-text {
+  margin: 0;
+  color: var(--color-neutral-800);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.template-band .form-message {
+  margin-top: var(--space-2);
+  font-size: 13px;
+}
+
+.template-band-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.template-band-actions .btn {
+  flex: 1;
+  font-size: 14px;
+}

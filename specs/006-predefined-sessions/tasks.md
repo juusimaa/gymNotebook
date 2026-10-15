@@ -299,11 +299,12 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - a 409 shows "You already have a template called Push A." at the name field with `aria-invalid`, keeping input
   - extract shared block and row pieces from `NewWorkout.tsx` only as far as needed (plan D7)
 - [x] T082 [US4] `frontend/src/routes.tsx`: `/templates`, `/templates/new` and `/templates/:templateId` behind the notice gate.
-- [ ] T083 [US4] **Save as template** on `frontend/src/screens/WorkoutDetail.tsx` and in prepare mode of `NewWorkout.tsx`; name prefilled from the title.
-- [ ] T084 [US4] The SC-007 entry from Sessions (`frontend/src/screens/Sessions.tsx`): "Prepare from template" reaches a prepared page in at most three taps from the cover.
-- [ ] T085 [US4] `docs/ui/README.md` Templates section, as built.
+- [x] T083 [US4] **Save as template** on `frontend/src/screens/WorkoutDetail.tsx` and in prepare mode of `NewWorkout.tsx`; name prefilled from the title.
+- [x] T084 [US4] The SC-007 entry from Sessions (`frontend/src/screens/Sessions.tsx`): "Prepare from template" reaches a prepared page in at most three taps from the cover.
+- [x] T085 [US4] `docs/ui/README.md` Templates section, as built.
   - PR 8 is split in two (owner, 2026-10-15). **PR 8a**: T079–T082 and the screens' as-built notes. **PR 8b**: T083, T084, the rest of T085 and T089.
   - PR 8a: the shared block pieces came out of `NewWorkout.tsx` as `useExerciseBlocks.ts`, `ExerciseBlockList.tsx` and `ExercisePicker.tsx`; the template draft helpers are `templateDraft.ts` (Vitest in `templateDraft.test.ts`). The notice gate's `isNotebookPath` gained `/templates`.
+  - PR 8b: the band is `SaveAsTemplateBand.tsx`, shared by `WorkoutDetail.tsx` and a plan in `NewWorkout.tsx`. On a plan, Save as template saves the plan first, then copies it (`POST /workouts/{id}/template`), so the template matches what is on screen (owner, 2026-10-15). Sessions loads `GET /templates` with its two lists, for the chooser.
 
 **Checkpoint**: All four stories independently testable.
 
@@ -337,7 +338,8 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - `Restore_TemplateBrokenExerciseRef_Returns400`
 - [x] T087 `frontend/src/screens/backupCsv.ts` and `frontend/src/api/backup.ts`: v2 types, a `status` column in the sets CSV, three template CSVs, and the new restore result counts in `frontend/src/screens/Backup.tsx`. Vitest in `backupCsv.test.ts`. *As built:* the CSV is one flattened file (spec 004), so templates stay out of it and live only in the JSON backup (owner, 2026-10-15); prepared pages are listed last with no date or times. The browser pre-check (`backupFile.ts`) accepts version 2 too.
 - [x] T088 Mark the format version 2 change in `specs/001-privacy-account-lifecycle/` and `specs/004-backup-restore/` export contracts, and in `PLAN.md` → backup.
-- [ ] T089 `PLAN.md` → Milestones: add milestone 15 "Predefined sessions" with the PR list and links to `specs/006-predefined-sessions/`.
+- [x] T089 `PLAN.md` → Milestones: add milestone 15 "Predefined sessions" with the PR list and links to `specs/006-predefined-sessions/`.
+  - PR 8b: milestone 15 was already "Move to UpCloud", so this is **milestone 16**, and the data model's and frontend's "milestone 15" references to specs/006 now say 16 (owner, 2026-10-15).
 - [ ] T090 Run all checks in [quickstart.md](quickstart.md) (`dotnet test`, `dotnet format --verify-no-changes`, frontend typecheck, lint, format:check and test) before each PR.
 - [ ] T091 Owner phone walkthrough (quickstart steps 1–6), covering SC-001, SC-002, SC-003, SC-007 and SC-008, on the local stack and after deploy.
 

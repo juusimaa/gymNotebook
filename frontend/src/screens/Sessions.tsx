@@ -8,6 +8,11 @@ import {
   type PreparedWorkoutSummaryResponse,
   type WorkoutSummaryResponse,
 } from '../api/workouts'
+import {
+  listTemplates,
+  prepareFromTemplate,
+  type TemplateSummaryResponse,
+} from '../api/templates'
 import { Link, useNavigate } from 'react-router'
 import { createStartTimes } from './newWorkoutDraft'
 import { useRouteNotice } from './routeNotice'
@@ -50,6 +55,18 @@ export default function Sessions() {
   // The plan whose Start is on its way, and what went wrong with the last one.
   const [startingPlanId, setStartingPlanId] = useState<number | null>(null)
   const [startMessage, setStartMessage] = useState<string | null>(null)
+  // The templates the chooser offers (specs/006 SC-007: a plan from a
+  // template is three taps from the cover). Loaded with the lists, so the
+  // chooser opens complete; null with templatesFailed false is "loading".
+  // A failure only costs the chooser its templates: a blank page and All
+  // templates still work.
+  const [templates, setTemplates] = useState<TemplateSummaryResponse[] | null>(
+    null,
+  )
+  const [templatesFailed, setTemplatesFailed] = useState(false)
+  // The template a plan is being made from, and what went wrong last time.
+  const [planningFromId, setPlanningFromId] = useState<number | null>(null)
+  const [chooserMessage, setChooserMessage] = useState<string | null>(null)
   const navigate = useNavigate()
 
   // "Plan a session" opens a small chooser above the footer rather than a
@@ -75,9 +92,10 @@ export default function Sessions() {
 
       // Both lists at once. allSettled rather than all: each answer is used
       // on its own, so a failed plan list still shows the history.
-      const [history, prepared] = await Promise.allSettled([
+      const [history, prepared, templateList] = await Promise.allSettled([
         listWorkouts(PAGE_SIZE),
         listPreparedWorkouts(),
+        listTemplates(),
       ])
 
       // React Strict Mode mounts effects twice in development, and navigation
@@ -100,6 +118,14 @@ export default function Sessions() {
       } else {
         setPlans(null)
         setPlansMessage('Your planned sessions could not be loaded.')
+      }
+
+      if (templateList.status === 'fulfilled') {
+        setTemplates(templateList.value)
+        setTemplatesFailed(false)
+      } else {
+        setTemplates(null)
+        setTemplatesFailed(true)
       }
     }
 
@@ -159,6 +185,30 @@ export default function Sessions() {
         refresh()
       } else {
         setStartMessage('The session could not be started. Please try again.')
+      }
+    }
+  }
+
+  // A template picked in the chooser: the server copies it into a new plan,
+  // which opens in the editor, as the template editor's Plan a session does.
+  async function planFromTemplate(template: TemplateSummaryResponse) {
+    if (planningFromId !== null) {
+      return
+    }
+
+    setPlanningFromId(template.id)
+    setChooserMessage(null)
+    try {
+      const plan = await prepareFromTemplate(template.id)
+      void navigate(`/workouts/${plan.id}/edit`)
+    } catch (error: unknown) {
+      setPlanningFromId(null)
+      if (error instanceof ApiError && error.status === 404) {
+        // Deleted on another device: the chooser's list is out of date.
+        setChooserMessage(`${template.name} no longer exists.`)
+        refresh()
+      } else {
+        setChooserMessage('The plan could not be made. Please try again.')
       }
     }
   }
@@ -251,11 +301,19 @@ export default function Sessions() {
       <div className="sessions-list">
         {/* The Planned group (specs/006, docs/ui/README.md → Planned group).
             Not dated, so the history below stays one flat list (rule 1).
-            PR 8 adds a Templates link to this label line. */}
+            The Templates link shares the label line. */}
         <section className="sessions-group" aria-labelledby="planned-title">
-          <h2 id="planned-title" className="kicker sessions-group-label">
-            Planned
-          </h2>
+          <div className="sessions-group-heading">
+            <h2 id="planned-title" className="kicker sessions-group-label">
+              Planned
+            </h2>
+            <Link
+              className="header-link sessions-templates-link"
+              to="/templates"
+            >
+              Templates
+            </Link>
+          </div>
           {startMessage !== null && (
             <p className="form-message sessions-start-message" role="alert">
               {startMessage}
@@ -452,10 +510,42 @@ export default function Sessions() {
             >
               A blank page
             </Link>
-            {/* PR 8 (T084): the templates by name, each with its exercise
-                summary, then an "All templates" link beside Close, so a
-                plan from a template is three taps from the cover (SC-007). */}
+            {/* The templates by name, so a plan from one is three taps from
+                the cover (SC-007): Open the notebook, Plan a session, the
+                template. Buttons, not links: picking one makes a plan. */}
+            {templates?.map((template) => (
+              <button
+                key={template.id}
+                className="plan-chooser-choice plan-chooser-template"
+                type="button"
+                disabled={planningFromId !== null}
+                aria-busy={planningFromId === template.id}
+                onClick={() => void planFromTemplate(template)}
+              >
+                <span className="plan-chooser-name">
+                  {planningFromId === template.id
+                    ? `Planning ${template.name}…`
+                    : template.name}
+                </span>
+                <span className="plan-chooser-summary">
+                  {template.exerciseNames.join(' · ')}
+                </span>
+              </button>
+            ))}
+            {templatesFailed && (
+              <p className="plan-chooser-note">
+                Your templates could not be loaded.
+              </p>
+            )}
+            {chooserMessage !== null && (
+              <p className="form-message plan-chooser-note" role="alert">
+                {chooserMessage}
+              </p>
+            )}
             <div className="plan-chooser-actions">
+              <Link className="header-link" to="/templates">
+                All templates
+              </Link>
               <button type="button" onClick={() => setChoosingPlan(false)}>
                 Close
               </button>
