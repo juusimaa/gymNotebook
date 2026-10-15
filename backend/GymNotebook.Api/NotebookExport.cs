@@ -13,7 +13,8 @@ using Npgsql;
 namespace GymNotebook.Api;
 
 // POST /account/export (specs/001 user story 3): the caller's whole notebook as one JSON
-// file, format version 1 in contracts/api.md. Three requirements shape the code:
+// file, format version 2 (specs/006 research R10: prepared pages, set status and
+// templates; version 1 is in specs/001 contracts/api.md). Three requirements shape the code:
 //
 //   1. One consistent snapshot. Every table is read in a single read-only REPEATABLE READ
 //      transaction, so an edit made while the download runs can't produce a file that is
@@ -196,7 +197,7 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
             .SingleAsync(ct);
 
         json.WriteStartObject();
-        json.WriteNumber("formatVersion", 1);
+        json.WriteNumber("formatVersion", 2);
         WriteInstant(json, "snapshotAt", snapshotAt);
         json.WritePropertyName("fieldGuide");
         JsonSerializer.Serialize(json, ExportFieldGuide.Content);
@@ -240,8 +241,8 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
                 json.WriteNumber("id", row.Id);
                 json.WriteNumber("userId", row.UserId);
                 // The stored local calendar day, never recomputed from startedAt. Null with
-                // startedAt on a prepared page (specs/006); format version 2 (PR 5)
-                // documents that, and until then no client creates prepared pages.
+                // startedAt on a prepared page (specs/006), which is why the format is
+                // version 2: a version 1 reader expects both on every page.
                 if (row.Date is null) json.WriteNull("date");
                 else json.WriteString("date", row.Date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 WriteInstant(json, "startedAt", row.StartedAt);
@@ -295,7 +296,7 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
                         EF.Functions.GreaterThan(ValueTuple.Create(s.WorkoutExerciseId, s.SetNumber, s.Id), ValueTuple.Create(last.WorkoutExerciseId, last.SetNumber, last.Id))))
                     .OrderBy(s => s.WorkoutExerciseId).ThenBy(s => s.SetNumber).ThenBy(s => s.Id)
                     .Take(batch)
-                    .Select(s => new SetRow(s.Id, s.WorkoutExerciseId, s.SetNumber, s.Weight, s.Reps, s.IsWarmup))
+                    .Select(s => new SetRow(s.Id, s.WorkoutExerciseId, s.SetNumber, s.Weight, s.Reps, s.IsWarmup, s.Status))
                     .ToListAsync(ct);
                 await stream.WriteRowsAsync(rows, row =>
                 {
@@ -305,6 +306,9 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
                     WriteDecimal(json, "weight", row.Weight);
                     json.WriteNumber("reps", row.Reps);
                     json.WriteBoolean("isWarmup", row.IsWarmup);
+                    // Version 2: only "done" sets are training; a version 1 reader would
+                    // have taken a skipped set for one (research R10).
+                    json.WriteString("status", SetStatusRules.ToText(row.Status));
                 }, ct);
                 if (rows.Count < batch)
                 {
@@ -315,6 +319,56 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
             lastBlockId = page[^1];
         }
         json.WriteEndArray();
+
+        // Templates (specs/006), in the same shape as the page tables: three arrays linked
+        // by ids. A user keeps a handful, so the ownership subqueries stay cheap here.
+        var templates = db.Templates.AsNoTracking().Where(t => t.UserId == userId);
+        await stream.WriteArrayAsync<TemplateRow>("templates",
+            last => (last is null ? templates : templates.Where(t => t.Id > last.Id))
+                .OrderBy(t => t.Id)
+                .Take(batch)
+                .Select(t => new TemplateRow(t.Id, t.UserId, t.Name, t.CreatedAt)),
+            row =>
+            {
+                json.WriteNumber("id", row.Id);
+                json.WriteNumber("userId", row.UserId);
+                json.WriteString("name", row.Name);
+                WriteInstant(json, "createdAt", row.CreatedAt);
+            }, ct);
+
+        var templateBlocks = db.TemplateExercises.AsNoTracking()
+            .Where(te => db.Templates.Any(t => t.Id == te.TemplateId && t.UserId == userId));
+        await stream.WriteArrayAsync<TemplateBlockRow>("templateExercises",
+            last => (last is null ? templateBlocks : templateBlocks.Where(te =>
+                    EF.Functions.GreaterThan(ValueTuple.Create(te.TemplateId, te.Position, te.Id), ValueTuple.Create(last.TemplateId, last.Position, last.Id))))
+                .OrderBy(te => te.TemplateId).ThenBy(te => te.Position).ThenBy(te => te.Id)
+                .Take(batch)
+                .Select(te => new TemplateBlockRow(te.Id, te.TemplateId, te.ExerciseId, te.Position)),
+            row =>
+            {
+                json.WriteNumber("id", row.Id);
+                json.WriteNumber("templateId", row.TemplateId);
+                json.WriteNumber("exerciseId", row.ExerciseId);
+                json.WriteNumber("position", row.Position);
+            }, ct);
+
+        var templateBlockIds = templateBlocks.Select(te => te.Id);
+        var templateSets = db.TemplateSets.AsNoTracking().Where(s => templateBlockIds.Contains(s.TemplateExerciseId));
+        await stream.WriteArrayAsync<TemplateSetRow>("templateSets",
+            last => (last is null ? templateSets : templateSets.Where(s =>
+                    EF.Functions.GreaterThan(ValueTuple.Create(s.TemplateExerciseId, s.SetNumber, s.Id), ValueTuple.Create(last.TemplateExerciseId, last.SetNumber, last.Id))))
+                .OrderBy(s => s.TemplateExerciseId).ThenBy(s => s.SetNumber).ThenBy(s => s.Id)
+                .Take(batch)
+                .Select(s => new TemplateSetRow(s.Id, s.TemplateExerciseId, s.SetNumber, s.Weight, s.Reps, s.IsWarmup)),
+            row =>
+            {
+                json.WriteNumber("id", row.Id);
+                json.WriteNumber("templateExerciseId", row.TemplateExerciseId);
+                json.WriteNumber("setNumber", row.SetNumber);
+                WriteDecimal(json, "weight", row.Weight);
+                json.WriteNumber("reps", row.Reps);
+                json.WriteBoolean("isWarmup", row.IsWarmup);
+            }, ct);
 
         json.WriteStartObject("privacyRecords");
         if (account.AcknowledgedPrivacyNoticeVersion is null || account.PrivacyNoticeAcknowledgedAt is null)
@@ -413,7 +467,13 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
 
     private sealed record BlockRow(int Id, int WorkoutId, int ExerciseId, int Position);
 
-    private sealed record SetRow(int Id, int WorkoutExerciseId, int SetNumber, decimal? Weight, int Reps, bool IsWarmup);
+    private sealed record SetRow(int Id, int WorkoutExerciseId, int SetNumber, decimal? Weight, int Reps, bool IsWarmup, SetStatus Status);
+
+    private sealed record TemplateRow(int Id, int UserId, string Name, DateTimeOffset CreatedAt);
+
+    private sealed record TemplateBlockRow(int Id, int TemplateId, int ExerciseId, int Position);
+
+    private sealed record TemplateSetRow(int Id, int TemplateExerciseId, int SetNumber, decimal? Weight, int Reps, bool IsWarmup);
 
     // The response side: JSON is serialized into an in-memory buffer, and SendAsync hands
     // the buffer to the client only after a delivery guard passes. At most one batch of

@@ -34,7 +34,7 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(text);
         var root = document.RootElement;
-        Assert.Equal(1, root.GetProperty("formatVersion").GetInt32());
+        Assert.Equal(2, root.GetProperty("formatVersion").GetInt32());
         var snapshotAt = DateTimeOffset.Parse(root.GetProperty("snapshotAt").GetString()!, CultureInfo.InvariantCulture);
         Assert.InRange(snapshotAt, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(5));
 
@@ -216,6 +216,86 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         AssertDocumented(guide.GetProperty("account"), root.GetProperty("account"));
         AssertDocumented(guide.GetProperty("privacyRecords"), root.GetProperty("privacyRecords"));
         foreach (var collection in new[] { "exercises", "workouts", "workoutExercises", "sets" })
+        {
+            AssertDocumented(guide.GetProperty(collection), root.GetProperty(collection)[0]);
+        }
+    }
+
+    [Fact]
+    public async Task Export_V2_IncludesStatusPreparedPagesAndTemplates()
+    {
+        // Arrange: a prepared page with a planned set, a finished page with a done and a
+        // skipped set, and a template with one block and set (specs/006 research R10).
+        await using var host = db.CreateHost(ExportTestSupport.FlagOn());
+        var userId = await db.SeedUserAsync();
+        int templateId, squatId;
+        await using (var context = db.NewContext())
+        {
+            var squat = new Exercise { UserId = userId, Name = "Squat", NormalizedName = "squat" };
+            context.Exercises.Add(squat);
+            await context.SaveChangesAsync();
+            squatId = squat.Id;
+            var prepared = new Workout { UserId = userId };
+            var plannedBlock = new WorkoutExercise { ExerciseId = squat.Id, Position = 0 };
+            plannedBlock.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 100m, Reps = 5, Status = SetStatus.Planned });
+            prepared.WorkoutExercises.Add(plannedBlock);
+            var finished = new Workout
+            {
+                UserId = userId,
+                Date = new DateOnly(2026, 3, 1),
+                StartedAt = new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero),
+                EndedAt = new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.Zero),
+            };
+            var block = new WorkoutExercise { ExerciseId = squat.Id, Position = 0 };
+            block.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 100m, Reps = 5, Status = SetStatus.Done });
+            block.SetEntries.Add(new SetEntry { SetNumber = 2, Weight = 100m, Reps = 5, Status = SetStatus.Skipped });
+            finished.WorkoutExercises.Add(block);
+            context.Workouts.AddRange(prepared, finished);
+            var legs = new Template { UserId = userId, Name = "Legs", NormalizedName = "legs" };
+            var templateBlock = new TemplateExercise { ExerciseId = squat.Id, Position = 0 };
+            templateBlock.Sets.Add(new TemplateSet { SetNumber = 1, Weight = 60m, Reps = 8, IsWarmup = true });
+            legs.Exercises.Add(templateBlock);
+            context.Templates.Add(legs);
+            await context.SaveChangesAsync();
+            templateId = legs.Id;
+        }
+        using var client = host.ClientFor(userId);
+
+        // Act
+        var response = await ExportTestSupport.ExportAsync(client);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.Equal(2, root.GetProperty("formatVersion").GetInt32());
+
+        // The prepared page (written first, so first by id) has no date, start or end.
+        var preparedRow = root.GetProperty("workouts")[0];
+        Assert.Equal(JsonValueKind.Null, preparedRow.GetProperty("date").ValueKind);
+        Assert.Equal(JsonValueKind.Null, preparedRow.GetProperty("startedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, preparedRow.GetProperty("endedAt").ValueKind);
+
+        // Every set carries its status, in the documented order (block, then set number).
+        Assert.Equal(["planned", "done", "skipped"],
+            root.GetProperty("sets").EnumerateArray().Select(s => s.GetProperty("status").GetString()));
+
+        // The template, its block and its set, linked by ids.
+        var template = Assert.Single(root.GetProperty("templates").EnumerateArray());
+        Assert.Equal((templateId, userId, "Legs"),
+            (template.GetProperty("id").GetInt32(), template.GetProperty("userId").GetInt32(), template.GetProperty("name").GetString()));
+        var templateBlockRow = Assert.Single(root.GetProperty("templateExercises").EnumerateArray());
+        Assert.Equal((templateId, squatId, 0),
+            (templateBlockRow.GetProperty("templateId").GetInt32(), templateBlockRow.GetProperty("exerciseId").GetInt32(), templateBlockRow.GetProperty("position").GetInt32()));
+        var templateSetRow = Assert.Single(root.GetProperty("templateSets").EnumerateArray());
+        Assert.Equal(templateBlockRow.GetProperty("id").GetInt32(), templateSetRow.GetProperty("templateExerciseId").GetInt32());
+        Assert.Equal((1, 60m, 8, true),
+            (templateSetRow.GetProperty("setNumber").GetInt32(), templateSetRow.GetProperty("weight").GetDecimal(),
+             templateSetRow.GetProperty("reps").GetInt32(), templateSetRow.GetProperty("isWarmup").GetBoolean()));
+
+        // The field guide explains every field of the new records too.
+        var guide = root.GetProperty("fieldGuide");
+        foreach (var collection in new[] { "sets", "templates", "templateExercises", "templateSets" })
         {
             AssertDocumented(guide.GetProperty(collection), root.GetProperty(collection)[0]);
         }

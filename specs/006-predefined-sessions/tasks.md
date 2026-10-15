@@ -307,13 +307,13 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 ## Phase 7: Polish & cross-cutting: backup v2 (PR 5) and wrap-up
 
-- [ ] T057 `backend/GymNotebook.Api/NotebookExport.cs`:
+- [x] T057 `backend/GymNotebook.Api/NotebookExport.cs`:
   - `formatVersion: 2`
   - nullable `date`/`startedAt`
   - `sets[].status`
   - new keyset-batched arrays `templates` (id, userId, name, createdAt), `templateExercises` (id, templateId, exerciseId, position) and `templateSets` (id, templateExerciseId, setNumber, weight, reps, isWarmup)
-- [ ] T058 `backend/GymNotebook.Api/ExportFieldGuide.cs`: an entry for every new field.
-- [ ] T059 `backend/GymNotebook.Api/NotebookRestore.cs`:
+- [x] T058 `backend/GymNotebook.Api/ExportFieldGuide.cs`: an entry for every new field.
+- [x] T059 `backend/GymNotebook.Api/NotebookRestore.cs`:
   - accept versions 1 and 2; v1 sets restore as `done`
   - prepared pages (null `startedAt`) are always added (Q2), with validation that date and end are also null
   - set status must fit the page state (`SetStatusRules`)
@@ -321,7 +321,7 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - template exercise refs must resolve or the file is `broken_reference`
   - result gains `PreparedPagesAdded`, `TemplatesAdded`, `TemplatesAlreadyPresent`
   - optional details dropped on prepared pages without consent
-- [ ] T086 [P] Tests in `backend/GymNotebook.Tests/ExportTests.cs` and `RestoreTests.cs`:
+- [x] T086 [P] Tests in `backend/GymNotebook.Tests/ExportTests.cs` and `RestoreTests.cs`:
   - `Export_V2_IncludesStatusPreparedPagesAndTemplates`
   - `Restore_V2RoundTrip_RecreatesPreparedSkippedAndTemplates`
   - `Restore_V1File_SetsRestoreAsDone`
@@ -331,8 +331,8 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - `Restore_DoneSetOnPreparedPage_Returns400`
   - `Restore_DuplicateTemplateNamesInFile_Returns400`
   - `Restore_TemplateBrokenExerciseRef_Returns400`
-- [ ] T087 `frontend/src/screens/backupCsv.ts` and `frontend/src/api/backup.ts`: v2 types, a `status` column in the sets CSV, three template CSVs, and the new restore result counts in `frontend/src/screens/Backup.tsx`. Vitest in `backupCsv.test.ts`.
-- [ ] T088 Mark the format version 2 change in `specs/001-privacy-account-lifecycle/` and `specs/004-backup-restore/` export contracts, and in `PLAN.md` → backup.
+- [x] T087 `frontend/src/screens/backupCsv.ts` and `frontend/src/api/backup.ts`: v2 types, a `status` column in the sets CSV, three template CSVs, and the new restore result counts in `frontend/src/screens/Backup.tsx`. Vitest in `backupCsv.test.ts`. *As built:* the CSV is one flattened file (spec 004), so templates stay out of it and live only in the JSON backup (owner, 2026-10-15); prepared pages are listed last with no date or times. The browser pre-check (`backupFile.ts`) accepts version 2 too.
+- [x] T088 Mark the format version 2 change in `specs/001-privacy-account-lifecycle/` and `specs/004-backup-restore/` export contracts, and in `PLAN.md` → backup.
 - [ ] T089 `PLAN.md` → Milestones: add milestone 15 "Predefined sessions" with the PR list and links to `specs/006-predefined-sessions/`.
 - [ ] T090 Run all checks in [quickstart.md](quickstart.md) (`dotnet test`, `dotnet format --verify-no-changes`, frontend typecheck, lint, format:check and test) before each PR.
 - [ ] T091 Owner phone walkthrough (quickstart steps 1–6), covering SC-001, SC-002, SC-003, SC-007 and SC-008, on the local stack and after deploy.

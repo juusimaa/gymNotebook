@@ -1,7 +1,7 @@
 namespace GymNotebook.Api;
 
 // The "fieldGuide" object embedded in every export (specs/001 contracts/api.md → Export
-// format version 1). The file has to explain itself to someone who has never seen this
+// format version 1, extended to version 2 by specs/006 research R10). The file has to explain itself to someone who has never seen this
 // API: every field, its unit, what null means, how records point at each other, the order
 // they come in and how dates are to be read. Kept next to the export rather than in docs/
 // because it *is* part of the export: changing a field in NotebookExport without changing
@@ -13,8 +13,8 @@ public static class ExportFieldGuide
 {
     public static readonly object Content = new
     {
-        about = "A copy of one Gym Notebook account: its exercises, workouts, the exercise blocks within each workout and their sets, plus the account's privacy records. It contains no password, password hash, sign-in token or any other account's data.",
-        formatVersion = "Integer. The version of this file's layout; this layout is version 1.",
+        about = "A copy of one Gym Notebook account: its exercises, workouts, the exercise blocks within each workout and their sets, its templates, plus the account's privacy records. It contains no password, password hash, sign-in token or any other account's data.",
+        formatVersion = "Integer. The version of this file's layout; this layout is version 2. Version 2 added prepared workouts (date and startedAt null), a status on every set, and templates.",
         snapshotAt = "UTC instant. When the database snapshot this file was read from was taken. Every record in the file reflects the notebook at that single moment; it is not a claim that every record was created then.",
         conventions = new[]
         {
@@ -48,9 +48,9 @@ public static class ExportFieldGuide
             order = "By id.",
             id = "Integer. Referenced by workoutExercises[].workoutId.",
             userId = "The owning account's id.",
-            date = "YYYY-MM-DD. The local calendar day the workout belongs to, stored separately. It is not derived from startedAt and may differ from startedAt's UTC date.",
-            startedAt = "UTC instant the workout started.",
-            endedAt = "UTC instant the workout ended, or null if it was never finished. Null does not mean snapshotAt.",
+            date = "YYYY-MM-DD. The local calendar day the workout belongs to, stored separately. It is not derived from startedAt and may differ from startedAt's UTC date. Null on a prepared workout.",
+            startedAt = "UTC instant the workout started, or null on a prepared workout: one written ahead as a plan and not started yet. date and startedAt are both null or both set.",
+            endedAt = "UTC instant the workout ended, or null if it was never finished. Null does not mean snapshotAt. Always null on a prepared workout.",
             title = "Optional text, or null when none was recorded.",
             location = "Optional text, or null when none was recorded.",
             notes = "Optional text, or null when none was recorded.",
@@ -75,6 +75,34 @@ public static class ExportFieldGuide
             weight = "Decimal number in kilograms, as stored without rounding, or null when no weight was recorded. Null is not zero. On a bodyweight exercise this is the added load only.",
             reps = "Integer. The repetitions recorded.",
             isWarmup = "Boolean. Whether the set was marked as a warm-up.",
+            status = "\"planned\", \"done\" or \"skipped\". done: the set was lifted. planned: written ahead and not lifted yet (on a prepared or unfinished workout). skipped: still planned when the workout was finished, kept as part of the plan. Only done sets are training; planned and skipped sets count toward no history or progress.",
+        },
+        templates = new
+        {
+            order = "By id.",
+            note = "Named routines to prepare workouts from. A template is never linked to the workouts prepared from it.",
+            id = "Integer. Referenced by templateExercises[].templateId.",
+            userId = "The owning account's id.",
+            name = "The template's name as entered. Unique within the account, ignoring case and extra spaces.",
+            createdAt = "UTC instant the template was created.",
+        },
+        templateExercises = new
+        {
+            order = "By templateId, then position, then id.",
+            id = "Integer. Referenced by templateSets[].templateExerciseId.",
+            templateId = "The template this block belongs to (templates[].id).",
+            exerciseId = "The exercise (exercises[].id).",
+            position = "Integer. The block's place within its template; lower comes first.",
+        },
+        templateSets = new
+        {
+            order = "By templateExerciseId, then setNumber, then id.",
+            id = "Integer. The template set's id.",
+            templateExerciseId = "The block this set belongs to (templateExercises[].id).",
+            setNumber = "Integer. The set's place within its block; lower comes first.",
+            weight = "Decimal number in kilograms, or null when none is planned. On a bodyweight exercise this is the added load only.",
+            reps = "Integer. The planned repetitions.",
+            isWarmup = "Boolean. Whether the set is a warm-up.",
         },
         privacyRecords = new
         {

@@ -155,7 +155,7 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
         {
             "broken_reference" => File(blocks: [new { id = 301, workoutId = 999999, exerciseId = 101, position = 0 }]),
             "invalid_value" => File(sets: [new { id = 401, workoutExerciseId = 301, setNumber = 1, weight = -1m, reps = 5, isWarmup = false }]),
-            _ => File(version: 2),
+            _ => File(version: 3),
         };
 
         using var response = await PostAsync(client, file);
@@ -361,6 +361,264 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
         Assert.Equal(100_000, await db.SetEntries.CountAsync(s => db.WorkoutExercises.Any(b => b.Id == s.WorkoutExerciseId && db.Workouts.Any(w => w.Id == b.WorkoutId && w.UserId == targetId))));
         Assert.Equal(await ReadRowsAsync(db, sourceId), await ReadRowsAsync(db, targetId));
         Assert.True(timer.Elapsed < TimeSpan.FromSeconds(60), $"restore took {timer.Elapsed}");
+    }
+
+    // specs/006 backup v2 (research R10, R11): a version 2 file with one finished page
+    // (a done set and a skipped one), one prepared page (a planned set) and one template.
+    // Each argument replaces its array whole.
+    private static object V2File(
+        object[]? workouts = null, object[]? sets = null,
+        object[]? templates = null, object[]? templateExercises = null, object[]? templateSets = null) => new
+        {
+            formatVersion = 2,
+            exercises = new object[]
+            {
+                new { id = 101, userId = 999999, name = "Squat", isBodyweight = false },
+                new { id = 102, userId = 999999, name = "Bench Press", isBodyweight = false },
+            },
+            workouts = workouts ??
+            [
+                new { id = 201, userId = 999999, date = (string?)"2026-01-02", startedAt = (DateTimeOffset?)_started, endedAt = (DateTimeOffset?)_started.AddHours(1), title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
+                new { id = 202, userId = 999999, date = (string?)null, startedAt = (DateTimeOffset?)null, endedAt = (DateTimeOffset?)null, title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
+            ],
+            workoutExercises = new object[]
+            {
+                new { id = 301, workoutId = 201, exerciseId = 101, position = 0 },
+                new { id = 302, workoutId = 202, exerciseId = 102, position = 0 },
+            },
+            sets = sets ??
+            [
+                new { id = 401, workoutExerciseId = 301, setNumber = 1, weight = 100m, reps = 5, isWarmup = false, status = "done" },
+                new { id = 402, workoutExerciseId = 301, setNumber = 2, weight = 100m, reps = 5, isWarmup = false, status = "skipped" },
+                new { id = 403, workoutExerciseId = 302, setNumber = 1, weight = 80m, reps = 5, isWarmup = false, status = "planned" },
+            ],
+            templates = templates ?? [new { id = 501, userId = 999999, name = "Push A", createdAt = _started }],
+            templateExercises = templateExercises ?? [new { id = 601, templateId = 501, exerciseId = 102, position = 0 }],
+            templateSets = templateSets ?? [new { id = 701, templateExerciseId = 601, setNumber = 1, weight = 60m, reps = 8, isWarmup = true }],
+        };
+
+    private static async Task AssertNothingWrittenAsync(GymNotebook.Api.Data.AppDbContext db, int userId)
+    {
+        Assert.Equal(0, await db.Workouts.CountAsync(w => w.UserId == userId));
+        Assert.Equal(0, await db.Exercises.CountAsync(e => e.UserId == userId));
+        Assert.Equal(0, await db.Templates.CountAsync(t => t.UserId == userId));
+    }
+
+    [Fact]
+    public async Task Restore_V2RoundTrip_RecreatesPreparedSkippedAndTemplates()
+    {
+        // Arrange: a source account with a finished page holding a skipped set, a prepared
+        // page holding a planned one, and a template; exported as version 2.
+        await using var host = fixture.CreateHost();
+        var sourceId = await fixture.SeedUserAsync();
+        var targetId = await fixture.SeedUserAsync();
+        await using (var seed = fixture.NewContext())
+        {
+            var squat = new Exercise { UserId = sourceId, Name = "Squat", NormalizedName = "squat" };
+            seed.Exercises.Add(squat);
+            await seed.SaveChangesAsync();
+            var finished = new Workout { UserId = sourceId, Date = new DateOnly(2026, 1, 2), StartedAt = _started, EndedAt = _started.AddHours(1) };
+            var block = new WorkoutExercise { ExerciseId = squat.Id, Position = 0 };
+            block.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 100m, Reps = 5, Status = SetStatus.Done });
+            block.SetEntries.Add(new SetEntry { SetNumber = 2, Weight = 100m, Reps = 5, Status = SetStatus.Skipped });
+            finished.WorkoutExercises.Add(block);
+            var prepared = new Workout { UserId = sourceId };
+            var plannedBlock = new WorkoutExercise { ExerciseId = squat.Id, Position = 0 };
+            plannedBlock.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 105m, Reps = 5, Status = SetStatus.Planned });
+            prepared.WorkoutExercises.Add(plannedBlock);
+            seed.Workouts.AddRange(finished, prepared);
+            var template = new Template { UserId = sourceId, Name = "Legs", NormalizedName = "legs" };
+            var templateBlock = new TemplateExercise { ExerciseId = squat.Id, Position = 0 };
+            templateBlock.Sets.Add(new TemplateSet { SetNumber = 1, Weight = 60m, Reps = 8, IsWarmup = true });
+            template.Exercises.Add(templateBlock);
+            seed.Templates.Add(template);
+            await seed.SaveChangesAsync();
+        }
+        using var sourceClient = host.ClientFor(sourceId);
+        using var targetClient = host.ClientFor(targetId);
+        using var export = await ExportTestSupport.ExportAsync(sourceClient);
+        var bytes = await export.Content.ReadAsByteArrayAsync();
+
+        // Act
+        using var restore = await targetClient.PostAsync("/account/restore",
+            new ByteArrayContent(bytes) { Headers = { ContentType = new("application/json") } });
+
+        // Assert: the counts, then each kind of row as it was in the source.
+        Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+        var result = (await restore.Content.ReadFromJsonAsync<RestoreResponse>())!;
+        Assert.Equal((1, 1, 1, 0, 3), (result.PagesAdded, result.PreparedPagesAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent, result.SetsAdded));
+        await using var db = fixture.NewContext();
+        var statuses = await (
+            from w in db.Workouts
+            join b in db.WorkoutExercises on w.Id equals b.WorkoutId
+            join s in db.SetEntries on b.Id equals s.WorkoutExerciseId
+            where w.UserId == targetId
+            orderby w.StartedAt == null, s.SetNumber
+            select new { Prepared = w.StartedAt == null, w.Date, s.Weight, s.Status })
+            .ToListAsync();
+        Assert.Equal(
+            [(false, 100m, SetStatus.Done), (false, 100m, SetStatus.Skipped), (true, 105m, SetStatus.Planned)],
+            statuses.Select(s => (s.Prepared, s.Weight!.Value, s.Status)));
+        Assert.Null(statuses[2].Date);
+        var restored = await db.Templates.Include(t => t.Exercises).ThenInclude(e => e.Sets).SingleAsync(t => t.UserId == targetId);
+        Assert.Equal("Legs", restored.Name);
+        var restoredSet = Assert.Single(Assert.Single(restored.Exercises).Sets);
+        Assert.Equal((1, 60m, 8, true), (restoredSet.SetNumber, restoredSet.Weight!.Value, restoredSet.Reps, restoredSet.IsWarmup));
+    }
+
+    [Fact]
+    public async Task Restore_V1File_SetsRestoreAsDone()
+    {
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+
+        using var response = await PostAsync(client, File());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<RestoreResponse>();
+        Assert.Equal((0, 0, 0), (result!.PreparedPagesAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent));
+        await using var db = fixture.NewContext();
+        var status = await db.SetEntries
+            .Where(s => db.WorkoutExercises.Any(b => b.Id == s.WorkoutExerciseId && db.Workouts.Any(w => w.Id == b.WorkoutId && w.UserId == userId)))
+            .Select(s => s.Status).SingleAsync();
+        Assert.Equal(SetStatus.Done, status);
+    }
+
+    [Fact]
+    public async Task Restore_PreparedTwice_AddsTwice()
+    {
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync(client, V2File())).StatusCode);
+
+        using var second = await PostAsync(client, V2File());
+
+        // The started page and the template are recognised; the plan is added again.
+        var result = (await second.Content.ReadFromJsonAsync<RestoreResponse>())!;
+        Assert.Equal((0, 1, 1, 0, 1), (result.PagesAdded, result.PagesAlreadyPresent, result.PreparedPagesAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent));
+        await using var db = fixture.NewContext();
+        Assert.Equal(2, await db.Workouts.CountAsync(w => w.UserId == userId && w.StartedAt == null));
+        Assert.Equal(1, await db.Workouts.CountAsync(w => w.UserId == userId && w.StartedAt != null));
+        Assert.Equal(1, await db.Templates.CountAsync(t => t.UserId == userId));
+    }
+
+    [Fact]
+    public async Task Restore_ExistingTemplateName_KeepsAccountsTemplate()
+    {
+        // Arrange: the account already has "push a", with its own single set.
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        int templateId;
+        await using (var seed = fixture.NewContext())
+        {
+            var dips = new Exercise { UserId = userId, Name = "Dips", NormalizedName = "dips" };
+            seed.Exercises.Add(dips);
+            await seed.SaveChangesAsync();
+            var template = new Template { UserId = userId, Name = "push a", NormalizedName = "push a" };
+            var block = new TemplateExercise { ExerciseId = dips.Id, Position = 0 };
+            block.Sets.Add(new TemplateSet { SetNumber = 1, Reps = 10 });
+            template.Exercises.Add(block);
+            seed.Templates.Add(template);
+            await seed.SaveChangesAsync();
+            templateId = template.Id;
+        }
+        using var client = host.ClientFor(userId);
+
+        // Act: the file's "Push A" normalizes to the same name.
+        using var response = await PostAsync(client, V2File());
+
+        // Assert: counted as present, and the account's template is exactly as it was.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<RestoreResponse>())!;
+        Assert.Equal((0, 1), (result.TemplatesAdded, result.TemplatesAlreadyPresent));
+        await using var db = fixture.NewContext();
+        var kept = await db.Templates.Include(t => t.Exercises).ThenInclude(e => e.Sets).SingleAsync(t => t.UserId == userId);
+        Assert.Equal((templateId, "push a"), (kept.Id, kept.Name));
+        Assert.Equal(10, Assert.Single(Assert.Single(kept.Exercises).Sets).Reps);
+    }
+
+    [Theory]
+    [InlineData(null, true, null)]
+    [InlineData("2026-01-02", false, null)]
+    [InlineData(null, false, true)]
+    public async Task Restore_PreparedPageWithStartedAt_Returns400BackupInvalid(string? date, bool started, bool? ended)
+    {
+        // Arrange: a page with only part of a start (or an end without one).
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+        var file = V2File(workouts:
+        [
+            new { id = 201, userId = 999999, date = (string?)"2026-01-02", startedAt = (DateTimeOffset?)_started, endedAt = (DateTimeOffset?)null, title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
+            new { id = 202, userId = 999999, date, startedAt = started ? (DateTimeOffset?)_started.AddDays(1) : null, endedAt = ended == true ? (DateTimeOffset?)_started.AddDays(1) : null, title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
+        ], sets: [new { id = 401, workoutExerciseId = 301, setNumber = 1, weight = 100m, reps = 5, isWarmup = false, status = "done" }]);
+
+        // Act
+        using var response = await PostAsync(client, file);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(new RestoreError("backup_invalid", "invalid_value"), await response.Content.ReadFromJsonAsync<RestoreError>());
+        await using var db = fixture.NewContext();
+        await AssertNothingWrittenAsync(db, userId);
+    }
+
+    [Fact]
+    public async Task Restore_DoneSetOnPreparedPage_Returns400()
+    {
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+        var file = V2File(sets:
+        [
+            new { id = 401, workoutExerciseId = 301, setNumber = 1, weight = 100m, reps = 5, isWarmup = false, status = "done" },
+            new { id = 403, workoutExerciseId = 302, setNumber = 1, weight = 80m, reps = 5, isWarmup = false, status = "done" },
+        ]);
+
+        using var response = await PostAsync(client, file);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_value", (await response.Content.ReadFromJsonAsync<RestoreError>())?.Reason);
+        await using var db = fixture.NewContext();
+        await AssertNothingWrittenAsync(db, userId);
+    }
+
+    [Fact]
+    public async Task Restore_DuplicateTemplateNamesInFile_Returns400()
+    {
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+        var file = V2File(templates:
+        [
+            new { id = 501, userId = 999999, name = "Push A", createdAt = _started },
+            new { id = 502, userId = 999999, name = " push  a", createdAt = _started },
+        ]);
+
+        using var response = await PostAsync(client, file);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_value", (await response.Content.ReadFromJsonAsync<RestoreError>())?.Reason);
+        await using var db = fixture.NewContext();
+        await AssertNothingWrittenAsync(db, userId);
+    }
+
+    [Fact]
+    public async Task Restore_TemplateBrokenExerciseRef_Returns400()
+    {
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+        var file = V2File(templateExercises: [new { id = 601, templateId = 501, exerciseId = 999, position = 0 }]);
+
+        using var response = await PostAsync(client, file);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("broken_reference", (await response.Content.ReadFromJsonAsync<RestoreError>())?.Reason);
+        await using var db = fixture.NewContext();
+        await AssertNothingWrittenAsync(db, userId);
     }
 
     private static Task<List<RoundTripRow>> ReadRowsAsync(GymNotebook.Api.Data.AppDbContext db, int userId) =>

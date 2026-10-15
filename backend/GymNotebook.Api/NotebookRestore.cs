@@ -16,9 +16,13 @@ public sealed class RestoreOptions
     }
 }
 
+// PagesAdded counts started pages; prepared ones (specs/006) are always added and counted
+// apart, since they can't be "already present". SetsAdded counts every set on the added
+// pages, whatever its status.
 public sealed record RestoreResponse(
     int PagesAdded, int SetsAdded, int PagesAlreadyPresent,
-    string[] ExercisesCreated, string[] ClassificationKept, int OptionalDetailsDropped);
+    string[] ExercisesCreated, string[] ClassificationKept, int OptionalDetailsDropped,
+    int PreparedPagesAdded, int TemplatesAdded, int TemplatesAlreadyPresent);
 
 public sealed record RestoreError(string Code, string Reason);
 
@@ -31,6 +35,10 @@ public sealed class RestoreFile
     public List<RestoreWorkout>? Workouts { get; set; }
     public List<RestoreBlock>? WorkoutExercises { get; set; }
     public List<RestoreSet>? Sets { get; set; }
+    // Version 2 only (specs/006 research R10); a version 1 file has no templates.
+    public List<RestoreTemplate>? Templates { get; set; }
+    public List<RestoreTemplateBlock>? TemplateExercises { get; set; }
+    public List<RestoreTemplateSet>? TemplateSets { get; set; }
 }
 
 public sealed class RestoreExercise
@@ -64,6 +72,32 @@ public sealed class RestoreSet
 {
     public int? Id { get; set; }
     public int? WorkoutExerciseId { get; set; }
+    public int? SetNumber { get; set; }
+    public decimal? Weight { get; set; }
+    public int? Reps { get; set; }
+    public bool? IsWarmup { get; set; }
+    // Version 2 only. Ignored in a version 1 file, whose sets are all lifted ones.
+    public string? Status { get; set; }
+}
+
+public sealed class RestoreTemplate
+{
+    public int? Id { get; set; }
+    public string? Name { get; set; }
+}
+
+public sealed class RestoreTemplateBlock
+{
+    public int? Id { get; set; }
+    public int? TemplateId { get; set; }
+    public int? ExerciseId { get; set; }
+    public int? Position { get; set; }
+}
+
+public sealed class RestoreTemplateSet
+{
+    public int? Id { get; set; }
+    public int? TemplateExerciseId { get; set; }
     public int? SetNumber { get; set; }
     public decimal? Weight { get; set; }
     public int? Reps { get; set; }
@@ -110,8 +144,10 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
                 !HasArray(root, "exercises") || !HasArray(root, "workouts") ||
                 !HasArray(root, "workoutExercises") || !HasArray(root, "sets"))
                 return Invalid("not_a_backup");
-            if (version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var number) || number != 1)
+            if (version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var number) || number is not (1 or 2))
                 return Invalid("unsupported_version");
+            if (number == 2 && (!HasArray(root, "templates") || !HasArray(root, "templateExercises") || !HasArray(root, "templateSets")))
+                return Invalid("not_a_backup");
             RestoreFile? file;
             try
             {
@@ -140,7 +176,17 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
     {
         if (file?.FormatVersion is null || file.Exercises is null || file.Workouts is null ||
             file.WorkoutExercises is null || file.Sets is null) return "not_a_backup";
-        if (file.FormatVersion != 1) return "unsupported_version";
+        if (file.FormatVersion is not (1 or 2)) return "unsupported_version";
+        var isV2 = file.FormatVersion == 2;
+        if (isV2 && (file.Templates is null || file.TemplateExercises is null || file.TemplateSets is null)) return "not_a_backup";
+        // A version 1 file has no templates. Anything it carries under those names is not
+        // version 1 content, so it's ignored like any other unknown field.
+        if (!isV2)
+        {
+            file.Templates = [];
+            file.TemplateExercises = [];
+            file.TemplateSets = [];
+        }
 
         var exerciseIds = new HashSet<int>();
         var workoutIds = new HashSet<int>();
@@ -149,6 +195,8 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
         var starts = new HashSet<DateTimeOffset>();
         var positions = new HashSet<(int WorkoutId, int Position)>();
         var setNumbers = new HashSet<(int BlockId, int SetNumber)>();
+        var workoutStates = new Dictionary<int, WorkoutState>();
+        var blockWorkouts = new Dictionary<int, int>();
 
         foreach (var exercise in file.Exercises)
         {
@@ -159,10 +207,15 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
         }
         foreach (var workout in file.Workouts)
         {
-            if (workout is null || workout.Id is not > 0 || !workoutIds.Add(workout.Id.Value) ||
-                workout.Date is null || workout.StartedAt is null ||
-                !starts.Add(workout.StartedAt.Value.ToUniversalTime()) ||
-                (workout.EndedAt is not null && workout.EndedAt < workout.StartedAt) ||
+            if (workout is null || workout.Id is not > 0 || !workoutIds.Add(workout.Id.Value)) return "invalid_value";
+            // A prepared page (version 2, specs/006) has no date, start or end; a started
+            // one has a date and start, and starts are unique as the dedupe key. Version 1
+            // knows only started pages.
+            var prepared = isV2 && workout.Date is null && workout.StartedAt is null && workout.EndedAt is null;
+            if (!prepared && (workout.Date is null || workout.StartedAt is null ||
+                !starts.Add(workout.StartedAt.Value.ToUniversalTime()))) return "invalid_value";
+            workoutStates.Add(workout.Id.Value, WorkoutStates.Of(workout.StartedAt, workout.EndedAt));
+            if ((workout.EndedAt is not null && workout.EndedAt < workout.StartedAt) ||
                 (workout.BodyweightKg is < 0 or > 999.99m) ||
                 (workout.BodyweightKg is not null && decimal.Round(workout.BodyweightKg.Value, 2) != workout.BodyweightKg))
                 return "invalid_value";
@@ -174,6 +227,7 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
                 !positions.Add((block.WorkoutId.Value, block.Position.Value))) return "invalid_value";
             if (!workoutIds.Contains(block.WorkoutId.Value) || !exerciseIds.Contains(block.ExerciseId.Value))
                 return "broken_reference";
+            blockWorkouts.Add(block.Id.Value, block.WorkoutId.Value);
         }
         foreach (var set in file.Sets)
         {
@@ -183,6 +237,43 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
                 (set.Weight is not null && decimal.Round(set.Weight.Value, 2) != set.Weight) ||
                 !setNumbers.Add((set.WorkoutExerciseId.Value, set.SetNumber.Value))) return "invalid_value";
             if (!blockIds.Contains(set.WorkoutExerciseId.Value)) return "broken_reference";
+            // Version 2: every set names its status, and it must fit its page's state, the
+            // same rule the set routes enforce (SetStatusRules, research R3).
+            if (isV2 && (!SetStatusRules.TryParse(set.Status, out var status) ||
+                !SetStatusRules.IsAllowed(workoutStates[blockWorkouts[set.WorkoutExerciseId.Value]], status)))
+                return "invalid_value";
+        }
+
+        // Templates: the same id, position, set-number and value rules as the page tables,
+        // plus names unique within the file after normalizing, as they are in an account.
+        var templateIds = new HashSet<int>();
+        var templateNames = new HashSet<string>();
+        var templateBlockIds = new HashSet<int>();
+        var templatePositions = new HashSet<(int TemplateId, int Position)>();
+        var templateSetIds = new HashSet<int>();
+        var templateSetNumbers = new HashSet<(int BlockId, int SetNumber)>();
+        foreach (var template in file.Templates!)
+        {
+            if (template is null || template.Id is not > 0 || !templateIds.Add(template.Id.Value) ||
+                string.IsNullOrWhiteSpace(template.Name) ||
+                !templateNames.Add(ExerciseNameNormalizer.Normalize(template.Name))) return "invalid_value";
+        }
+        foreach (var block in file.TemplateExercises!)
+        {
+            if (block is null || block.Id is not > 0 || !templateBlockIds.Add(block.Id.Value) ||
+                block.TemplateId is not > 0 || block.ExerciseId is not > 0 || block.Position is < 0 or null ||
+                !templatePositions.Add((block.TemplateId.Value, block.Position.Value))) return "invalid_value";
+            if (!templateIds.Contains(block.TemplateId.Value) || !exerciseIds.Contains(block.ExerciseId.Value))
+                return "broken_reference";
+        }
+        foreach (var set in file.TemplateSets!)
+        {
+            if (set is null || set.Id is not > 0 || !templateSetIds.Add(set.Id.Value) || set.TemplateExerciseId is not > 0 ||
+                set.SetNumber is not > 0 || set.Reps is not > 0 || set.IsWarmup is null ||
+                set.Weight is < 0 or > 9999.99m ||
+                (set.Weight is not null && decimal.Round(set.Weight.Value, 2) != set.Weight) ||
+                !templateSetNumbers.Add((set.TemplateExerciseId.Value, set.SetNumber.Value))) return "invalid_value";
+            if (!templateBlockIds.Contains(set.TemplateExerciseId.Value)) return "broken_reference";
         }
         return null;
     }
@@ -208,19 +299,36 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
 
         await db.Database.ExecuteSqlRawAsync("SET LOCAL statement_timeout = 120000", ct);
 
-        var fileTimes = file.Workouts!.Select(w => w.StartedAt!.Value.ToUniversalTime()).Distinct().ToArray();
+        // Started pages dedupe by their start, as in version 1. Prepared pages have none, so
+        // they are always added: restoring a file twice duplicates plans, never history
+        // (specs/006 research R11, owner-accepted Q2).
+        var fileTimes = file.Workouts!.Where(w => w.StartedAt is not null)
+            .Select(w => w.StartedAt!.Value.ToUniversalTime()).Distinct().ToArray();
         var existingTimes = fileTimes.Length == 0 ? [] : await db.Workouts.AsNoTracking()
             // A prepared page has no start, so it can never match a page in the file.
             .Where(w => w.UserId == userId && w.StartedAt != null && fileTimes.Contains(w.StartedAt.Value))
             .Select(w => w.StartedAt!.Value).ToArrayAsync(ct);
         var present = existingTimes.ToHashSet();
-        var addedPages = file.Workouts!.Where(w => !present.Contains(w.StartedAt!.Value.ToUniversalTime())).ToList();
+        var addedPages = file.Workouts!.Where(w => w.StartedAt is null || !present.Contains(w.StartedAt.Value.ToUniversalTime())).ToList();
         var skipped = file.Workouts!.Count - addedPages.Count;
         var addedIds = addedPages.Select(w => w.Id!.Value).ToHashSet();
         var addedBlocks = file.WorkoutExercises!.Where(b => addedIds.Contains(b.WorkoutId!.Value)).ToList();
         var addedBlockIds = addedBlocks.Select(b => b.Id!.Value).ToHashSet();
         var addedSets = file.Sets!.Where(s => addedBlockIds.Contains(s.WorkoutExerciseId!.Value)).ToList();
-        var usedExerciseIds = addedBlocks.Select(b => b.ExerciseId!.Value).ToHashSet();
+
+        // Templates match by normalized name: an existing one is the account's and is kept
+        // as it is, never merged with the file's (research R11).
+        var fileTemplateNames = file.Templates!.Select(t => ExerciseNameNormalizer.Normalize(t.Name!)).ToArray();
+        var existingTemplateNames = fileTemplateNames.Length == 0 ? [] : await db.Templates.AsNoTracking()
+            .Where(t => t.UserId == userId && fileTemplateNames.Contains(t.NormalizedName))
+            .Select(t => t.NormalizedName).ToArrayAsync(ct);
+        var addedTemplates = file.Templates!
+            .Where(t => !existingTemplateNames.Contains(ExerciseNameNormalizer.Normalize(t.Name!))).ToList();
+        var addedTemplateIds = addedTemplates.Select(t => t.Id!.Value).ToHashSet();
+        var addedTemplateBlocks = file.TemplateExercises!.Where(b => addedTemplateIds.Contains(b.TemplateId!.Value)).ToList();
+
+        var usedExerciseIds = addedBlocks.Select(b => b.ExerciseId!.Value)
+            .Concat(addedTemplateBlocks.Select(b => b.ExerciseId!.Value)).ToHashSet();
 
         var names = file.Exercises!.Where(e => usedExerciseIds.Contains(e.Id!.Value))
             .Select(e => ExerciseNameNormalizer.Normalize(e.Name!)).Distinct().ToArray();
@@ -261,8 +369,9 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
         var workouts = addedPages.Select(source => new Workout
         {
             UserId = userId,
-            Date = source.Date!.Value,
-            StartedAt = source.StartedAt!.Value.ToUniversalTime(),
+            // Both null on a prepared page; Validate made sure they come as a pair.
+            Date = source.Date,
+            StartedAt = source.StartedAt?.ToUniversalTime(),
             EndedAt = source.EndedAt?.ToUniversalTime(),
             Title = dropDetails ? null : source.Title,
             Location = dropDetails ? null : source.Location,
@@ -292,10 +401,40 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
             Weight = source.Weight,
             Reps = source.Reps!.Value,
             IsWarmup = source.IsWarmup!.Value,
+            // A version 1 file holds lifted sets only. Validate has checked a version 2
+            // status against its page's state.
+            Status = file.FormatVersion == 2 ? SetStatusRules.FromText(source.Status!) : SetStatus.Done,
         }));
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new RestoreResponse(workouts.Count, addedSets.Count, skipped,
-            created.Select(e => e.Name).ToArray(), classificationKept.ToArray(), dropped));
+
+        // Templates, built through their downward navigations so one save writes each
+        // template with its blocks and sets. Exercises resolve as for page blocks.
+        var templateSetsByBlock = file.TemplateSets!.ToLookup(s => s.TemplateExerciseId!.Value);
+        var templateBlocksByTemplate = addedTemplateBlocks.ToLookup(b => b.TemplateId!.Value);
+        db.Templates.AddRange(addedTemplates.Select(source => new Template
+        {
+            UserId = userId,
+            Name = source.Name!,
+            NormalizedName = ExerciseNameNormalizer.Normalize(source.Name!),
+            Exercises = templateBlocksByTemplate[source.Id!.Value].Select(block => new TemplateExercise
+            {
+                ExerciseId = exerciseByName[ExerciseNameNormalizer.Normalize(sourceExercises[block.ExerciseId!.Value].Name!)],
+                Position = block.Position!.Value,
+                Sets = templateSetsByBlock[block.Id!.Value].Select(set => new TemplateSet
+                {
+                    SetNumber = set.SetNumber!.Value,
+                    Weight = set.Weight,
+                    Reps = set.Reps!.Value,
+                    IsWarmup = set.IsWarmup!.Value,
+                }).ToList(),
+            }).ToList(),
+        }));
+        await db.SaveChangesAsync(ct);
+
+        var preparedAdded = addedPages.Count(w => w.StartedAt is null);
+        return Results.Ok(new RestoreResponse(workouts.Count - preparedAdded, addedSets.Count, skipped,
+            created.Select(e => e.Name).ToArray(), classificationKept.ToArray(), dropped,
+            preparedAdded, addedTemplates.Count, file.Templates!.Count - addedTemplates.Count));
     }
 
     private static IResult Invalid(string reason) =>

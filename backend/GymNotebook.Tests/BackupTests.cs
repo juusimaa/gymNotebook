@@ -110,7 +110,7 @@ public class BackupTests(TwoHostGymNotebookFixture db)
 
         // Assert: CSV still receives the complete JSON snapshot for browser conversion.
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(1, document.RootElement.GetProperty("formatVersion").GetInt32());
+        Assert.Equal(2, document.RootElement.GetProperty("formatVersion").GetInt32());
         Assert.Equal(_previousStamp, await ReadStampAsync(userId));
     }
 
