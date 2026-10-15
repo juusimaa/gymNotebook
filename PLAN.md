@@ -454,7 +454,7 @@ git config core.hooksPath .githooks
     - **Backend** (#172 set status and done-only metrics, #173 prepared pages and the start route, #174 templates): the API and data model above.
     - **Backup format version 2** (#176): merged before any screen could create plans or templates, so no production export ran as version 1 while they existed.
     - **Screens** (#175 the done toggle and skipped sets, #177 plans, the Planned group and Start, #178 the template list and editor, and PR 8b): PR 8b adds the entry points: Save as template on the session page and on a plan (which saves the plan first, then copies it), the templates in the Plan a session chooser, All templates, and the Templates link on the Planned label line.
-    - **Still open:** the owner's phone walkthrough (T091), on the local stack and after deploy.
+    - **Still open:** the owner's phone walkthrough after deploy (T091). The local-stack run passed on 2026-10-15.
 
 Containers come *second*, not first. This is the one lesson subscription-tracker wrote down explicitly about its own milestone 1: starting without Docker "avoids debugging Docker networking and SQL at the same time." That applies with more force here, since C# and EF Core are both new — a connection that won't open should have one candidate explanation, not three. Migrations are wired up in milestone 1 rather than alongside the domain model, for the other reason that project recorded: it started with `create_all()`, discovered that adding a non-null `user_id` to an existing table isn't something `create_all()` can do, and had to drop the database to move forward.
 
