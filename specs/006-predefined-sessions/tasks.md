@@ -342,6 +342,7 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - PR 8b: milestone 15 was already "Move to UpCloud", so this is **milestone 16**, and the data model's and frontend's "milestone 15" references to specs/006 now say 16 (owner, 2026-10-15).
 - [ ] T090 Run all checks in [quickstart.md](quickstart.md) (`dotnet test`, `dotnet format --verify-no-changes`, frontend typecheck, lint, format:check and test) before each PR.
 - [ ] T091 Owner phone walkthrough (quickstart steps 1–6), covering SC-001, SC-002, SC-003, SC-007 and SC-008, on the local stack and after deploy.
+  - Local stack: passed (owner, 2026-10-15, on the PR 8b branch, quickstart steps 1–6 on a phone). After deploy: still open.
 
 ---
 
