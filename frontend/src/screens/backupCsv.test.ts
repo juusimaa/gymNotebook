@@ -57,7 +57,7 @@ describe('backup CSV', () => {
       decimalComma: false,
     })
     expect(csv).toContain('2026-10-03,14:30,15:05,Push A,Kamppi,82.4,')
-    expect(csv).toContain(',142.5,8\r\n')
+    expect(csv).toContain(',142.5,8,done\r\n')
   })
 
   it.each(['=SUM(1,1)', '+cmd', '-cmd', '@cmd', '\tcmd', '\rcmd'])(
@@ -109,5 +109,43 @@ describe('backup CSV', () => {
         { timeZone: 'UTC', decimalComma: false },
       ),
     ).toContain(',yes,3,no,,8')
+  })
+
+  it('writes each set status and lists prepared pages last, undated', () => {
+    const csv = toCsv(
+      {
+        ...file,
+        formatVersion: 2,
+        workouts: [
+          {
+            ...file.workouts[0],
+            id: 5,
+            date: null,
+            startedAt: null,
+            endedAt: null,
+          },
+          ...file.workouts,
+        ],
+        workoutExercises: [
+          ...file.workoutExercises,
+          { id: 6, workoutId: 5, exerciseId: 1, position: 0 },
+        ],
+        sets: [
+          { ...file.sets[0], status: 'skipped' },
+          {
+            ...file.sets[0],
+            id: 7,
+            workoutExerciseId: 6,
+            setNumber: 1,
+            status: 'planned',
+          },
+        ],
+      },
+      { timeZone: 'UTC', decimalComma: false },
+    )
+    const lines = csv.slice(1).split('\r\n')
+    expect(lines[0].endsWith(',Reps,Status')).toBe(true)
+    expect(lines[1]).toMatch(/^2026-10-03,.*,142\.5,8,skipped$/s)
+    expect(lines[2]).toMatch(/^,,,Push A,.*,1,no,142\.5,8,planned$/s)
   })
 })

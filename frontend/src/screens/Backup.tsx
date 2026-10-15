@@ -14,6 +14,7 @@ import { getAccountPrivacy } from '../api/privacy'
 import { clearToken } from '../auth/token'
 import { prefersDecimalComma, toCsv } from './backupCsv'
 import {
+  planCounts,
   precheckBackupFile,
   type BackupFile,
   type BackupSummary,
@@ -595,6 +596,13 @@ function RestoreSection({
 
   const chooseAnother = filePicker('Choose another file', 'btn btn-ghost')
 
+  // Prepared pages and templates in the chosen file (specs/006), shown only
+  // when it has any, so a version 1 file's summary reads as before.
+  const plans =
+    state.step === 'summary'
+      ? planCounts(state.backup)
+      : { plans: 0, templates: 0 }
+
   return (
     <section className="privacy-block" aria-labelledby="backup-restore">
       <h2 id="backup-restore">Restore from a backup</h2>
@@ -649,9 +657,22 @@ function RestoreSection({
                   {formatNumber(state.summary.exercises)}
                 </span>
               </li>
+              {(plans.plans > 0 || plans.templates > 0) && (
+                <li>
+                  <span>Plans · templates</span>
+                  <span className="num">
+                    {formatNumber(plans.plans)} ·{' '}
+                    {formatNumber(plans.templates)}
+                  </span>
+                </li>
+              )}
             </ul>
           </div>
-          <p className="muted">Pages already in your notebook are skipped.</p>
+          <p className="muted">
+            Pages already in your notebook are skipped.
+            {plans.templates > 0 &&
+              ' Templates with a name you already use keep your version.'}
+          </p>
           <div className="backup-actions">
             <button
               className="btn btn-primary btn-block"
@@ -730,7 +751,21 @@ function RestoreDone({
     </button>
   )
 
-  if (result.pagesAdded === 0) {
+  // Plans and templates (specs/006) are reported apart from pages: a plan is
+  // always added, and a template is kept when the name is already in use.
+  const added =
+    result.pagesAdded + result.preparedPagesAdded + result.templatesAdded
+  const templatesPresent =
+    result.templatesAlreadyPresent === 0
+      ? null
+      : result.templatesAlreadyPresent === 1
+        ? '1 template has a name you already use; yours was kept.'
+        : `${formatNumber(result.templatesAlreadyPresent)} templates have names you already use; yours were kept.`
+
+  // Every page added, started or planned, for the headline.
+  const pages = result.pagesAdded + result.preparedPagesAdded
+
+  if (added === 0) {
     return (
       <>
         <div
@@ -747,6 +782,7 @@ function RestoreDone({
               : result.pagesAlreadyPresent === 1
                 ? 'Its one page is already in your notebook.'
                 : `All ${formatNumber(result.pagesAlreadyPresent)} pages are already in your notebook.`}
+            {templatesPresent !== null && ` ${templatesPresent}`}
           </p>
         </div>
         <div className="backup-actions">{again}</div>
@@ -765,10 +801,36 @@ function RestoreDone({
         aria-live="polite"
       >
         <p className="backup-result">
-          Restored <strong>{formatCount(result.pagesAdded, 'page')}</strong> and{' '}
-          <strong>{formatCount(result.setsAdded, 'set')}</strong>.
+          {pages > 0 ? (
+            <>
+              Restored <strong>{formatCount(pages, 'page')}</strong> and{' '}
+              <strong>{formatCount(result.setsAdded, 'set')}</strong>.
+            </>
+          ) : (
+            <>
+              Restored{' '}
+              <strong>{formatCount(result.templatesAdded, 'template')}</strong>.
+            </>
+          )}
         </p>
         <ul className="backup-result-lines">
+          {result.preparedPagesAdded > 0 && (
+            <li>
+              {result.preparedPagesAdded === 1
+                ? pages === 1
+                  ? 'It is a planned session, not started yet.'
+                  : '1 of them is a planned session, not started yet.'
+                : `${formatNumber(result.preparedPagesAdded)} of them are planned sessions, not started yet.`}
+            </li>
+          )}
+          {pages > 0 && result.templatesAdded > 0 && (
+            <li>
+              {result.templatesAdded === 1
+                ? '1 template was added.'
+                : `${formatNumber(result.templatesAdded)} templates were added.`}
+            </li>
+          )}
+          {templatesPresent !== null && <li>{templatesPresent}</li>}
           {present > 0 && (
             <li>
               {present === 1

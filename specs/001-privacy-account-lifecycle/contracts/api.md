@@ -62,6 +62,8 @@ If the response is lost, old-session retry receives 401 and the client says the 
 
 ## Export format version 1
 
+> **Superseded by version 2** (specs/006, [data-model.md → Export format version 2](../../006-predefined-sessions/data-model.md#export-format-version-2-changed)). The export now writes `formatVersion: 2`: `workouts[].date` and `startedAt` may be null (a prepared page), every set carries `status` (`planned`, `done` or `skipped`; only `done` is training), and three arrays are added after `sets`: `templates`, `templateExercises` and `templateSets`. Everything below still holds for the fields version 1 had.
+
 Headers: `Content-Type: application/json; charset=utf-8`, `Content-Disposition: attachment; filename="gym-notebook-export.json"`, `Cache-Control: no-store`. Filename has no username. Frontend can use this fixed filename without additional CORS header exposure. No range/resume URL in version 1; retries produce a fresh snapshot.
 
 | Top-level field | Type / content |

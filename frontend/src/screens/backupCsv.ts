@@ -15,6 +15,8 @@ const HEADERS = [
   'Warm-up',
   'Weight (kg)',
   'Reps',
+  // specs/006: done, planned or skipped. Only done sets were lifted.
+  'Status',
 ]
 
 export type CsvOptions = { timeZone: string; decimalComma: boolean }
@@ -66,13 +68,19 @@ export function toCsv(file: BackupFile, options: CsvOptions): string {
     sets.set(set.workoutExerciseId, entries)
   }
 
-  const workouts = [...file.workouts].sort(
-    (a, b) =>
-      a.date.localeCompare(b.date) || a.startedAt.localeCompare(b.startedAt),
-  )
+  // Logged pages oldest first; prepared pages (no date yet, specs/006) after
+  // them in the order they were written, with the date and times left blank.
+  const workouts = [...file.workouts].sort((a, b) => {
+    if (a.date === null || b.date === null)
+      return a.date === b.date ? a.id - b.id : a.date === null ? 1 : -1
+    return (
+      a.date.localeCompare(b.date) ||
+      (a.startedAt ?? '').localeCompare(b.startedAt ?? '')
+    )
+  })
   for (const workout of workouts) {
     const page = [
-      cell(workout.date),
+      cell(workout.date ?? ''),
       cell(clock(workout.startedAt)),
       cell(clock(workout.endedAt)),
       cell(workout.title ?? '', true),
@@ -84,7 +92,7 @@ export function toCsv(file: BackupFile, options: CsvOptions): string {
       (a, b) => a.position - b.position || a.id - b.id,
     )
     if (pageBlocks.length === 0) {
-      rows.push([...page, ...Array<string>(7).fill('')].join(separator))
+      rows.push([...page, ...Array<string>(8).fill('')].join(separator))
       continue
     }
     for (const block of pageBlocks) {
@@ -99,7 +107,7 @@ export function toCsv(file: BackupFile, options: CsvOptions): string {
         (a, b) => a.setNumber - b.setNumber || a.id - b.id,
       )
       if (blockSets.length === 0) {
-        rows.push([...prefix, '', '', '', ''].join(separator))
+        rows.push([...prefix, '', '', '', '', ''].join(separator))
         continue
       }
       for (const set of blockSets) {
@@ -110,6 +118,8 @@ export function toCsv(file: BackupFile, options: CsvOptions): string {
             cell(set.isWarmup ? 'yes' : 'no'),
             cell(number(set.weight)),
             cell(String(set.reps)),
+            // A version 1 file has no status: all its sets were lifted.
+            cell(set.status ?? 'done'),
           ].join(separator),
         )
       }
