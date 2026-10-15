@@ -275,6 +275,29 @@ public class OptionalDetailsConsentTests(PrivacyEnabledGymNotebookFactory factor
         Assert.Null(after.StartedAt);
     }
 
+    // specs/006 research R8: a page prepared from a template takes the template's name as
+    // its title only when the account may store optional details.
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, "Push A")]
+    public async Task Prepare_FromTemplate_TitleFollowsConsent(bool consented, string? expectedTitle)
+    {
+        // Arrange
+        var (client, _) = await OptionalDetailsTestData.CreateAccountAsync(factory, consentVersion: consented ? CurrentVersion : null);
+        var created = await client.PostAsJsonAsync("/templates",
+            new SaveTemplateRequest("Push A", [new("Bench Press", [new(80m, 5, false)])]));
+        var template = await created.Content.ReadFromJsonAsync<TemplateDetailResponse>();
+
+        // Act
+        var response = await client.PostAsync($"/templates/{template!.Id}/prepare", null);
+
+        // Assert: without consent the page is still prepared, just without a title.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>();
+        Assert.Equal(expectedTitle, page!.Title);
+        Assert.Single(page.Exercises);
+    }
+
     [Fact]
     public async Task WithdrawConsent_Repeated_ReturnsZeroClearedWorkouts()
     {

@@ -143,6 +143,117 @@ namespace GymNotebook.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GymNotebook.Api.Template", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_templates");
+
+                    b.HasIndex("UserId", "NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_templates_user_id_normalized_name");
+
+                    b.ToTable("templates", (string)null);
+                });
+
+            modelBuilder.Entity("GymNotebook.Api.TemplateExercise", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ExerciseId")
+                        .HasColumnType("integer")
+                        .HasColumnName("exercise_id");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<int>("TemplateId")
+                        .HasColumnType("integer")
+                        .HasColumnName("template_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_template_exercises");
+
+                    b.HasIndex("ExerciseId")
+                        .HasDatabaseName("ix_template_exercises_exercise_id");
+
+                    b.HasIndex("TemplateId")
+                        .HasDatabaseName("ix_template_exercises_template_id");
+
+                    b.ToTable("template_exercises", (string)null);
+                });
+
+            modelBuilder.Entity("GymNotebook.Api.TemplateSet", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsWarmup")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_warmup");
+
+                    b.Property<int>("Reps")
+                        .HasColumnType("integer")
+                        .HasColumnName("reps");
+
+                    b.Property<int>("SetNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("set_number");
+
+                    b.Property<int>("TemplateExerciseId")
+                        .HasColumnType("integer")
+                        .HasColumnName("template_exercise_id");
+
+                    b.Property<decimal?>("Weight")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("weight");
+
+                    b.HasKey("Id")
+                        .HasName("pk_template_sets");
+
+                    b.HasIndex("TemplateExerciseId", "SetNumber")
+                        .HasDatabaseName("ix_template_sets_template_exercise_id_set_number");
+
+                    b.ToTable("template_sets", (string)null);
+                });
+
             modelBuilder.Entity("GymNotebook.Api.User", b =>
                 {
                     b.Property<int>("Id")
@@ -351,6 +462,43 @@ namespace GymNotebook.Api.Migrations
                         .HasConstraintName("fk_set_entries_workout_exercises_workout_exercise_id");
                 });
 
+            modelBuilder.Entity("GymNotebook.Api.Template", b =>
+                {
+                    b.HasOne("GymNotebook.Api.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_templates_users_user_id");
+                });
+
+            modelBuilder.Entity("GymNotebook.Api.TemplateExercise", b =>
+                {
+                    b.HasOne("GymNotebook.Api.Exercise", null)
+                        .WithMany()
+                        .HasForeignKey("ExerciseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_exercises_exercises_exercise_id");
+
+                    b.HasOne("GymNotebook.Api.Template", null)
+                        .WithMany("Exercises")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_exercises_templates_template_id");
+                });
+
+            modelBuilder.Entity("GymNotebook.Api.TemplateSet", b =>
+                {
+                    b.HasOne("GymNotebook.Api.TemplateExercise", null)
+                        .WithMany("Sets")
+                        .HasForeignKey("TemplateExerciseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_sets_template_exercises_template_exercise_id");
+                });
+
             modelBuilder.Entity("GymNotebook.Api.Workout", b =>
                 {
                     b.HasOne("GymNotebook.Api.User", null)
@@ -376,6 +524,16 @@ namespace GymNotebook.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_workout_exercises_workouts_workout_id");
+                });
+
+            modelBuilder.Entity("GymNotebook.Api.Template", b =>
+                {
+                    b.Navigation("Exercises");
+                });
+
+            modelBuilder.Entity("GymNotebook.Api.TemplateExercise", b =>
+                {
+                    b.Navigation("Sets");
                 });
 
             modelBuilder.Entity("GymNotebook.Api.Workout", b =>

@@ -66,6 +66,15 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
         Assert.Contains("GET /workouts/{id:int}", guarded);
         Assert.Contains("PUT /workouts/{id:int}/exercises", guarded);
         Assert.Contains("POST /workouts/{id:int}/sets", guarded);
+
+        // specs/006 templates: every route, and save-as-template on the workouts group.
+        Assert.Contains("GET /templates/", guarded);
+        Assert.Contains("GET /templates/{id:int}", guarded);
+        Assert.Contains("POST /templates/", guarded);
+        Assert.Contains("PUT /templates/{id:int}", guarded);
+        Assert.Contains("DELETE /templates/{id:int}", guarded);
+        Assert.Contains("POST /templates/{id:int}/prepare", guarded);
+        Assert.Contains("POST /workouts/{id:int}/template", guarded);
         Assert.DoesNotContain("POST /auth/change-password", guarded);
         Assert.DoesNotContain("POST /account/export", guarded);
 
