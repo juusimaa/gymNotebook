@@ -13,7 +13,13 @@ export interface SetEntryResponse {
   reps: number
   weight: number | null
   isWarmup: boolean
+  status: SetStatus
 }
+
+// Where a set stands in its session (specs/006). Only 'done' counts as training;
+// 'planned' is written ahead, 'skipped' was still planned when the page finished.
+// The editor doesn't send a status yet, so the server stores 'done' as before.
+export type SetStatus = 'planned' | 'done' | 'skipped'
 
 // One exercise block within a workout. This id identifies the block appearance;
 // exerciseId identifies the reusable per-user exercise behind it. They can differ
@@ -102,7 +108,9 @@ export interface WorkoutSummaryResponse {
   endedAt: string | null
   title: string | null
   exerciseCount: number
+  // Done sets only. notDoneSetCount is planned plus skipped (specs/006).
   setCount: number
+  notDoneSetCount: number
   exerciseNames: string[]
 }
 

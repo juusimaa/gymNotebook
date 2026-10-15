@@ -408,4 +408,72 @@ public class ExerciseTests(GymNotebookFactory factory) : IClassFixture<GymNotebo
         var reloadedBlock = await db.WorkoutExercises.SingleAsync(we => we.Id == block.Id);
         Assert.Equal(typo.Id, reloadedBlock.ExerciseId);
     }
+
+    // Gives a seeded page's sets these statuses, in set-number order (specs/006). The
+    // seed helpers above predate statuses and leave every set done, the column default.
+    private async Task SetStatusesAsync(int workoutId, params SetStatus[] statuses)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sets = await (
+            from se in db.SetEntries
+            join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
+            where we.WorkoutId == workoutId
+            orderby we.Position, se.SetNumber
+            select se).ToListAsync();
+        Assert.Equal(statuses.Length, sets.Count);
+        for (var index = 0; index < sets.Count; index++)
+        {
+            sets[index].Status = statuses[index];
+        }
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task ListExercises_LastSetAndFirstSet_IgnoreNotDoneSets()
+    {
+        // Arrange: the middle session opened with a skipped warm-up and ended with a
+        // skipped top set; the newest page is only a plan.
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 90m, IsWarmup: false));
+        var middle = await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 10), new DateTimeOffset(2026, 1, 10, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 10, Weight: 60m, IsWarmup: true),
+            (SetNumber: 2, Reps: 5, Weight: 100m, IsWarmup: false),
+            (SetNumber: 3, Reps: 3, Weight: 110m, IsWarmup: false));
+        await SetStatusesAsync(middle.WorkoutId, SetStatus.Skipped, SetStatus.Done, SetStatus.Skipped);
+        var plan = await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 12), new DateTimeOffset(2026, 1, 12, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 120m, IsWarmup: false));
+        await SetStatusesAsync(plan.WorkoutId, SetStatus.Planned);
+
+        // Act
+        var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        // Assert: both hints come from the middle session's one done set.
+        var squat = Assert.Single(body!);
+        Assert.Equal(new LastSetResponse(100m, 5, IsWarmup: false), squat.LastSet);
+        Assert.Equal(new LastSetResponse(100m, 5, IsWarmup: false), squat.FirstSet);
+    }
+
+    [Fact]
+    public async Task ListExercises_SessionCount_CountsOnlyPagesWithDoneSets()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var backSquat = await SeedExerciseAsync(userId, "Back Squat");
+        await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 90m, IsWarmup: false));
+        var skipped = await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 10), new DateTimeOffset(2026, 1, 10, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 95m, IsWarmup: false));
+        await SetStatusesAsync(skipped.WorkoutId, SetStatus.Skipped);
+        var plan = await SeedSessionAsync(userId, backSquat.Id, new DateOnly(2026, 1, 12), new DateTimeOffset(2026, 1, 12, 7, 0, 0, TimeSpan.Zero),
+            (SetNumber: 1, Reps: 5, Weight: 100m, IsWarmup: false));
+        await SetStatusesAsync(plan.WorkoutId, SetStatus.Planned);
+
+        var response = await _client.SendAsync(AuthenticatedGet("/exercises", token));
+        var body = await response.Content.ReadFromJsonAsync<List<ExerciseResponse>>();
+
+        Assert.Equal(1, Assert.Single(body!).SessionCount);
+    }
 }
