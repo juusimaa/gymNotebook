@@ -429,17 +429,24 @@ while it exists: cents. Users' long-term copy remains the in-app JSON backup
    password.
 2. Dump our database from it. `TMP_URL` has `GN_URL`'s form with that
    service's host and port, user `upadmin` and its password, database
-   `gymnotebook`:
+   `gymnotebook`. Each `read -rs` takes **one line**: paste each string on
+   its own, unwrapped, or a line break splits it across variables (seen in
+   the T058 drill). The keyword form
+   `host=… port=… user=upadmin password=… dbname=gymnotebook sslmode=verify-full sslrootcert=/etc/gymnotebook/upcloud-ca.pem`
+   works everywhere a URL does and needs no percent-encoding. The dump
+   holds people's data, so it goes in a private directory, not `/tmp`:
 
    ```sh
-   read -rs TMP_URL; read -rs GN_URL; export TMP_URL GN_URL
-   cd /tmp
+   read -rs TMP_URL; export TMP_URL
+   read -rs GN_URL; export GN_URL
+   mkdir -m 700 ~/restore && cd ~/restore
    docker run --rm -e TMP_URL -v "$PWD:/work" -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
      sh -c 'pg_dump -Fc --no-owner --no-privileges -f /work/restore.dump "$TMP_URL"'
    ```
 
-   If the temporary service's certificate is signed by a different CA,
-   download that service's CA and mount it instead.
+   The temporary service's certificate verified against our CA file in the
+   2026-10-15 drill. If that ever fails, download that service's CA and
+   mount it instead.
 3. Replace the live data, as `gymnotebook`, with `gym-api` stopped:
 
    ```sh
@@ -455,13 +462,39 @@ while it exists: cents. Users' long-term copy remains the in-app JSON backup
    `gn start gym-api`, which keeps its log (§ Deletion evidence).
 
 4. Check the counts against what you expect, then delete the temporary
-   service and `/tmp/restore.dump`:
+   service and `rm -r ~/restore`:
 
    ```sh
    docker run --rm -e GN_URL -v /opt/gymnotebook/bin:/bin-gn:ro \
      -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
      sh -c 'psql -XAt -v ON_ERROR_STOP=1 -f /bin-gn/verify-copy.sql "$GN_URL"'
    ```
+
+### Restore drill
+
+Proves a backup restores without touching live data (FR-020; first run
+2026-10-15, 15 minutes, T058). Do steps 1 and 2 above, with `~/drill` as the
+private directory, then copy into a **scratch** database on the live service
+instead of step 3. With `pg()` from
+[docs/privacy/restore.md](../docs/privacy/restore.md) § 2, `ADMIN_URL` the
+live service as `upadmin`, database `defaultdb`, and `DRILL_URL` the same
+with database `gn_drill`:
+
+```sh
+pg TMP_URL -At -f /bin-gn/verify-copy.sql > backup.txt
+pg ADMIN_URL -c 'CREATE DATABASE gn_drill'
+docker run --rm -e DRILL_URL -v "$PWD:/work" -v /etc/gymnotebook/upcloud-ca.pem:/etc/gymnotebook/upcloud-ca.pem:ro postgres:18 \
+  sh -c 'pg_restore --no-owner --no-privileges -d "$DRILL_URL" /work/restore.dump'
+pg DRILL_URL -At -f /bin-gn/verify-copy.sql > drill.txt
+diff backup.txt drill.txt && echo MATCH
+```
+
+Pass: only `MATCH`, within an hour of starting the restore. Then
+`pg ADMIN_URL -c 'DROP DATABASE gn_drill'`, `cd ~ && rm -r ~/drill`,
+`unset TMP_URL ADMIN_URL DRILL_URL`, and delete the temporary service in the
+console (it also holds the tracker's database). If `psql` reports a local
+socket (`/var/run/postgresql/...`), the variable it was given is empty or
+has no host.
 
 ## Emptying the database after rehearsal
 
