@@ -596,8 +596,10 @@ function RestoreSection({
 
   const chooseAnother = filePicker('Choose another file', 'btn btn-ghost')
 
-  // Prepared pages and templates in the chosen file (specs/006), shown only
-  // when it has any, so a version 1 file's summary reads as before.
+  // Templates in the chosen file (specs/006), shown only when it has any, so a
+  // version 1 file's summary reads as before. Prepared pages in an older
+  // version 2 file are counted with them: restore turns each into a template
+  // (research R15).
   const plans =
     state.step === 'summary'
       ? planCounts(state.backup)
@@ -659,10 +661,9 @@ function RestoreSection({
               </li>
               {(plans.plans > 0 || plans.templates > 0) && (
                 <li>
-                  <span>Plans · templates</span>
+                  <span>Templates</span>
                   <span className="num">
-                    {formatNumber(plans.plans)} ·{' '}
-                    {formatNumber(plans.templates)}
+                    {formatNumber(plans.plans + plans.templates)}
                   </span>
                 </li>
               )}
@@ -672,6 +673,8 @@ function RestoreSection({
             Pages already in your notebook are skipped.
             {plans.templates > 0 &&
               ' Templates with a name you already use keep your version.'}
+            {plans.plans > 0 &&
+              ' Planned sessions in this backup become templates.'}
           </p>
           <div className="backup-actions">
             <button
@@ -751,10 +754,10 @@ function RestoreDone({
     </button>
   )
 
-  // Plans and templates (specs/006) are reported apart from pages: a plan is
-  // always added, and a template is kept when the name is already in use.
-  const added =
-    result.pagesAdded + result.preparedPagesAdded + result.templatesAdded
+  // Templates (specs/006) are reported apart from pages: a template is kept
+  // when the name is already in use. templatesAdded includes the planned
+  // sessions of an older backup, which became templates (research R15).
+  const added = result.pagesAdded + result.templatesAdded
   const templatesPresent =
     result.templatesAlreadyPresent === 0
       ? null
@@ -762,8 +765,7 @@ function RestoreDone({
         ? '1 template has a name you already use; yours was kept.'
         : `${formatNumber(result.templatesAlreadyPresent)} templates have names you already use; yours were kept.`
 
-  // Every page added, started or planned, for the headline.
-  const pages = result.pagesAdded + result.preparedPagesAdded
+  const pages = result.pagesAdded
 
   if (added === 0) {
     return (
@@ -814,15 +816,6 @@ function RestoreDone({
           )}
         </p>
         <ul className="backup-result-lines">
-          {result.preparedPagesAdded > 0 && (
-            <li>
-              {result.preparedPagesAdded === 1
-                ? pages === 1
-                  ? 'It is a planned session, not started yet.'
-                  : '1 of them is a planned session, not started yet.'
-                : `${formatNumber(result.preparedPagesAdded)} of them are planned sessions, not started yet.`}
-            </li>
-          )}
           {pages > 0 && result.templatesAdded > 0 && (
             <li>
               {result.templatesAdded === 1

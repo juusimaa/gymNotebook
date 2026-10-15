@@ -379,7 +379,7 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
             workouts = workouts ??
             [
                 new { id = 201, userId = 999999, date = (string?)"2026-01-02", startedAt = (DateTimeOffset?)_started, endedAt = (DateTimeOffset?)_started.AddHours(1), title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
-                new { id = 202, userId = 999999, date = (string?)null, startedAt = (DateTimeOffset?)null, endedAt = (DateTimeOffset?)null, title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
+                new { id = 202, userId = 999999, date = (string?)null, startedAt = (DateTimeOffset?)null, endedAt = (DateTimeOffset?)null, title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null, createdAt = _started.AddDays(-1) },
             ],
             workoutExercises = new object[]
             {
@@ -405,10 +405,10 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
     }
 
     [Fact]
-    public async Task Restore_V2RoundTrip_RecreatesPreparedSkippedAndTemplates()
+    public async Task Restore_V2RoundTrip_RecreatesSkippedAndTemplates()
     {
-        // Arrange: a source account with a finished page holding a skipped set, a prepared
-        // page holding a planned one, and a template; exported as version 2.
+        // Arrange: a source account with a finished page holding a skipped set and a
+        // template; exported as version 2.
         await using var host = fixture.CreateHost();
         var sourceId = await fixture.SeedUserAsync();
         var targetId = await fixture.SeedUserAsync();
@@ -422,11 +422,7 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
             block.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 100m, Reps = 5, Status = SetStatus.Done });
             block.SetEntries.Add(new SetEntry { SetNumber = 2, Weight = 100m, Reps = 5, Status = SetStatus.Skipped });
             finished.WorkoutExercises.Add(block);
-            var prepared = new Workout { UserId = sourceId };
-            var plannedBlock = new WorkoutExercise { ExerciseId = squat.Id, Position = 0 };
-            plannedBlock.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 105m, Reps = 5, Status = SetStatus.Planned });
-            prepared.WorkoutExercises.Add(plannedBlock);
-            seed.Workouts.AddRange(finished, prepared);
+            seed.Workouts.Add(finished);
             var template = new Template { UserId = sourceId, Name = "Legs", NormalizedName = "legs" };
             var templateBlock = new TemplateExercise { ExerciseId = squat.Id, Position = 0 };
             templateBlock.Sets.Add(new TemplateSet { SetNumber = 1, Weight = 60m, Reps = 8, IsWarmup = true });
@@ -446,24 +442,75 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
         // Assert: the counts, then each kind of row as it was in the source.
         Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
         var result = (await restore.Content.ReadFromJsonAsync<RestoreResponse>())!;
-        Assert.Equal((1, 1, 1, 0, 3), (result.PagesAdded, result.PreparedPagesAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent, result.SetsAdded));
+        Assert.Equal((1, 1, 0, 2), (result.PagesAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent, result.SetsAdded));
         await using var db = fixture.NewContext();
         var statuses = await (
             from w in db.Workouts
             join b in db.WorkoutExercises on w.Id equals b.WorkoutId
             join s in db.SetEntries on b.Id equals s.WorkoutExerciseId
             where w.UserId == targetId
-            orderby w.StartedAt == null, s.SetNumber
-            select new { Prepared = w.StartedAt == null, w.Date, s.Weight, s.Status })
+            orderby s.SetNumber
+            select new { s.Weight, s.Status })
             .ToListAsync();
         Assert.Equal(
-            [(false, 100m, SetStatus.Done), (false, 100m, SetStatus.Skipped), (true, 105m, SetStatus.Planned)],
-            statuses.Select(s => (s.Prepared, s.Weight!.Value, s.Status)));
-        Assert.Null(statuses[2].Date);
+            [(100m, SetStatus.Done), (100m, SetStatus.Skipped)],
+            statuses.Select(s => (s.Weight!.Value, s.Status)));
         var restored = await db.Templates.Include(t => t.Exercises).ThenInclude(e => e.Sets).SingleAsync(t => t.UserId == targetId);
         Assert.Equal("Legs", restored.Name);
         var restoredSet = Assert.Single(Assert.Single(restored.Exercises).Sets);
         Assert.Equal((1, 60m, 8, true), (restoredSet.SetNumber, restoredSet.Weight!.Value, restoredSet.Reps, restoredSet.IsWarmup));
+    }
+
+    // specs/006 research R15: a version 2 file written while prepared pages existed.
+    [Fact]
+    public async Task Restore_V2PreparedPage_BecomesTemplate()
+    {
+        // Arrange: the default file holds an untitled prepared page (Bench Press, one
+        // planned 80 x 5) created the day before its started page.
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+
+        // Act
+        using var response = await PostAsync(client, V2File());
+
+        // Assert: one page (the started one), and two templates: the file's and the plan,
+        // named after its creation day. No page without a start was written.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = (await response.Content.ReadFromJsonAsync<RestoreResponse>())!;
+        Assert.Equal((1, 2, 2, 0), (result.PagesAdded, result.SetsAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent));
+        await using var db = fixture.NewContext();
+        Assert.Equal(1, await db.Workouts.CountAsync(w => w.UserId == userId));
+        var plan = await db.Templates.Include(t => t.Exercises).ThenInclude(e => e.Sets)
+            .SingleAsync(t => t.UserId == userId && t.Name == "Plan 2026-01-01");
+        var block = Assert.Single(plan.Exercises);
+        Assert.Equal("Bench Press", await db.Exercises.Where(e => e.Id == block.ExerciseId).Select(e => e.Name).SingleAsync());
+        var set = Assert.Single(block.Sets);
+        Assert.Equal((1, 80m, 5, false), (set.SetNumber, set.Weight!.Value, set.Reps, set.IsWarmup));
+    }
+
+    [Fact]
+    public async Task Restore_V2PreparedPageTitleTaken_AddsNumber()
+    {
+        // Arrange: a prepared page titled like the file's own template, " push  a ".
+        await using var host = fixture.CreateHost();
+        var userId = await fixture.SeedUserAsync();
+        using var client = host.ClientFor(userId);
+        var file = V2File(workouts:
+        [
+            new { id = 201, userId = 999999, date = (string?)"2026-01-02", startedAt = (DateTimeOffset?)_started, endedAt = (DateTimeOffset?)_started.AddHours(1), title = (string?)null, location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
+            new { id = 202, userId = 999999, date = (string?)null, startedAt = (DateTimeOffset?)null, endedAt = (DateTimeOffset?)null, title = (string?)" push  a ", location = (string?)null, notes = (string?)null, bodyweightKg = (decimal?)null },
+        ]);
+
+        // Act
+        using var response = await PostAsync(client, file);
+
+        // Assert: the file's template keeps its name; the plan takes the next free one,
+        // from its trimmed title.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var db = fixture.NewContext();
+        var names = await db.Templates.Where(t => t.UserId == userId).OrderBy(t => t.Id).Select(t => t.Name).ToListAsync();
+        Assert.Equal(["Push A", "push  a (2)"], names);
     }
 
     [Fact]
@@ -477,7 +524,7 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<RestoreResponse>();
-        Assert.Equal((0, 0, 0), (result!.PreparedPagesAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent));
+        Assert.Equal((0, 0), (result!.TemplatesAdded, result.TemplatesAlreadyPresent));
         await using var db = fixture.NewContext();
         var status = await db.SetEntries
             .Where(s => db.WorkoutExercises.Any(b => b.Id == s.WorkoutExerciseId && db.Workouts.Any(w => w.Id == b.WorkoutId && w.UserId == userId)))
@@ -486,7 +533,7 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
     }
 
     [Fact]
-    public async Task Restore_PreparedTwice_AddsTwice()
+    public async Task Restore_PreparedTwice_AddsTwoTemplates()
     {
         await using var host = fixture.CreateHost();
         var userId = await fixture.SeedUserAsync();
@@ -495,13 +542,14 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
 
         using var second = await PostAsync(client, V2File());
 
-        // The started page and the template are recognised; the plan is added again.
+        // The started page and the template are recognised; the plan is added again, as a
+        // second template with a number, never as history.
         var result = (await second.Content.ReadFromJsonAsync<RestoreResponse>())!;
-        Assert.Equal((0, 1, 1, 0, 1), (result.PagesAdded, result.PagesAlreadyPresent, result.PreparedPagesAdded, result.TemplatesAdded, result.TemplatesAlreadyPresent));
+        Assert.Equal((0, 1, 1, 1), (result.PagesAdded, result.PagesAlreadyPresent, result.TemplatesAdded, result.TemplatesAlreadyPresent));
         await using var db = fixture.NewContext();
-        Assert.Equal(2, await db.Workouts.CountAsync(w => w.UserId == userId && w.StartedAt == null));
-        Assert.Equal(1, await db.Workouts.CountAsync(w => w.UserId == userId && w.StartedAt != null));
-        Assert.Equal(1, await db.Templates.CountAsync(t => t.UserId == userId));
+        Assert.Equal(1, await db.Workouts.CountAsync(w => w.UserId == userId));
+        var names = await db.Templates.Where(t => t.UserId == userId).OrderBy(t => t.Id).Select(t => t.Name).ToListAsync();
+        Assert.Equal(["Push A", "Plan 2026-01-01", "Plan 2026-01-01 (2)"], names);
     }
 
     [Fact]
@@ -529,12 +577,14 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
         // Act: the file's "Push A" normalizes to the same name.
         using var response = await PostAsync(client, V2File());
 
-        // Assert: counted as present, and the account's template is exactly as it was.
+        // Assert: counted as present, and the account's template is exactly as it was. (The
+        // one template added is the file's prepared page, research R15.)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = (await response.Content.ReadFromJsonAsync<RestoreResponse>())!;
-        Assert.Equal((0, 1), (result.TemplatesAdded, result.TemplatesAlreadyPresent));
+        Assert.Equal((1, 1), (result.TemplatesAdded, result.TemplatesAlreadyPresent));
         await using var db = fixture.NewContext();
-        var kept = await db.Templates.Include(t => t.Exercises).ThenInclude(e => e.Sets).SingleAsync(t => t.UserId == userId);
+        var kept = await db.Templates.Include(t => t.Exercises).ThenInclude(e => e.Sets)
+            .SingleAsync(t => t.UserId == userId && t.NormalizedName == "push a");
         Assert.Equal((templateId, "push a"), (kept.Id, kept.Name));
         Assert.Equal(10, Assert.Single(Assert.Single(kept.Exercises).Sets).Reps);
     }
@@ -628,7 +678,7 @@ public class RestoreTests(TwoHostGymNotebookFixture fixture, ITestOutputHelper o
          join set in db.SetEntries on block.Id equals set.WorkoutExerciseId
          where workout.UserId == userId
          orderby workout.StartedAt, block.Position, set.SetNumber
-         select new RoundTripRow(workout.Date!.Value, workout.StartedAt!.Value, workout.EndedAt,
+         select new RoundTripRow(workout.Date, workout.StartedAt, workout.EndedAt,
              workout.Title, workout.Location, workout.Notes, workout.BodyweightKg,
              block.Position, exercise.Name, exercise.IsBodyweight,
              set.SetNumber, set.Weight, set.Reps, set.IsWarmup)).ToListAsync();

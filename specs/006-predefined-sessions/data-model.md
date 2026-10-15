@@ -2,7 +2,9 @@
 
 Three migrations, one per backend PR (see [plan.md](plan.md#delivery)). Review each generated migration for unintended changes before applying it (Principle IV).
 
-## Workout (changed): migration `AllowPreparedWorkouts`
+## Workout: migration `AllowPreparedWorkouts`, reverted by `RemovePreparedWorkouts` (R15)
+
+> **Revised (research R15).** The `RemovePreparedWorkouts` migration turns every prepared page into a template (blocks and sets copied in order; named by its trimmed title, or `Plan YYYY-MM-DD` from its UTC `created_at`, with ` (2)`, ` (3)`… while the normalized name is taken), deletes the pages, drops both check constraints and makes `date` and `started_at` NOT NULL again. State is then in progress or finished, from `ended_at` alone (`WorkoutState.Of(endedAt)`). The section below records the prepared design as it was.
 
 | Field | Column | Change |
 | --- | --- | --- |
@@ -80,10 +82,10 @@ TemplateSet       (id, template_exercise_id, set_number, weight?, reps, is_warmu
 
 | Table | From the file | Set by the server |
 | --- | --- | --- |
-| `workouts` (prepared) | as for started pages, with `date`/`startedAt`/`endedAt` null | always added (R11) |
+| `workouts` (prepared) | as for started pages, with `date`/`startedAt`/`endedAt` null | always added (R11); since R15, added as a template named like the migration names them |
 | `sets` | adds `status` (v2). A v1 file restores as `done` | |
 | `templates` | `name` | `Id`, `UserId`, `NormalizedName`, `CreatedAt` = restore time. Skipped when the name already exists for the account |
 | `template_exercises` | `position`, exercise via the file's `exerciseId` → matched or created exercise | `Id`, `TemplateId` |
 | `template_sets` | `setNumber`, `weight`, `reps`, `isWarmup` | `Id`, `TemplateExerciseId` |
 
-**Restore result** gains `preparedPagesAdded`, `templatesAdded` and `templatesAlreadyPresent` (integers).
+**Restore result** gains `templatesAdded` and `templatesAlreadyPresent` (integers). *(It also had `preparedPagesAdded` until R15; prepared pages from a file now count in `templatesAdded`.)*

@@ -4,9 +4,10 @@ export const DEFAULT_RESTORE_MAX_BYTES = 26_214_400
 
 export type SetStatus = 'planned' | 'done' | 'skipped'
 
-// Version 2 (specs/006 research R10) adds prepared pages (date and startedAt
-// null), a status on every set and the three template arrays. A version 1
-// file has none of them; its sets are all lifted ones.
+// Version 2 (specs/006 research R10) adds a status on every set and the three
+// template arrays; files written before research R15 may also hold prepared
+// pages (date and startedAt null), which restore turns into templates. A
+// version 1 file has none of them; its sets are all lifted ones.
 export type BackupFile = {
   formatVersion: 1 | 2
   snapshotAt: string
@@ -64,8 +65,9 @@ export type BackupSummary = {
   exercises: number
 }
 
-// What a version 2 file holds besides its history (specs/006): prepared pages,
-// which restore always adds, and templates, which it adds by name.
+// What a version 2 file holds besides its history (specs/006): prepared pages
+// from before research R15, which restore turns into templates, and
+// templates, which it adds by name.
 export function planCounts(file: BackupFile): {
   plans: number
   templates: number

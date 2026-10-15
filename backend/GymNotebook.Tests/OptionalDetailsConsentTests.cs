@@ -238,43 +238,6 @@ public class OptionalDetailsConsentTests(PrivacyEnabledGymNotebookFactory factor
         Assert.Equal(OptionalDetailsTestData.Notes, canary.Notes);
     }
 
-    [Fact]
-    public async Task WithdrawConsent_PreparedPage_ClearsDetails()
-    {
-        // Arrange: a prepared page (no date or start, specs/006) holding all four details.
-        var (client, userId) = await OptionalDetailsTestData.CreateAccountAsync(factory, consentVersion: CurrentVersion);
-        int preparedId;
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var prepared = new Workout
-            {
-                UserId = userId,
-                Title = OptionalDetailsTestData.Title,
-                Location = OptionalDetailsTestData.Location,
-                Notes = OptionalDetailsTestData.Notes,
-                BodyweightKg = OptionalDetailsTestData.BodyweightKg,
-            };
-            db.Workouts.Add(prepared);
-            await db.SaveChangesAsync();
-            preparedId = prepared.Id;
-        }
-
-        // Act
-        var response = await client.DeleteAsync(ConsentPath);
-
-        // Assert: counted and cleared like any other page, and still prepared.
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var withdrawal = await response.Content.ReadFromJsonAsync<OptionalDetailsWithdrawalResponse>();
-        Assert.Equal(1, withdrawal?.ClearedWorkouts);
-        var after = (await OptionalDetailsTestData.ReadWorkoutsAsync(factory, userId)).Single(w => w.Id == preparedId);
-        Assert.Null(after.Title);
-        Assert.Null(after.Location);
-        Assert.Null(after.Notes);
-        Assert.Null(after.BodyweightKg);
-        Assert.Null(after.StartedAt);
-    }
-
     // specs/006 research R8: a session started from a template takes the template's name
     // as its title only when the account may store optional details.
     [Theory]

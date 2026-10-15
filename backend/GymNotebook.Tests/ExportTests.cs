@@ -71,7 +71,7 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         {
             Assert.Equal(expected.Id, actual.GetProperty("id").GetInt32());
             Assert.Equal(expected.UserId, actual.GetProperty("userId").GetInt32());
-            Assert.Equal(expected.Date!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), actual.GetProperty("date").GetString());
+            Assert.Equal(expected.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), actual.GetProperty("date").GetString());
             Assert.Equal(expected.StartedAt, Instant(actual.GetProperty("startedAt")));
             Assert.Equal(expected.EndedAt, NullableInstant(actual.GetProperty("endedAt")));
             Assert.Equal(expected.Title, NullableText(actual.GetProperty("title")));
@@ -222,10 +222,10 @@ public class ExportTests(TwoHostGymNotebookFixture db)
     }
 
     [Fact]
-    public async Task Export_V2_IncludesStatusPreparedPagesAndTemplates()
+    public async Task Export_V2_IncludesStatusAndTemplates()
     {
-        // Arrange: a prepared page with a planned set, a finished page with a done and a
-        // skipped set, and a template with one block and set (specs/006 research R10).
+        // Arrange: a page in progress with a planned set, a finished page with a done and
+        // a skipped set, and a template with one block and set (specs/006 research R10).
         await using var host = db.CreateHost(ExportTestSupport.FlagOn());
         var userId = await db.SeedUserAsync();
         int templateId, squatId;
@@ -235,10 +235,15 @@ public class ExportTests(TwoHostGymNotebookFixture db)
             context.Exercises.Add(squat);
             await context.SaveChangesAsync();
             squatId = squat.Id;
-            var prepared = new Workout { UserId = userId };
+            var inProgress = new Workout
+            {
+                UserId = userId,
+                Date = new DateOnly(2026, 3, 2),
+                StartedAt = new DateTimeOffset(2026, 3, 2, 8, 0, 0, TimeSpan.Zero),
+            };
             var plannedBlock = new WorkoutExercise { ExerciseId = squat.Id, Position = 0 };
             plannedBlock.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 100m, Reps = 5, Status = SetStatus.Planned });
-            prepared.WorkoutExercises.Add(plannedBlock);
+            inProgress.WorkoutExercises.Add(plannedBlock);
             var finished = new Workout
             {
                 UserId = userId,
@@ -250,7 +255,7 @@ public class ExportTests(TwoHostGymNotebookFixture db)
             block.SetEntries.Add(new SetEntry { SetNumber = 1, Weight = 100m, Reps = 5, Status = SetStatus.Done });
             block.SetEntries.Add(new SetEntry { SetNumber = 2, Weight = 100m, Reps = 5, Status = SetStatus.Skipped });
             finished.WorkoutExercises.Add(block);
-            context.Workouts.AddRange(prepared, finished);
+            context.Workouts.AddRange(inProgress, finished);
             var legs = new Template { UserId = userId, Name = "Legs", NormalizedName = "legs" };
             var templateBlock = new TemplateExercise { ExerciseId = squat.Id, Position = 0 };
             templateBlock.Sets.Add(new TemplateSet { SetNumber = 1, Weight = 60m, Reps = 8, IsWarmup = true });
@@ -270,13 +275,8 @@ public class ExportTests(TwoHostGymNotebookFixture db)
         var root = document.RootElement;
         Assert.Equal(2, root.GetProperty("formatVersion").GetInt32());
 
-        // The prepared page (written first, so first by id) has no date, start or end.
-        var preparedRow = root.GetProperty("workouts")[0];
-        Assert.Equal(JsonValueKind.Null, preparedRow.GetProperty("date").ValueKind);
-        Assert.Equal(JsonValueKind.Null, preparedRow.GetProperty("startedAt").ValueKind);
-        Assert.Equal(JsonValueKind.Null, preparedRow.GetProperty("endedAt").ValueKind);
-
-        // Every set carries its status, in the documented order (block, then set number).
+        // Every set carries its status, in the documented order (block, then set number);
+        // the page in progress was written first.
         Assert.Equal(["planned", "done", "skipped"],
             root.GetProperty("sets").EnumerateArray().Select(s => s.GetProperty("status").GetString()));
 

@@ -136,31 +136,21 @@ export default function WorkoutDetail() {
     return <main className="page workout-detail-state">Opening page…</main>
   }
 
-  // A prepared page (specs/006): written ahead and not started, so it has no
-  // date or time. It reads as a plan: "Plan" where the date goes, "Untitled
-  // plan" without a title, and no best figures, since nothing on it has been
-  // lifted. Its sets are all still to do, so none is demoted or tagged for it.
-  const isPlan = workout.startedAt === null
   // No end time means the lifter is still at it, so the page's main action is
-  // getting back into the editor rather than reading. A plan isn't under way.
-  const inProgress = workout.endedAt === null && !isPlan
+  // getting back into the editor rather than reading.
+  const inProgress = workout.endedAt === null
   const timeRange =
-    workout.startedAt === null
-      ? 'not started yet'
-      : workout.endedAt === null
-        ? `from ${formatWorkoutTime(workout.startedAt)}, in progress`
-        : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
+    workout.endedAt === null
+      ? `from ${formatWorkoutTime(workout.startedAt)}, in progress`
+      : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
   const bodyweight =
     workout.bodyweightKg === null
       ? 'bodyweight not logged'
       : `${workout.bodyweightKg.toFixed(1)} kg bodyweight`
   const location = workout.location ?? 'gym not logged'
-  // A plan's bodyweight and gym are filled in once it starts, so a plan's
-  // meta line doesn't list them as missing.
-  const meta =
-    detailsAllowed && !isPlan
-      ? `${timeRange} · ${bodyweight} · ${location}`
-      : timeRange
+  const meta = detailsAllowed
+    ? `${timeRange} · ${bodyweight} · ${location}`
+    : timeRange
 
   return (
     <main className="page workout-detail">
@@ -261,13 +251,10 @@ export default function WorkoutDetail() {
       <div className="workout-detail-content">
         <section className="workout-detail-heading">
           <p className="workout-detail-date num">
-            {workout.date === null
-              ? 'Plan'
-              : formatWorkoutLongDate(workout.date)}
+            {formatWorkoutLongDate(workout.date)}
           </p>
           <h1>
-            {(detailsAllowed ? workout.title : null) ??
-              (isPlan ? 'Untitled plan' : 'Untitled session')}
+            {(detailsAllowed ? workout.title : null) ?? 'Untitled session'}
           </h1>
           <p className="workout-detail-meta num">{meta}</p>
         </section>
@@ -277,9 +264,7 @@ export default function WorkoutDetail() {
         <section className="workout-detail-exercises" aria-label="Exercises">
           {workout.exercises.length === 0 ? (
             <p className="muted workout-detail-empty">
-              {isPlan
-                ? 'No exercises are planned yet.'
-                : 'No exercises were logged on this page.'}
+              No exercises were logged on this page.
             </p>
           ) : (
             workout.exercises.map((exercise) => (
@@ -293,18 +278,16 @@ export default function WorkoutDetail() {
                       </span>
                     )}
                   </div>
-                  {!isPlan && (
-                    <strong className="workout-detail-best num">
-                      {formatBestSet(exercise.isBodyweight, exercise.sets)}
-                    </strong>
-                  )}
+                  <strong className="workout-detail-best num">
+                    {formatBestSet(exercise.isBodyweight, exercise.sets)}
+                  </strong>
                 </div>
 
                 <ol className="workout-detail-sets">
                   {exercise.sets.map((set) => (
                     <li
                       className={
-                        set.isWarmup || (set.status !== 'done' && !isPlan)
+                        set.isWarmup || set.status !== 'done'
                           ? 'is-demoted'
                           : undefined
                       }
@@ -328,9 +311,9 @@ export default function WorkoutDetail() {
                           session is still going. Its status outranks the
                           warm-up tag, since that is what decides whether it
                           happened. */}
-                      {setTag(set, isPlan) !== null && (
+                      {setTag(set) !== null && (
                         <span className="workout-detail-set-tag">
-                          {setTag(set, isPlan)}
+                          {setTag(set)}
                         </span>
                       )}
                     </li>
@@ -368,11 +351,10 @@ export default function WorkoutDetail() {
   )
 }
 
-// The one tag a set row carries, if any. On a plan every set is still to do,
-// so saying so on each row would be noise: only warm-ups are tagged there.
-function setTag(set: SetEntryResponse, isPlan: boolean): string | null {
+// The one tag a set row carries, if any.
+function setTag(set: SetEntryResponse): string | null {
   if (set.status === 'skipped') return 'skipped'
-  if (set.status === 'planned' && !isPlan) return 'to do'
+  if (set.status === 'planned') return 'to do'
   return set.isWarmup ? 'warm-up' : null
 }
 
