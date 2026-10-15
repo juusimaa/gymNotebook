@@ -737,8 +737,10 @@ export function createStartTimes(now: Date): {
 }
 
 // The blocks half of a strict save. Every block needs a name and a set, and
-// every set must be complete; the first that isn't is pointed at.
-function prepareExerciseInputs(
+// every set must be complete; the first that isn't is pointed at. Exported
+// for the template editor's Save (templateDraft.ts), which checks its blocks
+// the same way.
+export function prepareExerciseInputs(
   exerciseDrafts: WorkoutExerciseDraft[],
 ):
   | { ok: true; value: PutWorkoutExercisesRequest['exercises'] }

@@ -20,7 +20,7 @@ export function needsNoticeGate(state: AccountPrivacyState | null): boolean {
 // and the privacy screens are deliberately not here: they stay reachable
 // without acknowledging (contracts/ui.md → Routes and entry points).
 export function isNotebookPath(pathname: string): boolean {
-  return /^\/(workouts|progress|exercises)(\/|$)/.test(pathname)
+  return /^\/(workouts|progress|exercises|templates)(\/|$)/.test(pathname)
 }
 
 export function noticeGateUrl(returnTo: string): string {
