@@ -530,4 +530,46 @@ public class WorkoutTests(GymNotebookFactory factory) : IClassFixture<GymNoteboo
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.False(await db.Workouts.AnyAsync(w => w.Id == workout.Id));
     }
+
+    // Gives a seeded page's sets these statuses, in set-number order (specs/006). The
+    // seed helpers above predate statuses and leave every set done, the column default.
+    private async Task SetStatusesAsync(int workoutId, params SetStatus[] statuses)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sets = await (
+            from se in db.SetEntries
+            join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
+            where we.WorkoutId == workoutId
+            orderby we.Position, se.SetNumber
+            select se).ToListAsync();
+        Assert.Equal(statuses.Length, sets.Count);
+        for (var index = 0; index < sets.Count; index++)
+        {
+            sets[index].Status = statuses[index];
+        }
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task ListWorkouts_SetCounts_SplitDoneAndNotDone()
+    {
+        // Arrange: four sets across two blocks, two of them not lifted.
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var workout = await SeedWorkoutAsync(userId, new DateOnly(2026, 1, 8), new DateTimeOffset(2026, 1, 8, 7, 0, 0, TimeSpan.Zero));
+        var squat = await SeedExerciseAsync(userId, "Back Squat");
+        var bench = await SeedExerciseAsync(userId, "Bench Press");
+        await SeedBlockWithSetsAsync(workout.Id, squat.Id, 0, (1, 5, 100m, false), (2, 5, 100m, false));
+        await SeedBlockWithSetsAsync(workout.Id, bench.Id, 1, (1, 8, 60m, false), (2, 8, 60m, false));
+        await SetStatusesAsync(workout.Id, SetStatus.Done, SetStatus.Skipped, SetStatus.Done, SetStatus.Planned);
+
+        // Act
+        var response = await _client.SendAsync(AuthenticatedRequest(HttpMethod.Get, "/workouts", token));
+        var body = await response.Content.ReadFromJsonAsync<List<WorkoutSummaryResponse>>();
+
+        // Assert
+        var summary = Assert.Single(body!);
+        Assert.Equal(2, summary.SetCount);
+        Assert.Equal(2, summary.NotDoneSetCount);
+    }
 }

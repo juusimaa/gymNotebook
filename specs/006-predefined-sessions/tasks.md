@@ -19,7 +19,7 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 ## Phase 1: Setup
 
 - [x] T001 Spec, plan, research, data model, contracts, quickstart and tasks in `specs/006-predefined-sessions/` (planning PR).
-- [ ] T002 Open the planning PR for `specs/006-predefined-sessions/` after owner approval of the plan (Principle VII); reference issue #165.
+- [x] T002 Open the planning PR for `specs/006-predefined-sessions/` after owner approval of the plan (Principle VII); reference issue #165.
 - [x] T003 **PR 1, UI mock**: with `/impeccable`, update `docs/ui/README.md` (Sessions, Session page, New page, a new Templates section) and `docs/ui/prototype.html` to cover everything in `specs/006-predefined-sessions/contracts/ui.md`:
   - prepared group and Start
   - prepare mode
@@ -37,38 +37,38 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 **Purpose**: The planned/done/skipped status and the "only done counts" rule. US1–US3 all depend on it. The frontend keeps working unchanged, because an omitted status means done.
 
-- [ ] T010 [P] Create `backend/GymNotebook.Api/SetStatus.cs`: enum `SetStatus { Planned, Done, Skipped }`.
-- [ ] T011 [P] Create `backend/GymNotebook.Api/WorkoutState.cs`: enum `WorkoutState { Prepared, InProgress, Finished }` and `static WorkoutState Of(DateTimeOffset? startedAt, DateTimeOffset? endedAt)`: prepared when `startedAt` is null, in progress when `endedAt` is null, otherwise finished. Comment why state is derived rather than stored (research R1).
-- [ ] T012 Create `backend/GymNotebook.Api/SetStatusRules.cs`, the one table from research R3:
+- [x] T010 [P] Create `backend/GymNotebook.Api/SetStatus.cs`: enum `SetStatus { Planned, Done, Skipped }`.
+- [x] T011 [P] Create `backend/GymNotebook.Api/WorkoutState.cs`: enum `WorkoutState { Prepared, InProgress, Finished }` and `static WorkoutState Of(DateTimeOffset? startedAt, DateTimeOffset? endedAt)`: prepared when `startedAt` is null, in progress when `endedAt` is null, otherwise finished. Comment why state is derived rather than stored (research R1).
+- [x] T012 Create `backend/GymNotebook.Api/SetStatusRules.cs`, the one table from research R3:
   - `IsAllowed(WorkoutState, SetStatus)`:
     - prepared → planned
     - in progress → planned, done
     - finished → done, skipped
   - `DefaultFor(WorkoutState)`: planned when prepared, otherwise done.
   - Comment the table.
-- [ ] T013 Add `public SetStatus Status { get; set; } = SetStatus.Done;` to `backend/GymNotebook.Api/SetEntry.cs`.
-- [ ] T014 Configure `Status` in `backend/GymNotebook.Api/Data/AppDbContext.cs`:
+- [x] T013 Add `public SetStatus Status { get; set; } = SetStatus.Done;` to `backend/GymNotebook.Api/SetEntry.cs`.
+- [x] T014 Configure `Status` in `backend/GymNotebook.Api/Data/AppDbContext.cs`:
   - a value converter to the lowercase strings `planned`/`done`/`skipped`
   - column `text not null default 'done'`
   - check constraint `ck_set_entries_status`: `status IN ('planned', 'done', 'skipped')`
-- [ ] T015 Generate migration `AddSetStatus` in `backend/GymNotebook.Api/Migrations/` (`dotnet ef migrations add AddSetStatus`). Review that it only adds the column with its default and the check constraint, then update `AppDbContextModelSnapshot.cs`.
-- [ ] T016 Add `string Status` to `backend/GymNotebook.Api/SetEntryResponse.cs` and `SetWriteResponse`, and map it in `GetWorkoutExercisesAsync` and the set routes in `backend/GymNotebook.Api/Program.cs`.
-- [ ] T017 Add optional `string? Status` to `PutSetInput.cs`, `CreateSetRequest.cs` and `UpdateSetRequest`. In `Program.cs`, parse it, apply `SetStatusRules.DefaultFor` when omitted (a PATCH without it keeps the current status), and return 400 `ErrorResponse("invalid_set_status")` when it is unknown or not allowed for the page's `WorkoutState.Of(...)`. Apply this in:
+- [x] T015 Generate migration `AddSetStatus` in `backend/GymNotebook.Api/Migrations/` (`dotnet ef migrations add AddSetStatus`). Review that it only adds the column with its default and the check constraint, then update `AppDbContextModelSnapshot.cs`.
+- [x] T016 Add `string Status` to `backend/GymNotebook.Api/SetEntryResponse.cs` and `SetWriteResponse`, and map it in `GetWorkoutExercisesAsync` and the set routes in `backend/GymNotebook.Api/Program.cs`.
+- [x] T017 Add optional `string? Status` to `PutSetInput.cs`, `CreateSetRequest.cs` and `UpdateSetRequest`. In `Program.cs`, parse it, apply `SetStatusRules.DefaultFor` when omitted (a PATCH without it keeps the current status), and return 400 `ErrorResponse("invalid_set_status")` when it is unknown or not allowed for the page's `WorkoutState.Of(...)`. Apply this in:
   - `PUT /workouts/{id}/exercises`
   - `POST /workouts/{id}/sets`
   - `PATCH /workouts/{id}/sets/{setId}`
-- [ ] T018 In `PATCH /workouts/{id}` (`Program.cs`), inside the same transaction:
+- [x] T018 In `PATCH /workouts/{id}` (`Program.cs`), inside the same transaction:
   - **finish** (`endedAt` set on an in-progress page): `ExecuteUpdateAsync` every planned set of the page to skipped (FR-010).
   - **reopen** (`endedAt: null` on a finished page): every skipped set back to planned (Q1).
   - Comment both.
-- [ ] T019 Done-only metrics in `Program.cs` (research R4):
+- [x] T019 Done-only metrics in `Program.cs` (research R4):
   - `GET /exercises/{id}/history` filters `setEntry.Status == SetStatus.Done`.
   - `ProjectExerciseResponses` `LastSet` and `FirstSet` filter done.
   - `SessionCount` counts distinct workouts having at least one done set of the exercise.
   - `GET /workouts` `SetCount` counts done sets, and a new `NotDoneSetCount` counts planned plus skipped.
   - Keep each a single projection (no N+1).
-- [ ] T020 Add `int NotDoneSetCount` to `backend/GymNotebook.Api/WorkoutSummaryResponse.cs`. Add `status` to `SetEntryResponse` and `notDoneSetCount` to `WorkoutSummaryResponse` in `frontend/src/api/workouts.ts`, with types only and no behaviour change.
-- [ ] T021 [P] Tests in new `backend/GymNotebook.Tests/SetStatusTests.cs`:
+- [x] T020 Add `int NotDoneSetCount` to `backend/GymNotebook.Api/WorkoutSummaryResponse.cs`. Add `status` to `SetEntryResponse` and `notDoneSetCount` to `WorkoutSummaryResponse` in `frontend/src/api/workouts.ts`, with types only and no behaviour change.
+- [x] T021 [P] Tests in new `backend/GymNotebook.Tests/SetStatusTests.cs`:
   - `Migration_ExistingSets_ReadAsDone`
   - `PutExercises_OmittedStatusOnInProgressPage_SavesDone`
   - `PutExercises_PlannedOnInProgressPage_Saves`
@@ -78,13 +78,13 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
   - `PatchWorkout_Finish_TurnsPlannedIntoSkipped`
   - `PatchWorkout_Reopen_TurnsSkippedIntoPlanned`
   - `PutExercises_InvalidStatus_WritesNothing`
-- [ ] T022 [P] Tests in `backend/GymNotebook.Tests/ExerciseHistoryTests.cs` and `ExerciseTests.cs`:
+- [x] T022 [P] Tests in `backend/GymNotebook.Tests/ExerciseHistoryTests.cs` and `ExerciseTests.cs`:
   - `History_PlannedAndSkippedSets_AreExcluded`
   - `History_AllSkippedPage_AddsNoPoint`
   - `ListExercises_LastSetAndFirstSet_IgnoreNotDoneSets`
   - `ListExercises_SessionCount_CountsOnlyPagesWithDoneSets`
-- [ ] T023 [P] Tests in `backend/GymNotebook.Tests/WorkoutTests.cs`: `ListWorkouts_SetCounts_SplitDoneAndNotDone`.
-- [ ] T024 `PLAN.md`: data model (`SetEntry.status`, with the bullet explaining the three values and that only done counts), REST API (status on set routes, finish and reopen transitions, `notDoneSetCount`), and the progress metric section ("non-warmup **done** sets").
+- [x] T023 [P] Tests in `backend/GymNotebook.Tests/WorkoutTests.cs`: `ListWorkouts_SetCounts_SplitDoneAndNotDone`.
+- [x] T024 `PLAN.md`: data model (`SetEntry.status`, with the bullet explaining the three values and that only done counts), REST API (status on set routes, finish and reopen transitions, `notDoneSetCount`), and the progress metric section ("non-warmup **done** sets").
 
 **Checkpoint**: `dotnet test` green with every pre-existing test unchanged.
 

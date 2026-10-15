@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using GymNotebook.Api;
 using GymNotebook.Api.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GymNotebook.Tests;
@@ -201,5 +202,77 @@ public class ExerciseHistoryTests(GymNotebookFactory factory) : IClassFixture<Gy
         var point = Assert.Single((await filtered.Content.ReadFromJsonAsync<ExerciseHistoryResponse>())!.Points);
         Assert.Equal(new DateOnly(2026, 9, 8), point.Date);
         Assert.Equal(HttpStatusCode.BadRequest, reversed.StatusCode);
+    }
+
+    // Gives a seeded page's sets these statuses, in set-number order (specs/006). The
+    // seed helpers above predate statuses and leave every set done, the column default.
+    private async Task SetStatusesAsync(int workoutId, params SetStatus[] statuses)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var sets = await (
+            from se in db.SetEntries
+            join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
+            where we.WorkoutId == workoutId
+            orderby we.Position, se.SetNumber
+            select se).ToListAsync();
+        Assert.Equal(statuses.Length, sets.Count);
+        for (var index = 0; index < sets.Count; index++)
+        {
+            sets[index].Status = statuses[index];
+        }
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task History_PlannedAndSkippedSets_AreExcluded()
+    {
+        // Arrange: the heavier sets were written down but never lifted.
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var exercise = await SeedExerciseAsync(userId, "Back Squat");
+        var session = await SeedSessionAsync(
+            userId,
+            exercise.Id,
+            new DateOnly(2026, 9, 8),
+            new DateTimeOffset(2026, 9, 8, 7, 0, 0, TimeSpan.Zero),
+            (Reps: 5, Weight: 100m, IsWarmup: false),
+            (Reps: 5, Weight: 140m, IsWarmup: false),
+            (Reps: 5, Weight: 150m, IsWarmup: false));
+        await SetStatusesAsync(session.Id, SetStatus.Done, SetStatus.Skipped, SetStatus.Planned);
+
+        // Act
+        var response = await _client.SendAsync(AuthenticatedGet($"/exercises/{exercise.Id}/history", token));
+
+        // Assert: the point is the one done set.
+        response.EnsureSuccessStatusCode();
+        var point = Assert.Single((await response.Content.ReadFromJsonAsync<ExerciseHistoryResponse>())!.Points);
+        Assert.Equal(100m, point.Weight);
+    }
+
+    [Fact]
+    public async Task History_AllSkippedPage_AddsNoPoint()
+    {
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var exercise = await SeedExerciseAsync(userId, "Back Squat");
+        var lifted = await SeedSessionAsync(
+            userId,
+            exercise.Id,
+            new DateOnly(2026, 9, 8),
+            new DateTimeOffset(2026, 9, 8, 7, 0, 0, TimeSpan.Zero),
+            (Reps: 5, Weight: 100m, IsWarmup: false));
+        var skipped = await SeedSessionAsync(
+            userId,
+            exercise.Id,
+            new DateOnly(2026, 9, 10),
+            new DateTimeOffset(2026, 9, 10, 7, 0, 0, TimeSpan.Zero),
+            (Reps: 5, Weight: 120m, IsWarmup: false),
+            (Reps: 5, Weight: 120m, IsWarmup: false));
+        await SetStatusesAsync(skipped.Id, SetStatus.Skipped, SetStatus.Skipped);
+
+        var response = await _client.SendAsync(AuthenticatedGet($"/exercises/{exercise.Id}/history", token));
+
+        response.EnsureSuccessStatusCode();
+        var point = Assert.Single((await response.Content.ReadFromJsonAsync<ExerciseHistoryResponse>())!.Points);
+        Assert.Equal(lifted.Id, point.WorkoutId);
     }
 }

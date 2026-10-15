@@ -1057,7 +1057,7 @@ exercises.MapGet("/", async (string? search, int? excludeWorkoutId, ClaimsPrinci
 })
    .WithName("SearchExercises")
    .WithSummary("Searches the caller's exercises")
-   .WithDescription("Exercise-index and autocomplete lookup scoped to the authenticated user. Returns every exercise when search is omitted. Each result carries its distinct session count, its last set (the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else) and its first set (that same session's first set, warm-up or not); both are null if the exercise has never been logged. excludeWorkoutId leaves one workout out of both sets, so a page being edited doesn't see its own sets as \"last time\".")
+   .WithDescription("Exercise-index and autocomplete lookup scoped to the authenticated user. Returns every exercise when search is omitted. Only done sets count. Each result carries its distinct session count (pages with at least one done set of it), its last set (the latest session's last non-warm-up set, or its last warm-up set if that session had nothing else) and its first set (that same session's first set, warm-up or not); both are null if the exercise has never been logged. excludeWorkoutId leaves one workout out of both sets, so a page being edited doesn't see its own sets as \"last time\".")
    .Produces<List<ExerciseResponse>>(StatusCodes.Status200OK);
 
 exercises.MapGet("/{id:int}/history", async (int id, DateOnly? from, DateOnly? to, ClaimsPrincipal caller, AppDbContext db, CancellationToken ct) =>
@@ -1090,6 +1090,9 @@ exercises.MapGet("/{id:int}/history", async (int id, DateOnly? from, DateOnly? t
         where block.ExerciseId == exercise.Id
               && workout.UserId == userId
               && !setEntry.IsWarmup
+              // Only lifted sets are progress: a planned or skipped set is a number
+              // somebody wrote down, not one they did (specs/006 research R4).
+              && setEntry.Status == SetStatus.Done
               // An added-weight bodyweight set is a different metric from plain reps;
               // PLAN.md deliberately defers charting that mixed load.
               && (exercise.IsBodyweight ? setEntry.Weight == null : setEntry.Weight != null)
@@ -1149,7 +1152,7 @@ exercises.MapGet("/{id:int}/history", async (int id, DateOnly? from, DateOnly? t
 })
    .WithName("GetExerciseHistory")
    .WithSummary("Gets an exercise's progress history")
-   .WithDescription("Returns the best qualifying working set per workout, oldest first. Loaded exercises use Epley e1RM (with tested singles unchanged); bodyweight exercises use reps and exclude added-weight sets. Optional from/to calendar dates are inclusive.")
+   .WithDescription("Returns the best qualifying done working set per workout, oldest first. Loaded exercises use Epley e1RM (with tested singles unchanged); bodyweight exercises use reps and exclude added-weight sets. Optional from/to calendar dates are inclusive.")
    .Produces<ExerciseHistoryResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status404NotFound);
@@ -1303,6 +1306,8 @@ workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, App
     // row: EF Core translates the nested collections into one SQL statement, so a page of
     // twenty summaries is still one round trip. ExerciseNames needs a subquery because
     // WorkoutExercise has no Exercise navigation property (only the raw ExerciseId).
+    // The set count is split by status: done sets are the session's training, the rest
+    // (planned or skipped) only the plan around it (specs/006 research R4).
     var results = await query
         .OrderByDescending(w => w.Date)
         .ThenByDescending(w => w.StartedAt)
@@ -1314,7 +1319,8 @@ workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, App
             w.EndedAt,
             w.Title,
             w.WorkoutExercises.Count,
-            w.WorkoutExercises.Sum(we => we.SetEntries.Count),
+            w.WorkoutExercises.Sum(we => we.SetEntries.Count(se => se.Status == SetStatus.Done)),
+            w.WorkoutExercises.Sum(we => we.SetEntries.Count(se => se.Status != SetStatus.Done)),
             w.WorkoutExercises
                 .OrderBy(we => we.Position)
                 .Select(we => db.Exercises.Where(e => e.Id == we.ExerciseId).Select(e => e.Name).Single())
@@ -1325,7 +1331,7 @@ workouts.MapGet("/", async (int? limit, int? before, ClaimsPrincipal caller, App
 })
    .WithName("ListWorkouts")
    .WithSummary("Lists the caller's workouts")
-   .WithDescription("Pages newest first (date desc, then started_at desc). `before` is the id of the last workout from the previous page. Each row carries the exercise names (in position order), exercise and set counts and the end time, so the list can render without fetching each workout.")
+   .WithDescription("Pages newest first (date desc, then started_at desc). `before` is the id of the last workout from the previous page. Each row carries the exercise names (in position order), the exercise count, the done set count and the not-done (planned or skipped) set count, and the end time, so the list can render without fetching each workout.")
    .Produces<List<WorkoutSummaryResponse>>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest);
 
@@ -1389,6 +1395,29 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
     var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
     if (revisionError is not null) return revisionError;
 
+    // Finishing or reopening moves the page's sets with it (specs/006 research R3), so
+    // the page never holds a status its new state doesn't allow:
+    // - finish (an end time on an in-progress page): what is still planned wasn't
+    //   lifted, and becomes skipped. It stays on the page so the plan is still visible,
+    //   but no history or count reads it (FR-010).
+    // - reopen (the end time cleared on a finished page): skipped sets become planned
+    //   again, so the reopened session can tick them off (owner, Q1).
+    // Bulk updates rather than loading the sets: nothing else in this request reads
+    // them. Both run in the lifecycle filter's transaction, so they commit or roll back
+    // together with the timestamp change below.
+    var stateBefore = WorkoutStates.Of(workout.StartedAt, workout.EndedAt);
+    var finishing = request.HasEndedAt && request.EndedAt is not null && stateBefore == WorkoutState.InProgress;
+    var reopening = request.HasEndedAt && request.EndedAt is null && stateBefore == WorkoutState.Finished;
+    if (finishing || reopening)
+    {
+        var from = finishing ? SetStatus.Planned : SetStatus.Skipped;
+        var to = finishing ? SetStatus.Skipped : SetStatus.Planned;
+        await db.SetEntries
+            .Where(se => se.Status == from &&
+                db.WorkoutExercises.Any(we => we.Id == se.WorkoutExerciseId && we.WorkoutId == workout.Id))
+            .ExecuteUpdateAsync(s => s.SetProperty(se => se.Status, to), ct);
+    }
+
     if (request.HasDate)
     {
         workout.Date = request.Date!.Value;
@@ -1436,7 +1465,7 @@ workouts.MapPatch("/{id:int}", async (int id, UpdateWorkoutRequest request, Clai
 })
     .WithName("UpdateWorkout")
     .WithSummary("Updates an existing workout")
-    .WithDescription("Modifies only supplied fields. Optional expectedRevision rejects a stale page with 409 page_changed. Explicit null clears nullable fields; date and startedAt cannot be null. With the privacy feature on, setting optional details without consent gets 403 optional_details_consent_required.")
+    .WithDescription("Modifies only supplied fields. Optional expectedRevision rejects a stale page with 409 page_changed. Explicit null clears nullable fields; date and startedAt cannot be null. With the privacy feature on, setting optional details without consent gets 403 optional_details_consent_required. Finishing an in-progress page turns its planned sets into skipped; reopening a finished page turns skipped back into planned.")
     .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
     .Produces(StatusCodes.Status400BadRequest)
     .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
@@ -1485,6 +1514,25 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
         return Results.BadRequest();
     }
 
+    // Every set's status, resolved against the page's state before anything is written
+    // (SetStatusRules): omitted takes the state's default, and one status the state
+    // doesn't allow refuses the whole payload, as a bulk write never half-applies.
+    var pageState = WorkoutStates.Of(workout.StartedAt, workout.EndedAt);
+    var statuses = new List<List<SetStatus>>();
+    foreach (var input in request.Exercises)
+    {
+        var blockStatuses = new List<SetStatus>();
+        foreach (var set in input.Sets ?? [])
+        {
+            if (SetStatusRules.Resolve(pageState, set.Status) is not { } status)
+            {
+                return InvalidSetStatus();
+            }
+            blockStatuses.Add(status);
+        }
+        statuses.Add(blockStatuses);
+    }
+
     var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
     if (revisionError is not null) return revisionError;
 
@@ -1516,7 +1564,7 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
 
     var position = 0;
 
-    foreach (var input in request.Exercises)
+    foreach (var (input, blockStatuses) in request.Exercises.Zip(statuses))
     {
         if (!WorkoutInputValidation.HasExerciseName(input.ExerciseName))
         {
@@ -1538,7 +1586,7 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
 
         var setNumber = 1;
 
-        foreach (var set in input.Sets ?? [])
+        foreach (var (set, status) in (input.Sets ?? []).Zip(blockStatuses))
         {
             // Added through the navigation property rather than with an explicit
             // WorkoutExerciseId: the block has no id yet, and this is the one relationship
@@ -1549,6 +1597,7 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
                 Weight = set.Weight,
                 Reps = set.Reps,
                 IsWarmup = set.IsWarmup,
+                Status = status,
             });
         }
 
@@ -1566,7 +1615,7 @@ workouts.MapPut("/{id:int}/exercises", async (int id, PutWorkoutExercisesRequest
 })
    .WithName("ReplaceWorkoutExercises")
    .WithSummary("Replaces a workout's exercises and sets")
-   .WithDescription("Atomically replaces every exercise block and set. Optional expectedRevision rejects a stale page with 409 page_changed. Exercise names are get-or-create; position and set number come from array order.")
+   .WithDescription("Atomically replaces every exercise block and set. Optional expectedRevision rejects a stale page with 409 page_changed. Exercise names are get-or-create; position and set number come from array order. Each set's optional status defaults by page state (done on a started page); a status the state doesn't allow is 400 invalid_set_status and writes nothing.")
    .Produces<WorkoutDetailResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
    .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
@@ -1590,6 +1639,11 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
     if (!WorkoutInputValidation.HasExerciseName(request.ExerciseName))
     {
         return Results.BadRequest();
+    }
+
+    if (SetStatusRules.Resolve(WorkoutStates.Of(workout.StartedAt, workout.EndedAt), request.Status) is not { } status)
+    {
+        return InvalidSetStatus();
     }
 
     var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
@@ -1617,6 +1671,7 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
         Weight = request.Weight,
         Reps = request.Reps,
         IsWarmup = request.IsWarmup,
+        Status = status,
     };
 
     db.SetEntries.Add(set);
@@ -1628,12 +1683,12 @@ workouts.MapPost("/{id:int}/sets", async (int id, CreateSetRequest request, Clai
     // the new set, not the whole WorkoutDetailResponse — the caller already has the rest
     // of the page and this is an incremental add.
     return Results.Json(
-        new SetWriteResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup, revision),
+        new SetWriteResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup, SetStatusRules.ToText(set.Status), revision),
         statusCode: StatusCodes.Status201Created);
 })
    .WithName("AddWorkoutSet")
    .WithSummary("Appends a set to a workout")
-   .WithDescription("Get-or-creates the exercise and its block, then appends the set. Optional expectedRevision rejects a stale page with 409 page_changed. Returns 201 with the set and new revision; no Location header, since single sets have no GET route.")
+   .WithDescription("Get-or-creates the exercise and its block, then appends the set. Optional expectedRevision rejects a stale page with 409 page_changed. Returns 201 with the set and new revision; no Location header, since single sets have no GET route. Optional status defaults by page state; a status the state doesn't allow is 400 invalid_set_status.")
    .Produces<SetWriteResponse>(StatusCodes.Status201Created)
    .Produces(StatusCodes.Status400BadRequest)
    .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
@@ -1656,6 +1711,19 @@ workouts.MapPatch("/{id:int}/sets/{setId:int}", async (int id, int setId, Update
         return Results.NotFound();
     }
 
+    // Unlike the two creating routes, an omitted status keeps the set's own rather than
+    // taking the state's default (see UpdateSetRequest). A status that is sent must
+    // still fit the page's state.
+    var status = set.Status;
+    if (request.Status is not null)
+    {
+        if (SetStatusRules.Resolve(WorkoutStates.Of(workout.StartedAt, workout.EndedAt), request.Status) is not { } requested)
+        {
+            return InvalidSetStatus();
+        }
+        status = requested;
+    }
+
     var (revision, revisionError) = await BumpWorkoutRevisionAsync(db, workout, userId, request.ExpectedRevision, ct);
     if (revisionError is not null) return revisionError;
 
@@ -1665,15 +1733,17 @@ workouts.MapPatch("/{id:int}/sets/{setId:int}", async (int id, int setId, Update
     set.Weight = request.Weight;
     set.Reps = request.Reps;
     set.IsWarmup = request.IsWarmup;
+    set.Status = status;
 
     await db.SaveChangesAsync(ct);
 
-    return Results.Ok(new SetWriteResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup, revision));
+    return Results.Ok(new SetWriteResponse(set.Id, set.SetNumber, set.Reps, set.Weight, set.IsWarmup, SetStatusRules.ToText(set.Status), revision));
 })
    .WithName("UpdateWorkoutSet")
    .WithSummary("Updates a set")
-   .WithDescription("Replaces the weight, reps and warm-up flag of one set. All three are applied. Optional expectedRevision rejects a stale page with 409 page_changed.")
+   .WithDescription("Replaces the weight, reps and warm-up flag of one set. All three are applied. Optional status changes the set's status (omitted keeps it); a status the page state doesn't allow is 400 invalid_set_status. Optional expectedRevision rejects a stale page with 409 page_changed.")
    .Produces<SetWriteResponse>(StatusCodes.Status200OK)
+   .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
    .Produces<PageChangedResponse>(StatusCodes.Status409Conflict)
    .Produces(StatusCodes.Status404NotFound);
 
@@ -1734,6 +1804,12 @@ app.Run();
 // contracts/api.md: never 401, see FR-009).
 static IResult LinkError(LinkTokenStatus status) => Results.Json(
     new ErrorResponse(status == LinkTokenStatus.Expired ? "expired" : "invalid"),
+    statusCode: StatusCodes.Status400BadRequest);
+
+// 400 {"code":"invalid_set_status"}: a set status that is unknown, or that the page's
+// state doesn't allow (SetStatusRules, specs/006 contracts/api.md).
+static IResult InvalidSetStatus() => Results.Json(
+    new ErrorResponse(SetStatusRules.InvalidSetStatus),
     statusCode: StatusCodes.Status400BadRequest);
 
 // True when a save failed on the named unique index — Postgres's error 23505, which EF
@@ -1819,6 +1895,10 @@ static async Task<(int Revision, IResult? Error)> BumpWorkoutRevisionAsync(
 // excludeWorkoutId (null for none) leaves one workout out of both, which is how the edit
 // page asks for the session before itself. SessionCount still counts every page.
 //
+// All three read done sets only (specs/006 research R4): a planned or skipped set was
+// never lifted, so it isn't "last time", and a page where this exercise holds no done
+// set (a plan, or a session where it was skipped) isn't a session of it.
+//
 // It walks SetEntry -> WorkoutExercise -> Workout by explicit joins because neither of
 // the lower two has a navigation property upward. EF Core folds the correlated subqueries
 // into the outer SELECT, so a full autocomplete list is still one round trip.
@@ -1828,21 +1908,21 @@ static IQueryable<ExerciseResponse> ProjectExerciseResponses(AppDbContext db, IQ
         e.Name,
         e.IsBodyweight,
         db.WorkoutExercises
-            .Where(we => we.ExerciseId == e.Id)
+            .Where(we => we.ExerciseId == e.Id && we.SetEntries.Any(se => se.Status == SetStatus.Done))
             .Select(we => we.WorkoutId)
             .Distinct()
             .Count(),
         (from se in db.SetEntries
          join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
          join w in db.Workouts on we.WorkoutId equals w.Id
-         where we.ExerciseId == e.Id && (excludeWorkoutId == null || w.Id != excludeWorkoutId)
+         where we.ExerciseId == e.Id && se.Status == SetStatus.Done && (excludeWorkoutId == null || w.Id != excludeWorkoutId)
          orderby w.Date descending, w.StartedAt descending, w.Id descending, se.IsWarmup, we.Position descending, se.SetNumber descending
          select new LastSetResponse(se.Weight, se.Reps, se.IsWarmup))
             .FirstOrDefault(),
         (from se in db.SetEntries
          join we in db.WorkoutExercises on se.WorkoutExerciseId equals we.Id
          join w in db.Workouts on we.WorkoutId equals w.Id
-         where we.ExerciseId == e.Id && (excludeWorkoutId == null || w.Id != excludeWorkoutId)
+         where we.ExerciseId == e.Id && se.Status == SetStatus.Done && (excludeWorkoutId == null || w.Id != excludeWorkoutId)
          orderby w.Date descending, w.StartedAt descending, w.Id descending, we.Position, se.SetNumber
          select new LastSetResponse(se.Weight, se.Reps, se.IsWarmup))
             .FirstOrDefault()));
@@ -1866,7 +1946,7 @@ static async Task<List<WorkoutExerciseResponse>> GetWorkoutExercisesAsync(AppDbC
             exercise.IsBodyweight,
             we.SetEntries
                 .OrderBy(se => se.SetNumber)
-                .Select(se => new SetEntryResponse(se.Id, se.SetNumber, se.Reps, se.Weight, se.IsWarmup))
+                .Select(se => new SetEntryResponse(se.Id, se.SetNumber, se.Reps, se.Weight, se.IsWarmup, SetStatusRules.ToText(se.Status)))
                 .ToList()))
         .ToListAsync(ct);
 

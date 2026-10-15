@@ -116,6 +116,12 @@ namespace GymNotebook.Api.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("set_number");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasDefaultValue("done")
+                        .HasColumnName("status");
+
                     b.Property<decimal?>("Weight")
                         .HasPrecision(6, 2)
                         .HasColumnType("numeric(6,2)")
@@ -131,7 +137,10 @@ namespace GymNotebook.Api.Migrations
                     b.HasIndex("WorkoutExerciseId", "SetNumber")
                         .HasDatabaseName("ix_set_entries_workout_exercise_id_set_number");
 
-                    b.ToTable("set_entries", (string)null);
+                    b.ToTable("set_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_set_entries_status", "status IN ('planned', 'done', 'skipped')");
+                        });
                 });
 
             modelBuilder.Entity("GymNotebook.Api.User", b =>

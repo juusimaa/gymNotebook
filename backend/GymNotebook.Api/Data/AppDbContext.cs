@@ -98,6 +98,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(s => new { s.WorkoutExerciseId, s.SetNumber });
+
+            // Stored as the lowercase word (SetStatusRules.ToText), readable in psql and
+            // in the export, and kept to those three words by a check constraint
+            // (specs/006 research R2). The column default makes every set that existed
+            // before statuses a done set, with no data step in the migration (FR-012).
+            //
+            // ValueGeneratedNever undoes what HasDefaultValue implies: EF would otherwise
+            // leave the column out of the INSERT whenever the C# value is the enum's CLR
+            // default, and that is Planned, so a planned set would be saved as done.
+            // The default stays in the schema; EF just always sends the value it has.
+            entity.Property(s => s.Status)
+                .HasConversion(
+                    status => SetStatusRules.ToText(status),
+                    text => SetStatusRules.FromText(text))
+                .HasColumnType("text")
+                .HasDefaultValue(SetStatus.Done)
+                .ValueGeneratedNever();
+            entity.ToTable(t => t.HasCheckConstraint(
+                "ck_set_entries_status",
+                "status IN ('planned', 'done', 'skipped')"));
         });
 
         modelBuilder.Entity<Exercise>(entity =>

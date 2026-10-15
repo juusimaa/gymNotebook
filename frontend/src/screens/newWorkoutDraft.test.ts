@@ -87,6 +87,7 @@ describe('createExistingWorkoutDraft', () => {
                 reps: 5,
                 weight: 10,
                 isWarmup: false,
+                status: 'done',
               },
             ],
           },
