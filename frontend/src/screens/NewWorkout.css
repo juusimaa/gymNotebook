@@ -393,6 +393,74 @@
   cursor: not-allowed;
 }
 
+/* Set status (specs/006, docs/ui/README.md → Editor modes). A page that is
+   logged, in progress or finished, adds a Done column at the row's end:
+   number, weight, reps, Warm-up, ×, Done, so Done sits under the thumb and
+   the × is never last. The Warm-up track narrows to make room. */
+.has-done .new-workout-set,
+.has-done .new-workout-set-columns {
+  grid-template-columns: 20px minmax(0, 1fr) minmax(0, 0.75fr) 66px 44px 44px;
+}
+
+/* Round where Warm-up is a rectangular tag. Not done: a hollow circle that
+   reads "Done". Done: a filled ink disc with a check. Ink, not gold, so it
+   holds in both themes and gold never carries text (README rules 12, 13). */
+.new-workout-set-done {
+  width: var(--hit-target);
+  height: var(--hit-target);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-text);
+  background: none;
+  border: 1px solid var(--color-neutral-700);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 11px;
+}
+
+.new-workout-set-done[aria-pressed='true'] {
+  color: var(--color-bg);
+  background: var(--color-text);
+  border: 2px solid var(--color-text);
+}
+
+/* The set the lifter is up to: a heavier stroke, and "next" under the row. */
+.new-workout-set-done.is-next {
+  border: 2px solid var(--color-accent-700);
+}
+
+/* A not-done row's fields are dashed: written in, not yet lifted. A
+   skipped set's toggle on a finished page is dashed too. */
+.new-workout-set.is-not-done .input {
+  border-style: dashed;
+}
+
+/* Darker than the hairline so the dashes read, but never over the focus or
+   error colour. */
+.new-workout-set.is-not-done
+  .input:not(:focus-visible):not([aria-invalid='true']) {
+  border-color: var(--color-neutral-600);
+}
+
+.new-workout-set-done.is-skipped {
+  border-style: dashed;
+}
+
+/* "next" or "skipped" under the row, aligned with the weight field. */
+.new-workout-set-note {
+  margin: 2px 0 0 26px;
+  color: var(--color-neutral-700);
+  font-size: 12px;
+}
+
+.new-workout-set-note.is-next {
+  color: var(--color-accent-700);
+  font-weight: 600;
+}
+
 /* The block's next action, and the editor's most-tapped control: a full-width
    row like a blank line waiting to be written on, not a small text link in
    the corner. 48px tall, a little above the 44px floor, because it is hit
@@ -625,6 +693,15 @@
   .new-workout-set-columns {
     grid-template-columns: 20px minmax(0, 1fr) 58px 66px 46px;
     gap: 4px;
+  }
+
+  .has-done .new-workout-set,
+  .has-done .new-workout-set-columns {
+    grid-template-columns: 18px minmax(0, 1fr) minmax(0, 0.75fr) 62px 44px 44px;
+  }
+
+  .has-done .new-workout-set .input {
+    padding-inline: 4px;
   }
 
   .new-workout-set-kind {

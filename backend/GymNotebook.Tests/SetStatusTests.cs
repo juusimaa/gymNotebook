@@ -292,4 +292,73 @@ public class SetStatusTests(GymNotebookFactory factory) : IClassFixture<GymNoteb
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal([SetStatus.Done, SetStatus.Planned], await ReadStatusesAsync(workout.Id));
     }
+
+    // US3 (research R3): a done set's figures can be corrected and it stays done. The
+    // editor resends the whole page with each set's status, so the changed values arrive
+    // together with "done".
+    [Fact]
+    public async Task PutExercises_ChangedValuesOnDoneSet_KeepsDone()
+    {
+        // Arrange
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var workout = await SeedWorkoutAsync(userId);
+        await SeedSetsAsync(userId, workout.Id, SetStatus.Done);
+
+        // Act
+        var response = await SendAsync(HttpMethod.Put, $"/workouts/{workout.Id}/exercises", token,
+            new PutWorkoutExercisesRequest([
+                new PutWorkoutExerciseInput("Back Squat", [new PutSetInput(102.5m, 4, false, "done")]),
+            ]));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var set = Assert.Single(Assert.Single((await response.Content.ReadFromJsonAsync<WorkoutDetailResponse>())!.Exercises).Sets);
+        Assert.Equal(102.5m, set.Weight);
+        Assert.Equal(4, set.Reps);
+        Assert.Equal("done", set.Status);
+        Assert.Equal([SetStatus.Done], await ReadStatusesAsync(workout.Id));
+    }
+
+    // FR-010a: a forgotten tap is fixed after the session, on the finished page.
+    [Fact]
+    public async Task PutExercises_SkippedToDoneOnFinishedPage_Saves()
+    {
+        // Arrange
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var workout = await SeedWorkoutAsync(userId, endedAt: new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.Zero));
+        await SeedSetsAsync(userId, workout.Id, SetStatus.Done, SetStatus.Skipped);
+
+        // Act
+        var response = await SendAsync(HttpMethod.Put, $"/workouts/{workout.Id}/exercises", token,
+            new PutWorkoutExercisesRequest([
+                new PutWorkoutExerciseInput("Back Squat", [
+                    new PutSetInput(100m, 5, false, "done"),
+                    new PutSetInput(100m, 5, false, "done"),
+                ]),
+            ]));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal([SetStatus.Done, SetStatus.Done], await ReadStatusesAsync(workout.Id));
+    }
+
+    // A skipped set can be removed like any row: the page is saved without it.
+    [Fact]
+    public async Task PutExercises_RemoveSkippedSetOnFinishedPage_Saves()
+    {
+        // Arrange
+        var (token, userId) = await RegisterAndGetUserAsync();
+        var workout = await SeedWorkoutAsync(userId, endedAt: new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.Zero));
+        await SeedSetsAsync(userId, workout.Id, SetStatus.Done, SetStatus.Skipped);
+
+        // Act
+        var response = await SendAsync(HttpMethod.Put, $"/workouts/{workout.Id}/exercises", token,
+            new PutWorkoutExercisesRequest([
+                new PutWorkoutExerciseInput("Back Squat", [new PutSetInput(100m, 5, false, "done")]),
+            ]));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal([SetStatus.Done], await ReadStatusesAsync(workout.Id));
+    }
 }

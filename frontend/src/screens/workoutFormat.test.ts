@@ -5,6 +5,7 @@ import {
   formatInstantDate,
   formatWorkoutDate,
   formatWorkoutLongDate,
+  formatSetCounts,
   formatSetLoad,
   formatWorkoutTime,
   formatWorkoutTimeRange,
@@ -140,5 +141,64 @@ describe('formatBestSet', () => {
         { weight: 10, reps: 5, isWarmup: false },
       ]),
     ).toBe('best 8 reps')
+  })
+
+  // specs/006: only done sets count, as on the progress chart.
+  it('ignores planned and skipped sets', () => {
+    // Arrange
+    const sets = [
+      { weight: 140, reps: 5, isWarmup: false, status: 'skipped' as const },
+      { weight: 130, reps: 5, isWarmup: false, status: 'planned' as const },
+      { weight: 90, reps: 3, isWarmup: false, status: 'done' as const },
+    ]
+
+    // Act
+    const best = formatBestSet(false, sets)
+
+    // Assert
+    expect(best).toBe('e1RM 99 kg')
+  })
+
+  it('says so when no set is done yet', () => {
+    // Arrange
+    const sets = [
+      { weight: 100, reps: 5, isWarmup: false, status: 'planned' as const },
+      { weight: 60, reps: 8, isWarmup: true, status: 'skipped' as const },
+    ]
+
+    // Act
+    const best = formatBestSet(false, sets)
+
+    // Assert
+    expect(best).toBe('no sets done')
+  })
+
+  it('reads warm-ups only when only warm-ups are done', () => {
+    // Arrange
+    const sets = [
+      { weight: 60, reps: 8, isWarmup: true, status: 'done' as const },
+      { weight: 100, reps: 5, isWarmup: false, status: 'skipped' as const },
+    ]
+
+    // Act
+    const best = formatBestSet(false, sets)
+
+    // Assert
+    expect(best).toBe('warm-ups only')
+  })
+})
+
+describe('formatSetCounts', () => {
+  it('reads as before when every set is done', () => {
+    expect(formatSetCounts(9, 0, false)).toBe('9 sets')
+    expect(formatSetCounts(1, 0, true)).toBe('1 set')
+  })
+
+  it('adds the skipped sets on a finished page', () => {
+    expect(formatSetCounts(9, 2, false)).toBe('9 sets · 2 skipped')
+  })
+
+  it('says how far along a page in progress is', () => {
+    expect(formatSetCounts(4, 5, true)).toBe('4 of 9 done')
   })
 })

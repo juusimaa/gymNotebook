@@ -292,6 +292,58 @@ describe('parseStoredEditorDraft', () => {
     ).toBeNull()
   })
 
+  // specs/006: a copy stored before sets had a status survives the deploy,
+  // and its sets were all lifted, so they read as done.
+  it('reads a stored set without a status as done', () => {
+    // Arrange
+    const block = sampleContent().exercises[0]
+    const legacySets = block.sets.map((set) => {
+      const legacy: Record<string, unknown> = { ...set }
+      delete legacy.status
+      return legacy
+    })
+
+    // Act
+    const parsed = parseStoredEditorDraft(
+      storedWith({ exercises: [{ ...block, sets: legacySets }] }),
+    )
+
+    // Assert
+    expect(parsed?.exercises[0].sets.map((set) => set.status)).toEqual([
+      'done',
+      'done',
+    ])
+  })
+
+  it('keeps a stored planned or skipped status', () => {
+    // Arrange
+    const block = sampleContent().exercises[0]
+    const sets = [
+      { ...block.sets[0], status: 'planned' },
+      { ...block.sets[1], status: 'skipped' },
+    ]
+
+    // Act
+    const parsed = parseStoredEditorDraft(
+      storedWith({ exercises: [{ ...block, sets }] }),
+    )
+
+    // Assert
+    expect(parsed?.exercises[0].sets.map((set) => set.status)).toEqual([
+      'planned',
+      'skipped',
+    ])
+  })
+
+  it('rejects a set with an unknown status', () => {
+    const block = sampleContent().exercises[0]
+    const sets = [{ ...block.sets[0], status: 'maybe' }]
+
+    expect(
+      parseStoredEditorDraft(storedWith({ exercises: [{ ...block, sets }] })),
+    ).toBeNull()
+  })
+
   it('rejects a heading with a missing field', () => {
     const heading: Record<string, unknown> = { ...sampleContent().heading }
     delete heading.notes
@@ -425,6 +477,25 @@ describe('draftFingerprint', () => {
           sets: content.exercises[0].sets.map((set) => ({
             ...set,
             reps: '6',
+          })),
+        },
+      ],
+    }
+
+    expect(draftFingerprint(changed)).not.toBe(draftFingerprint(content))
+  })
+
+  // A Done tap is a change: the stored copy and Cancel's question see it.
+  it('changes when a set status changes', () => {
+    const content = sampleContent()
+    const changed: EditorDraftContent = {
+      ...content,
+      exercises: [
+        {
+          ...content.exercises[0],
+          sets: content.exercises[0].sets.map((set) => ({
+            ...set,
+            status: 'planned' as const,
           })),
         },
       ],

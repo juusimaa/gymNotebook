@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import { useRouteNotice } from './routeNotice'
 import {
   formatCount,
+  formatSetCounts,
   formatWorkoutDate,
   formatWorkoutTime,
   formatWorkoutTimeRange,
@@ -205,7 +206,12 @@ export default function Sessions() {
 
                   <p className="session-meta num">
                     {formatCount(workout.exerciseCount, 'exercise')} ·{' '}
-                    {formatCount(workout.setCount, 'set')} · {timeRange}
+                    {formatSetCounts(
+                      workout.setCount,
+                      workout.notDoneSetCount,
+                      inProgress,
+                    )}{' '}
+                    · {timeRange}
                   </p>
                 </div>
               </Link>

@@ -37,9 +37,13 @@ interface DraftContent {
   exercises: WorkoutExerciseDraft[]
 }
 
+// What decides when a save goes: any change waits for the debounce, but a set
+// row that became complete, or a set marked done (specs/006: one tap at the
+// rack, saved at once), goes immediately.
 interface AutosaveTrigger {
   fingerprint: string
   setCount: number
+  doneCount: number
 }
 
 export function autosaveTrigger(
@@ -51,8 +55,17 @@ export function autosaveTrigger(
     ? {
         fingerprint: JSON.stringify(prepared.value),
         setCount: prepared.setCount,
+        doneCount: prepared.value.exercises.exercises.reduce(
+          (total, exercise) =>
+            total + exercise.sets.filter((set) => set.status === 'done').length,
+          0,
+        ),
       }
-    : { fingerprint: `invalid: ${prepared.message}`, setCount: 0 }
+    : {
+        fingerprint: `invalid: ${prepared.message}`,
+        setCount: 0,
+        doneCount: 0,
+      }
 }
 
 // A save gives newly created exercises server ids by block client id.
@@ -111,7 +124,11 @@ export function useWorkoutAutosave({
   onPageProblem,
   dropWithdrawnDetails,
 }: AutosaveOptions) {
-  const lastTrigger = useRef<AutosaveTrigger>({ fingerprint: '', setCount: 0 })
+  const lastTrigger = useRef<AutosaveTrigger>({
+    fingerprint: '',
+    setCount: 0,
+    doneCount: 0,
+  })
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: 'idle' })
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [autosaveProblem, setAutosaveProblem] = useState<string | null>(null)
@@ -234,7 +251,11 @@ export function useWorkoutAutosave({
     const previous = lastTrigger.current
     if (trigger.fingerprint === previous.fingerprint) return
     lastTrigger.current = trigger
-    scheduler.edit({ immediate: trigger.setCount > previous.setCount })
+    scheduler.edit({
+      immediate:
+        trigger.setCount > previous.setCount ||
+        trigger.doneCount > previous.doneCount,
+    })
   }, [autosaves, scheduler, trigger])
 
   const incompleteSet = autosaves ? findIncompleteSet(content.exercises) : null
