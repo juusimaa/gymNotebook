@@ -1718,6 +1718,599 @@ document.addEventListener('DOMContentLoaded', async function() {
           <p role="status" style="margin:-4px 0 0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)">Saved 07.42</p>`
     );
 
+    // Predefined sessions and templates (specs/006 contracts/ui.md, T003).
+    // Prepared pages, the editor's four modes (prepare, in progress, finished
+    // edit, template), done/next/skipped sets and the template screens. All of
+    // it is sample data in memory; nothing is saved. Same anchor discipline as
+    // the patches above: fail visibly if the bundled source moves. This code
+    // sits inside template literals, so it avoids backticks, dollar-brace and
+    // backslashes.
+    const replaceSessionsAnchor = (anchor, replacement, all) => {
+      if (!template.includes(anchor)) throw new Error('Sessions prototype anchor missing: ' + anchor.slice(0, 90));
+      template = all ? template.split(anchor).join(replacement) : template.replace(anchor, replacement);
+    };
+
+    // Sample data: a finished page with skipped sets (so the session page and
+    // the finished editor have something to show) and a planned set on the
+    // page in progress.
+    replaceSessionsAnchor(
+      '  { id: 1, date: [2026,9,8], time: "18.20"',
+      `  { id: 7, date: [2026,9,9], time: "07.10", end: "08.05", title: "Push day", bw: 78.3, loc: "Liikuntamylly",
+    notes: "Ran out of time, so the last bench set and the dips never happened.",
+    blocks: [
+      { name: "Bench Press", sets: [[40,8,true],[60,5,false],[65,5,false],[65,5,false,"skipped"]] },
+      { name: "Dip", bodyweight: true, sets: [[null,10,false],[null,8,false,"skipped"]] }
+    ] },
+  { id: 1, date: [2026,9,8], time: "18.20"`
+    );
+    replaceSessionsAnchor(
+      '{ name: "Overhead Press", sets: [[20,8,true],[35,6,false]] }',
+      '{ name: "Overhead Press", sets: [[20,8,true],[35,6,false],[35,6,false,"planned"]] }'
+    );
+
+    // State: the editor's mode, the prepared pages and the templates.
+    replaceSessionsAnchor(
+      '    detailsCleared: 0,\n    draft: [',
+      `    detailsCleared: 0,
+    editorMode: "progress",
+    planId: null,
+    planTitle: "",
+    plans: [
+      { id: 2, title: "Push A", blocks: [
+        { name: "Bench Press", sets: [{ weight: "40", reps: "8", warmup: true }, { weight: "60", reps: "5", warmup: false }, { weight: "65", reps: "5", warmup: false }, { weight: "65", reps: "5", warmup: false }] },
+        { name: "Overhead Press", sets: [{ weight: "35", reps: "6", warmup: false }, { weight: "35", reps: "6", warmup: false }, { weight: "35", reps: "6", warmup: false }] }
+      ] },
+      { id: 1, title: "", blocks: [
+        { name: "Back Squat", sets: [{ weight: "80", reps: "5", warmup: false }, { weight: "80", reps: "5", warmup: false }, { weight: "80", reps: "5", warmup: false }] }
+      ] }
+    ],
+    templates: [
+      { id: 1, name: "Legs B", blocks: [
+        { name: "Back Squat", sets: [{ weight: "60", reps: "5", warmup: true }, { weight: "80", reps: "5", warmup: false }, { weight: "90", reps: "3", warmup: false }, { weight: "90", reps: "3", warmup: false }] },
+        { name: "Romanian Deadlift", sets: [{ weight: "70", reps: "8", warmup: false }, { weight: "70", reps: "8", warmup: false }, { weight: "70", reps: "8", warmup: false }] }
+      ] },
+      { id: 2, name: "Pull A", blocks: [
+        { name: "Deadlift", sets: [{ weight: "80", reps: "5", warmup: true }, { weight: "110", reps: "3", warmup: false }, { weight: "120", reps: "3", warmup: false }] },
+        { name: "Barbell Row", sets: [{ weight: "50", reps: "8", warmup: false }, { weight: "55", reps: "8", warmup: false }] },
+        { name: "Pull-up", sets: [{ weight: "", reps: "8", warmup: false }, { weight: "", reps: "8", warmup: false }] }
+      ] },
+      { id: 3, name: "Push A", blocks: [
+        { name: "Bench Press", sets: [{ weight: "40", reps: "8", warmup: true }, { weight: "60", reps: "5", warmup: false }, { weight: "65", reps: "5", warmup: false }, { weight: "65", reps: "5", warmup: false }] },
+        { name: "Overhead Press", sets: [{ weight: "35", reps: "6", warmup: false }, { weight: "35", reps: "6", warmup: false }, { weight: "35", reps: "6", warmup: false }] },
+        { name: "Dip", sets: [{ weight: "", reps: "10", warmup: false }, { weight: "", reps: "8", warmup: false }] }
+      ] }
+    ],
+    notice: "",
+    chooser: false,
+    tplId: null,
+    tplName: "",
+    tplNameError: "",
+    tplDeleteAsk: false,
+    saveTplOpen: false,
+    saveTplFrom: "page",
+    saveTplName: "",
+    saveTplError: "",
+    saveTplDone: "",
+    draft: [`
+    );
+    // The sample draft is a page in progress that started from a plan: two
+    // sets done, the rest still to do.
+    replaceSessionsAnchor(
+      `{ name: "Back Squat", sets: [{ weight: "60", reps: "5", warmup: true }, { weight: "80", reps: "5", warmup: false }, { weight: "90", reps: "3", warmup: false }] },
+      { name: "Romanian Deadlift", sets: [{ weight: "70", reps: "8", warmup: false }] }`,
+      `{ name: "Back Squat", sets: [{ weight: "60", reps: "5", warmup: true, done: true }, { weight: "80", reps: "5", warmup: false, done: true }, { weight: "90", reps: "3", warmup: false, done: false }] },
+      { name: "Romanian Deadlift", sets: [{ weight: "70", reps: "8", warmup: false, done: false }, { weight: "70", reps: "8", warmup: false, done: false }] }`
+    );
+    // Navigating away drops any open band or arrival notice.
+    replaceSessionsAnchor(
+      '  go = (screen) => (e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ screen }); };',
+      '  go = (screen) => (e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ screen, chooser: false, notice: "", saveTplOpen: false, saveTplDone: "", saveTplError: "", tplDeleteAsk: false }); };'
+    );
+    // New rows start done (research R14), even after a planned row.
+    replaceSessionsAnchor(
+      '{ ...b.sets[b.sets.length - 1], warmup: false }',
+      '{ ...b.sets[b.sets.length - 1], warmup: false, done: true }'
+    );
+
+    // Sessions: sets count only when done; a skipped count follows.
+    replaceSessionsAnchor(
+      'const setCount = w.blocks.reduce((n, b) => n + b.sets.length, 0);',
+      'const setCount = w.blocks.reduce((n, b) => n + b.sets.filter((s) => !s[3]).length, 0);\n      const skipN = w.blocks.reduce((n, b) => n + b.sets.filter((s) => s[3] === "skipped").length, 0);'
+    );
+    replaceSessionsAnchor(
+      '${setCount} sets · ',
+      '${setCount} sets${skipN ? " · " + skipN + " skipped" : ""} · '
+    );
+    replaceSessionsAnchor('continueLog: this.go("new"),', 'continueLog: this.openPage(w, "progress"),');
+    // The session page: planned and skipped sets are demoted and never count.
+    replaceSessionsAnchor(
+      'const work = b.sets.filter((s) => !s[2]);',
+      'const work = b.sets.filter((s) => !s[2] && !s[3]);'
+    );
+    replaceSessionsAnchor(
+      '            tag: s[2] ? "warm-up" : "",\n            ink: s[2] ? "var(--color-neutral-700)" : "var(--color-text)"',
+      '            tag: s[3] === "skipped" ? "skipped" : s[3] === "planned" ? "to do" : s[2] ? "warm-up" : "",\n            ink: s[2] || s[3] ? "var(--color-neutral-700)" : "var(--color-text)"'
+    );
+
+    // A finished page being corrected shows no "last time" (its last time could
+    // be a later session), as in the app.
+    replaceSessionsAnchor(
+      'hasLast: !!(EXERCISES.find((x) => x.name === b.name) || {}).last,',
+      'hasLast: this.state.editorMode !== "finished" && !!(EXERCISES.find((x) => x.name === b.name) || {}).last,'
+    );
+
+    // Methods and values for the new flows.
+    replaceSessionsAnchor(
+      '  renderVals() {\n    const screen =',
+      `  // ── Predefined sessions (specs/006) ──
+  enter = (mode, draft, extra) => this.setState({
+    screen: "new", editorMode: mode, draft, removed: null, headingOpen: false, confirmDiscard: false, confirmFinish: false,
+    chooser: false, notice: "", saveTplOpen: false, saveTplDone: "", saveTplError: "", tplDeleteAsk: false, ...extra
+  });
+  clone = (blocks) => blocks.map((b) => ({ name: b.name, sets: b.sets.map((x) => ({ weight: x.weight, reps: x.reps, warmup: x.warmup })) }));
+  draftFromPage = (w) => w.blocks.map((b) => ({ name: b.name, sets: b.sets.map((s) => ({
+    weight: s[0] == null ? "" : String(s[0]), reps: String(s[1]), warmup: !!s[2], done: !(s[3] === "skipped" || s[3] === "planned")
+  })) }));
+  openPage = (w, mode) => (e) => { if (e && e.preventDefault) e.preventDefault(); this.enter(mode, this.draftFromPage(w), {}); };
+  startBlank = (e) => {
+    if (e) e.preventDefault();
+    this.enter("progress", [
+      { name: "Back Squat", sets: [{ weight: "60", reps: "5", warmup: true }, { weight: "80", reps: "5", warmup: false }, { weight: "90", reps: "3", warmup: false }] },
+      { name: "Romanian Deadlift", sets: [{ weight: "70", reps: "8", warmup: false }] }
+    ], {});
+  };
+  continueCurrent = (e) => this.openPage(DATA.find((x) => x.id === this.state.pageId) || DATA[0], "progress")(e);
+  editCurrent = (e) => this.openPage(DATA.find((x) => x.id === this.state.pageId) || DATA[0], "finished")(e);
+  openChooser = (e) => { if (e) e.preventDefault(); this.setState({ chooser: true }); };
+  closeChooser = (e) => { if (e) e.preventDefault(); this.setState({ chooser: false }); };
+  prepareFrom = (tpl) => (e) => {
+    if (e) e.preventDefault();
+    this.enter("prepare", tpl ? this.clone(tpl.blocks) : [], { planId: null, planTitle: tpl ? tpl.name : "" });
+  };
+  openPlan = (p) => (e) => { if (e) e.preventDefault(); this.enter("prepare", this.clone(p.blocks), { planId: p.id, planTitle: p.title }); };
+  startPlan = (p) => (e) => {
+    if (e) e.preventDefault();
+    this.enter("progress", this.clone(p.blocks).map((b) => ({ ...b, sets: b.sets.map((x) => ({ ...x, done: false })) })), {});
+    this.setState((s) => ({ plans: s.plans.filter((x) => x.id !== p.id) }));
+  };
+  savePlan = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => {
+      const plan = { id: s.planId || Math.max(0, ...s.plans.map((x) => x.id)) + 1, title: s.planTitle, blocks: this.clone(s.draft) };
+      const plans = s.planId ? s.plans.map((x) => x.id === s.planId ? plan : x) : [plan, ...s.plans];
+      return { plans, screen: "history", notice: "Plan saved." };
+    });
+  };
+  startSession = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({
+      editorMode: "progress", headingOpen: false,
+      plans: s.planId ? s.plans.filter((x) => x.id !== s.planId) : s.plans,
+      draft: s.draft.map((b) => ({ ...b, sets: b.sets.map((x) => ({ ...x, done: false })) }))
+    }));
+  };
+  toggleDone = (bi, si) => () => this.setState((s) => ({
+    draft: s.draft.map((b, i) => i !== bi ? b : { ...b, sets: b.sets.map((x, j) => j !== si ? x : { ...x, done: x.done === false }) })
+  }));
+  firstNotDone = () => {
+    const d = this.state.draft;
+    for (let i = 0; i < d.length; i++) for (let j = 0; j < d[i].sets.length; j++) if (d[i].sets[j].done === false) return i + "-" + j;
+    return "";
+  };
+  setStatusValues = (bi, si, s) => {
+    const mode = this.state.editorMode;
+    const done = s.done !== false;
+    const next = mode === "progress" && !done && this.firstNotDone() === bi + "-" + si;
+    const note = done || mode === "prepare" || mode === "template" ? "" : next ? "next" : mode === "finished" ? "skipped" : "";
+    const base = "width:44px;height:44px;padding:0;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:11px;";
+    return {
+      isDone: done, isNotDone: !done, donePressed: String(done), hasNote: !!note, note,
+      doneStyle: base + (done
+        ? "background:var(--color-text);color:var(--color-bg);border:2px solid var(--color-text)"
+        : "background:none;color:var(--color-text);border:" + (next ? "2px solid var(--color-accent-700)" : mode === "finished" ? "1px dashed var(--color-neutral-700)" : "1px solid var(--color-neutral-700)")),
+      noteStyle: "margin:3px 0 0 24px;font-size:12px;" + (next ? "color:var(--color-accent-700);font-weight:600" : "color:var(--color-neutral-700)"),
+      inputExtra: !done ? "border:1px dashed var(--color-neutral-600)" : "",
+      toggleDone: this.toggleDone(bi, si)
+    };
+  };
+  // Save as template: from the session page or the prepared page's editor.
+  openSaveTpl = (from) => (e) => {
+    if (e) e.preventDefault();
+    const w = DATA.find((x) => x.id === this.state.pageId) || DATA[0];
+    this.setState({ saveTplOpen: true, saveTplFrom: from, saveTplName: from === "page" ? w.title : this.state.planTitle, saveTplError: "", saveTplDone: "" });
+  };
+  setSaveTplName = (e) => this.setState({ saveTplName: e.target.value, saveTplError: "" });
+  closeSaveTpl = (e) => { if (e) e.preventDefault(); this.setState({ saveTplOpen: false, saveTplDone: "", saveTplError: "" }); };
+  takenName = (name, exceptId) => this.state.templates.find((t) => t.id !== exceptId && norm(t.name) === norm(name));
+  confirmSaveTpl = (e) => {
+    if (e) e.preventDefault();
+    const s = this.state, name = s.saveTplName.trim();
+    if (!name) { this.setState({ saveTplError: "Name the template." }); return; }
+    const taken = this.takenName(name, null);
+    if (taken) { this.setState({ saveTplError: "You already have a template called " + taken.name + "." }); return; }
+    const w = DATA.find((x) => x.id === s.pageId) || DATA[0];
+    const blocks = s.saveTplFrom === "page" ? this.clone(this.draftFromPage(w)) : this.clone(s.draft);
+    this.setState({
+      templates: [...s.templates, { id: Math.max(0, ...s.templates.map((t) => t.id)) + 1, name, blocks }],
+      saveTplDone: "Saved as template " + name + "."
+    });
+  };
+  // Template editor.
+  openTemplate = (t) => (e) => { if (e) e.preventDefault(); this.enter("template", this.clone(t.blocks), { tplId: t.id, tplName: t.name, tplNameError: "" }); };
+  newTemplate = (e) => { if (e) e.preventDefault(); this.enter("template", [], { tplId: null, tplName: "", tplNameError: "" }); };
+  setTplName = (e) => this.setState({ tplName: e.target.value, tplNameError: "" });
+  saveTemplate = (e) => {
+    if (e) e.preventDefault();
+    const s = this.state, name = s.tplName.trim();
+    if (!name) { this.setState({ tplNameError: "Name the template." }); return; }
+    const taken = this.takenName(name, s.tplId);
+    if (taken) { this.setState({ tplNameError: "You already have a template called " + taken.name + "." }); return; }
+    const t = { id: s.tplId || Math.max(0, ...s.templates.map((x) => x.id)) + 1, name, blocks: this.clone(s.draft) };
+    this.setState({
+      templates: s.tplId ? s.templates.map((x) => x.id === s.tplId ? t : x) : [...s.templates, t],
+      screen: "templates", notice: "Template saved."
+    });
+  };
+  prepareFromEditor = (e) => {
+    if (e) e.preventDefault();
+    this.enter("prepare", this.clone(this.state.draft), { planId: null, planTitle: this.state.tplName });
+  };
+  askDeleteTpl = (e) => { if (e) e.preventDefault(); this.setState({ tplDeleteAsk: true }); };
+  cancelDeleteTpl = (e) => { if (e) e.preventDefault(); this.setState({ tplDeleteAsk: false }); };
+  deleteTpl = (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({ templates: s.templates.filter((t) => t.id !== s.tplId), tplDeleteAsk: false, screen: "templates", notice: "Template deleted. Sessions made from it stay." }));
+  };
+  sessionValues() {
+    const s = this.state, mode = s.editorMode;
+    const isProg = mode === "progress", isPrep = mode === "prepare", isFin = mode === "finished", isTpl = mode === "template";
+    const setN = (blocks) => blocks.reduce((n, b) => n + b.sets.length, 0);
+    const exN = (blocks) => blocks.length + (blocks.length === 1 ? " exercise" : " exercises");
+    const notDone = s.draft.reduce((n, b) => n + b.sets.filter((x) => x.done === false).length, 0);
+    const showDone = isProg || isFin;
+    const sortedTpls = s.templates.slice().sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      isTemplates: s.screen === "templates",
+      isProgMode: isProg, isPrep, isFinMode: isFin, isTpl, showDone,
+      cols: showDone ? "18px 1fr 1fr 62px 44px 44px" : "26px 1fr 1fr 80px 48px",
+      gap: showDone ? "6px" : "8px",
+      editorTitle: isPrep ? "Plan a session" : isTpl ? (s.tplId ? "Template" : "New template") : isFin ? "Edit page" : "New page",
+      datelineText: isPrep ? "Plan" : isFin ? "9 Sep 07.10–08.05" : "Today 07.15",
+      datelineDisplay: isTpl ? "none" : "flex",
+      dateFieldsDisplay: isPrep ? "none" : "grid",
+      bwGymDisplay: isPrep ? "none" : "grid",
+      showSaved: isProg,
+      headingOpen: !!s.headingOpen && !isTpl,
+      // The header's old "Save" predates autosave (specs/003): a page in
+      // progress saves itself and a finished page has Save changes in its
+      // footer, so the only header action left is a template's Delete.
+      hasHeaderAction: isTpl && !!s.tplId,
+      noHeaderAction: !(isTpl && !!s.tplId),
+      headerLabel: "Delete",
+      headerAction: this.askDeleteTpl,
+      discardQuestion: isTpl ? "Discard your changes to this template?" : isPrep ? "Discard this plan and its " + setN(s.draft) + " sets?" : "Discard this page and its " + setN(s.draft) + " sets?",
+      discard: (e) => { if (e) e.preventDefault(); this.setState({ confirmDiscard: false, screen: isTpl ? "templates" : "history" }); },
+      finishQuestion: notDone
+        ? notDone + " planned " + (notDone === 1 ? "set" : "sets") + " will be kept as skipped. The current time will be saved."
+        : "Finish this session now? The current time will be saved.",
+      finish: (e) => { if (e) e.preventDefault(); this.setState({ confirmFinish: false, screen: "history", notice: "Session finished and saved." }); },
+      savePlan: this.savePlan, startSession: this.startSession, saveTemplate: this.saveTemplate, prepareFromEditor: this.prepareFromEditor,
+      saveChanges: (e) => { if (e) e.preventDefault(); this.setState({ screen: "detail" }); },
+      // Template name
+      tplName: s.tplName, setTplName: this.setTplName, tplNameError: s.tplNameError,
+      tplNameInvalid: String(!!s.tplNameError),
+      tplNameStyle: s.tplNameError ? "border:2px solid var(--color-error)" : "",
+      askDeleteTpl: this.askDeleteTpl, cancelDeleteTpl: this.cancelDeleteTpl, deleteTpl: this.deleteTpl,
+      tplDeleteAsk: s.tplDeleteAsk && isTpl,
+      tplDeleteQuestion: "Delete template " + s.tplName + "? Sessions made from it stay.",
+      // Save as template band
+      saveTplOpen: s.saveTplOpen, saveTplName: s.saveTplName, saveTplError: s.saveTplError, saveTplDone: s.saveTplDone,
+      saveTplNameInvalid: String(!!s.saveTplError),
+      saveTplStyle: s.saveTplError ? "border:2px solid var(--color-error)" : "",
+      saveTplForm: s.saveTplOpen && !s.saveTplDone,
+      setSaveTplName: this.setSaveTplName, closeSaveTpl: this.closeSaveTpl, confirmSaveTpl: this.confirmSaveTpl,
+      openSaveTplPage: this.openSaveTpl("page"), openSaveTplEditor: this.openSaveTpl("editor"),
+      // Sessions
+      startBlank: this.startBlank, continueCurrent: this.continueCurrent, editCurrent: this.editCurrent,
+      goTemplates: this.go("templates"),
+      notice: s.notice, hasNotice: !!s.notice,
+      chooserOpen: s.chooser, openChooser: this.openChooser, closeChooser: this.closeChooser,
+      chooseBlank: this.prepareFrom(null),
+      chooserTemplates: sortedTpls.map((t) => ({ name: t.name, summary: t.blocks.map((b) => b.name).join(" · "), pick: this.prepareFrom(t) })),
+      hasPlans: s.plans.length > 0, noPlans: s.plans.length === 0,
+      plans: s.plans.map((p) => ({
+        title: p.title || "Untitled plan",
+        titleInk: p.title ? "var(--color-text)" : "var(--color-neutral-700)",
+        summary: p.blocks.map((b) => b.name).join(" · "),
+        meta: exN(p.blocks) + " · " + setN(p.blocks) + " sets",
+        open: this.openPlan(p), start: this.startPlan(p), startLabel: "Start " + (p.title || "untitled plan")
+      })),
+      templateRows: sortedTpls.map((t) => ({
+        name: t.name, summary: t.blocks.map((b) => b.name).join(" · "),
+        meta: exN(t.blocks) + " · " + setN(t.blocks) + " sets", open: this.openTemplate(t)
+      })),
+      hasTemplates: s.templates.length > 0, noTemplates: s.templates.length === 0, newTemplate: this.newTemplate
+    };
+  }
+
+  renderVals() {
+    const screen =`
+    );
+    replaceSessionsAnchor(
+      '        toggle: this.toggleWarmup(bi, si)\n      }))\n    }));',
+      '        toggle: this.toggleWarmup(bi, si),\n        ...this.setStatusValues(bi, si, s)\n      }))\n    }));'
+    );
+    replaceSessionsAnchor(
+      '      workouts, page, draft, suggestions\n    };',
+      '      workouts, page, draft, suggestions,\n      ...this.sessionValues()\n    };'
+    );
+
+    // Markup. Sessions: the Prepared group, the arrival notice, the footer.
+    const bandStart = '<div style="padding:14px 22px;border-bottom:1px solid var(--color-divider);background:var(--color-surface)">';
+    const saveTplBand = `
+        <sc-if value="{{ saveTplOpen }}" hint-placeholder-val="{{ false }}">
+          ` + bandStart + `
+            <sc-if value="{{ saveTplDone }}" hint-placeholder-val="{{ false }}">
+              <p role="status" style="margin:0;font-size:14px;line-height:1.55;color:var(--color-neutral-800)">{{ saveTplDone }}</p>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-secondary" sc-camel-on-click="{{ closeSaveTpl }}" style="flex:1;min-height:44px;font-size:14px">Close</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ saveTplForm }}" hint-placeholder-val="{{ true }}">
+              <label style="display:flex;flex-direction:column;gap:5px">
+                <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Template name</span>
+                <input class="input" type="text" sc-camel-value="{{ saveTplName }}" sc-camel-on-change="{{ setSaveTplName }}" aria-invalid="{{ saveTplNameInvalid }}" aria-describedby="save-tpl-error" style="width:100%;box-sizing:border-box;min-height:44px;font-family:var(--font-body);{{ saveTplStyle }}">
+              </label>
+              <sc-if value="{{ saveTplError }}" hint-placeholder-val="{{ false }}">
+                <p id="save-tpl-error" role="alert" style="margin:8px 0 0;font-size:13px;line-height:1.5;color:var(--color-error)">{{ saveTplError }}</p>
+              </sc-if>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-ghost" sc-camel-on-click="{{ closeSaveTpl }}" style="flex:1;min-height:44px;font-size:14px">Cancel</button>
+                <button class="btn btn-secondary" sc-camel-on-click="{{ confirmSaveTpl }}" style="flex:1;min-height:44px;font-size:14px">Save template</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>`;
+    const noticeLine = `
+        <sc-if value="{{ hasNotice }}" hint-placeholder-val="{{ false }}">
+          <p role="status" style="margin:0;padding:10px 22px;border-bottom:1px solid var(--color-divider);font-size:14px;line-height:1.5;color:var(--color-neutral-800)">{{ notice }}</p>
+        </sc-if>`;
+    const groupLabel = 'font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-700)';
+
+    replaceSessionsAnchor(
+      '        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:4px 22px 96px">\n          <sc-for list="{{ workouts }}"',
+      noticeLine + `
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:4px 22px 96px">
+          <div style="display:flex;align-items:center;justify-content:space-between;min-height:44px;margin-top:6px">
+            <div style="` + groupLabel + `">Planned</div>
+            <a href="#" class="header-link" sc-camel-on-click="{{ goTemplates }}" style="font-size:13px">Templates</a>
+          </div>
+          <sc-if value="{{ noPlans }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:var(--color-neutral-700);border-bottom:1px solid var(--color-divider);padding-bottom:14px">Nothing planned. Use Plan a session to set one up ahead.</p>
+          </sc-if>
+          <sc-for list="{{ plans }}" as="p" hint-placeholder-count="2">
+            <div style="display:grid;grid-template-columns:56px 1fr auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--color-divider)">
+              <div sc-camel-on-click="{{ p.open }}" style="text-align:right;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-700);cursor:pointer">Plan</div>
+              <div sc-camel-on-click="{{ p.open }}" style="min-width:0;cursor:pointer">
+                <div style="font-family:var(--font-heading);font-size:19px;color:{{ p.titleInk }}">{{ p.title }}</div>
+                <div style="font-size:13px;color:var(--color-neutral-700);line-height:1.5;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.summary }}</div>
+                <div style="font-size:12px;color:var(--color-neutral-700);margin-top:5px;font-variant-numeric:tabular-nums">{{ p.meta }}</div>
+              </div>
+              <button class="btn btn-secondary" sc-camel-on-click="{{ p.start }}" aria-label="{{ p.startLabel }}" style="min-height:44px;min-width:68px;padding:0 14px;font-size:15px">Start</button>
+            </div>
+          </sc-for>
+          <div style="margin-top:22px;min-height:32px;` + groupLabel + `">Logged</div>
+          <sc-for list="{{ workouts }}"`
+    );
+    replaceSessionsAnchor(
+      `        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent)">
+          <button class="btn btn-primary" sc-camel-on-click="{{ goNew }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Start a new page</button>`,
+      `        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;gap:10px">
+          <sc-if value="{{ chooserOpen }}" hint-placeholder-val="{{ false }}">
+            <div role="group" aria-label="Plan a session from" style="position:absolute;left:22px;right:22px;bottom:82px;padding:12px 14px 6px;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-md)">
+              <div style="` + groupLabel + `;margin-bottom:2px">Plan a session from</div>
+              <button sc-camel-on-click="{{ chooseBlank }}" style="width:100%;min-height:48px;display:flex;align-items:center;padding:0;border:0;border-bottom:1px solid var(--color-divider);background:none;cursor:pointer;text-align:left;font-family:var(--font-heading);font-size:18px;color:var(--color-text)">A blank page</button>
+              <sc-for list="{{ chooserTemplates }}" as="t" hint-placeholder-count="3">
+                <button sc-camel-on-click="{{ t.pick }}" style="width:100%;min-height:52px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;padding:4px 0;border:0;border-bottom:1px solid var(--color-divider);background:none;cursor:pointer;text-align:left;color:var(--color-text);font-family:var(--font-body)">
+                  <span style="font-family:var(--font-heading);font-size:18px">{{ t.name }}</span>
+                  <span style="max-width:100%;font-family:var(--font-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--color-neutral-700)">{{ t.summary }}</span>
+                </button>
+              </sc-for>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <a href="#" class="header-link" sc-camel-on-click="{{ goTemplates }}" style="font-size:13px;justify-content:flex-start">All templates</a>
+                <a href="#" class="header-link" sc-camel-on-click="{{ closeChooser }}" style="font-size:13px;color:var(--color-neutral-700)">Close</a>
+              </div>
+            </div>
+          </sc-if>
+          <button class="btn btn-secondary" sc-camel-on-click="{{ openChooser }}" aria-expanded="{{ chooserOpen }}" style="flex:1;min-height:48px;font-size:15px">Plan a session</button>
+          <button class="btn btn-primary" sc-camel-on-click="{{ startBlank }}" style="flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Start a new page</button>`
+    );
+
+    // Session page: Save as template beside Edit and Delete, its band, and the
+    // Continue logging / Edit entries into the right editor mode.
+    replaceSessionsAnchor(
+      `            <sc-if value="{{ page.finished }}" hint-placeholder-val="{{ true }}">
+              <a href="#" class="header-link" sc-camel-on-click="{{ goNew }}">Edit</a>
+            </sc-if>`,
+      `            <sc-if value="{{ page.finished }}" hint-placeholder-val="{{ true }}">
+              <a href="#" class="header-link" sc-camel-on-click="{{ editCurrent }}">Edit</a>
+            </sc-if>
+            <a href="#" class="header-link" sc-camel-on-click="{{ openSaveTplPage }}" style="color:var(--color-accent-700)">Save as template</a>`
+    );
+    replaceSessionsAnchor(
+      '<a href="#" sc-camel-on-click="{{ askDelete }}" style="color:var(--color-neutral-700)">Delete</a>',
+      '<a href="#" class="header-link" sc-camel-on-click="{{ askDelete }}" style="color:var(--color-neutral-700)">Delete</a>'
+    );
+    replaceSessionsAnchor(
+      '        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:22px 22px 36px">',
+      saveTplBand + '\n        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:22px 22px 36px">'
+    );
+    replaceSessionsAnchor(
+      '<button class="btn btn-primary" sc-camel-on-click="{{ goNew }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Continue logging</button>',
+      '<button class="btn btn-primary" sc-camel-on-click="{{ continueCurrent }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Continue logging</button>'
+    );
+
+    // Editor: title and header action by mode, the template name field, bands.
+    replaceSessionsAnchor(
+      `<div style="font-family:var(--font-heading);font-size:18px;color:var(--color-text)">New page</div>
+          <a href="#" sc-camel-on-click="{{ save }}" style="font-size:13px">Save</a>`,
+      `<div style="font-family:var(--font-heading);font-size:18px;color:var(--color-text)">{{ editorTitle }}</div>
+          <sc-if value="{{ hasHeaderAction }}" hint-placeholder-val="{{ true }}">
+            <a href="#" sc-camel-on-click="{{ headerAction }}" style="font-size:13px;min-width:44px;text-align:right">{{ headerLabel }}</a>
+          </sc-if>
+          <sc-if value="{{ noHeaderAction }}" hint-placeholder-val="{{ false }}"><span style="min-width:44px"></span></sc-if>`
+    );
+    replaceSessionsAnchor(
+      '        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:20px 22px 110px">',
+      `        <sc-if value="{{ tplDeleteAsk }}" hint-placeholder-val="{{ false }}">
+          ` + bandStart + `
+            <div style="font-size:14px;line-height:1.55;color:var(--color-neutral-800)">{{ tplDeleteQuestion }}</div>
+            <div style="display:flex;gap:10px;margin-top:12px">
+              <button class="btn btn-ghost" sc-camel-on-click="{{ cancelDeleteTpl }}" style="flex:1;min-height:44px;font-size:14px">Keep</button>
+              <button class="btn btn-secondary" sc-camel-on-click="{{ deleteTpl }}" style="flex:1;min-height:44px;font-size:14px">Delete template</button>
+            </div>
+          </div>
+        </sc-if>` + saveTplBand + `
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:20px 22px 110px">
+          <sc-if value="{{ isTpl }}" hint-placeholder-val="{{ false }}">
+            <label style="display:flex;flex-direction:column;gap:5px;margin:-4px 0 14px">
+              <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Name</span>
+              <input class="input" type="text" sc-camel-value="{{ tplName }}" sc-camel-on-change="{{ setTplName }}" aria-invalid="{{ tplNameInvalid }}" aria-describedby="tpl-name-error" placeholder="Push A" style="width:100%;box-sizing:border-box;min-height:44px;font-family:var(--font-body);{{ tplNameStyle }}">
+            </label>
+            <sc-if value="{{ tplNameError }}" hint-placeholder-val="{{ false }}">
+              <p id="tpl-name-error" role="alert" style="margin:-8px 0 14px;font-size:13px;line-height:1.5;color:var(--color-error)">{{ tplNameError }}</p>
+            </sc-if>
+          </sc-if>`
+    );
+    replaceSessionsAnchor(
+      'style="width:100%;min-height:44px;margin-top:-14px;display:flex;',
+      'style="width:100%;min-height:44px;margin-top:-14px;display:{{ datelineDisplay }};'
+    );
+    replaceSessionsAnchor('<span style="font-variant-numeric:tabular-nums">Today 07.15</span>', '<span style="font-variant-numeric:tabular-nums">{{ datelineText }}</span>');
+    replaceSessionsAnchor(
+      '<p role="status" style="margin:-4px 0 0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)">Saved 07.42</p>',
+      '<sc-if value="{{ showSaved }}" hint-placeholder-val="{{ true }}"><p role="status" style="margin:-4px 0 0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)">Saved 07.42</p></sc-if>'
+    );
+    replaceSessionsAnchor(
+      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Date</span>`,
+      `<div style="display:{{ dateFieldsDisplay }};grid-template-columns:1fr 1fr;gap:12px">
+            <label style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-700)">Date</span>`
+    );
+
+    // A plan has a title and notes, but no bodyweight or gym: both can change
+    // by the day, so they are filled in once the session starts.
+    replaceSessionsAnchor(
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">',
+      '<div style="display:{{ bwGymDisplay }};grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">'
+    );
+
+    // Set rows: the Done toggle, the next / skipped note, dashed inputs for
+    // sets not yet done.
+    replaceSessionsAnchor(
+      'grid-template-columns:26px 1fr 1fr 80px 48px;gap:8px;align-items:center;margin-top:12px;',
+      'grid-template-columns:{{ cols }};gap:{{ gap }};align-items:center;margin-top:12px;'
+    );
+    replaceSessionsAnchor(
+      '<div style="display:grid;grid-template-columns:26px 1fr 1fr 80px 48px;gap:8px;align-items:center;margin-top:8px">',
+      '<div><div style="display:grid;grid-template-columns:{{ cols }};gap:{{ gap }};align-items:center;margin-top:8px">'
+    );
+    replaceSessionsAnchor(
+      'font-variant-numeric:tabular-nums;text-align:center">',
+      'font-variant-numeric:tabular-nums;text-align:center;{{ s.inputExtra }}">',
+      true
+    );
+    replaceSessionsAnchor(
+      `color:var(--color-neutral-700);font-size:22px">×</button>
+                </div>
+              </sc-for>`,
+      `color:var(--color-neutral-700);font-size:22px">×</button>
+                  <sc-if value="{{ showDone }}" hint-placeholder-val="{{ true }}">
+                    <button sc-camel-on-click="{{ s.toggleDone }}" aria-pressed="{{ s.donePressed }}" aria-label="Done" style="{{ s.doneStyle }}">
+                      <sc-if value="{{ s.isDone }}" hint-placeholder-val="{{ true }}"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5l4 4 8-9"></path></svg></sc-if>
+                      <sc-if value="{{ s.isNotDone }}" hint-placeholder-val="{{ false }}">Done</sc-if>
+                    </button>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ s.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ s.noteStyle }}">{{ s.note }}</div></sc-if>
+                </div>
+              </sc-for>`
+    );
+
+    // Footer by mode, and the finish confirmation naming the sets it skips.
+    replaceSessionsAnchor(
+      'Finish this session now? The current time will be saved.',
+      '{{ finishQuestion }}'
+    );
+    replaceSessionsAnchor(
+      '<button class="btn btn-primary" sc-camel-on-click="{{ askFinish }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Finish session</button>',
+      `<sc-if value="{{ isProgMode }}" hint-placeholder-val="{{ true }}">
+            <button class="btn btn-primary" sc-camel-on-click="{{ askFinish }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Finish session</button>
+          </sc-if>
+          <sc-if value="{{ isFinMode }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-primary" sc-camel-on-click="{{ saveChanges }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Save changes</button>
+          </sc-if>
+          <sc-if value="{{ isPrep }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-secondary" sc-camel-on-click="{{ savePlan }}" style="flex:1;min-height:48px;font-size:15px">Save plan</button>
+            <button class="btn btn-primary" sc-camel-on-click="{{ startSession }}" style="flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px">Start session</button>
+          </sc-if>
+          <sc-if value="{{ isTpl }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-secondary" sc-camel-on-click="{{ prepareFromEditor }}" style="flex:1;min-height:48px;font-size:15px">Plan a session</button>
+            <button class="btn btn-primary" sc-camel-on-click="{{ saveTemplate }}" style="flex:1;min-height:48px;font-family:var(--font-heading);font-size:17px">Save</button>
+          </sc-if>`
+    );
+    // Prepare mode: Save as template under the add-exercise suggestions.
+    replaceSessionsAnchor(
+      `            </sc-for>
+          </div>
+
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;gap:10px">`,
+      `            </sc-for>
+          </div>
+          <sc-if value="{{ isPrep }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-ghost" sc-camel-on-click="{{ openSaveTplEditor }}" style="margin-top:14px;min-height:44px;font-size:15px">Save as template</button>
+          </sc-if>
+
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;gap:10px">`
+    );
+
+    // Templates list.
+    replaceSessionsAnchor(
+      '    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">',
+      `    <sc-if value="{{ isTemplates }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div style="padding:20px 22px 12px;border-bottom:1px solid var(--color-divider);display:flex;align-items:baseline;justify-content:space-between">
+          <div style="font-family:var(--font-heading);font-size:27px;line-height:1.1;color:var(--color-text)">Templates</div>
+          <a href="#" class="header-link" sc-camel-on-click="{{ goHistory }}" style="font-size:13px">← Sessions</a>
+        </div>` + noticeLine + `
+        <div class="gn-scroll" style="flex:1;overflow-y:auto;padding:14px 22px 96px">
+          <p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:var(--color-neutral-700)">A template is a set of exercises and sets to plan a session from. Planning from one copies it; the template stays as it is.</p>
+          <sc-if value="{{ noTemplates }}" hint-placeholder-val="{{ false }}">
+            <p style="margin:18px 0;font-size:14px;line-height:1.6;color:var(--color-neutral-800)">No templates yet. Save one from a session page or a planned session, or write one here.</p>
+          </sc-if>
+          <sc-for list="{{ templateRows }}" as="t" hint-placeholder-count="3">
+            <div sc-camel-on-click="{{ t.open }}" style="padding:16px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+              <div style="font-family:var(--font-heading);font-size:19px;color:var(--color-text)">{{ t.name }}</div>
+              <div style="font-size:13px;color:var(--color-neutral-700);line-height:1.5;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.summary }}</div>
+              <div style="font-size:12px;color:var(--color-neutral-700);margin-top:5px;font-variant-numeric:tabular-nums">{{ t.meta }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 22px 22px;background:linear-gradient(to top, var(--color-bg) 62%, transparent)">
+          <button class="btn btn-primary" sc-camel-on-click="{{ newTemplate }}" style="width:100%;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">New template</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">`
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';

@@ -20,7 +20,7 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 
 - [x] T001 Spec, plan, research, data model, contracts, quickstart and tasks in `specs/006-predefined-sessions/` (planning PR).
 - [ ] T002 Open the planning PR for `specs/006-predefined-sessions/` after owner approval of the plan (Principle VII); reference issue #165.
-- [ ] T003 **PR 1, UI mock**: with `/impeccable`, update `docs/ui/README.md` (Sessions, Session page, New page, a new Templates section) and `docs/ui/prototype.html` to cover everything in `specs/006-predefined-sessions/contracts/ui.md`:
+- [x] T003 **PR 1, UI mock**: with `/impeccable`, update `docs/ui/README.md` (Sessions, Session page, New page, a new Templates section) and `docs/ui/prototype.html` to cover everything in `specs/006-predefined-sessions/contracts/ui.md`:
   - prepared group and Start
   - prepare mode
   - done toggle and next set
