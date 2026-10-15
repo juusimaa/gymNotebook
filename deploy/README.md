@@ -347,16 +347,19 @@ back. It only touches project `gymnotebook`.
 
 **Rolling back by hand**: run the `deploy` workflow with `workflow_dispatch`
 and an older `main-<40 hex>` tag from GHCR. If CI itself is the problem, run
-the same script on the server as `gymdeploy`, so the evidence is saved first:
+the same script on the server as `gymdeploy`, so the evidence is saved first.
+Start from `/`: `sudo` keeps the current directory, and Compose fails with
+`stat .: permission denied` in one `gymdeploy` can't read, such as
+`/home/admin` (found in T063's install).
 
 ```sh
-sudo -u gymdeploy env SSH_ORIGINAL_COMMAND=main-<40 hex> /opt/gymnotebook/bin/deploy.sh
+cd / && sudo -u gymdeploy env SSH_ORIGINAL_COMMAND=main-<40 hex> /opt/gymnotebook/bin/deploy.sh
 ```
 
 **Redeploying the running tag** applies a changed env file the same way:
 
 ```sh
-sudo -u gymdeploy sh -c 'SSH_ORIGINAL_COMMAND=$(sed -n "s/^IMAGE_TAG=//p" /var/lib/gymnotebook/image-tag.env) exec /opt/gymnotebook/bin/deploy.sh'
+cd / && sudo -u gymdeploy sh -c 'SSH_ORIGINAL_COMMAND=$(sed -n "s/^IMAGE_TAG=//p" /var/lib/gymnotebook/image-tag.env) exec /opt/gymnotebook/bin/deploy.sh'
 ```
 
 ### Deletion evidence
