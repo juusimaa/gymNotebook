@@ -95,6 +95,48 @@ export function formatProgressSet(
   return `${compactNumber(point.weight ?? 0, 2)} kg × ${point.reps}`
 }
 
+// A history row's name for a screen reader, which would otherwise read the
+// row's columns as bare figures ("08 Sep 07.15 100 kg × 5 117 +2"). It says
+// what each figure is, in the order the row shows them. `time` is the start
+// already formatted for the lifter's clock (formatWorkoutTime), so this stays
+// free of time zones.
+export function describeProgressSession(
+  point: ExerciseHistoryPointResponse,
+  change: number | null,
+  isBodyweight: boolean,
+  time: string,
+): string {
+  const parts = [formatProgressSet(point, isBodyweight)]
+  if (!isBodyweight) {
+    // A single charts its own weight, so a separate figure would only repeat it.
+    if (point.reps === 1) {
+      parts.push('single, weight as logged')
+    } else {
+      parts.push(`e1RM ${formatProgressFigure(point.value, false)} kg`)
+      if (point.reps > 12) {
+        parts.push('high-rep estimate, less certain')
+      }
+    }
+  }
+  parts.push(describeChange(change, isBodyweight))
+
+  return `${formatProgressDate(point.date)} ${time}: ${parts.join(', ')}`
+}
+
+function describeChange(change: number | null, isBodyweight: boolean): string {
+  if (change === null) {
+    return 'first session charted'
+  }
+  if (change === 0) {
+    return 'no change from the session before'
+  }
+
+  const size = Math.abs(change)
+  const unit = isBodyweight ? (size === 1 ? 'rep' : 'reps') : 'kg'
+  const direction = change > 0 ? 'up' : 'down'
+  return `${direction} ${compactNumber(size)} ${unit} from the session before`
+}
+
 // The smallest "round" step — 1, 2 or 5 times a power of ten, and never under
 // one whole kg or rep — that covers `raw`. Ticks on such a step read as
 // figures someone would write down (58 / 59 / 60), not as arithmetic

@@ -2431,6 +2431,72 @@ document.addEventListener('DOMContentLoaded', async function() {
       continueCurrent:`
     );
 
+    // Design critique 2026-10-16, Progress, matching the React app. A search
+    // field filters the exercise chips, which wrap (capped at two and a half
+    // rows) instead of scrolling sideways; each history row opens its session
+    // page and is named as a sentence for a screen reader; and the e1RM
+    // guidance shows one sentence with the rest under "How to read this
+    // estimate".
+    replaceSessionsAnchor(
+      '<div class="gn-scroll" style="display:flex;gap:8px;overflow-x:auto;padding:0 22px 4px;mask-image:linear-gradient(to right,#000 calc(100% - 40px),transparent)">',
+      '<div style="padding:0 22px"><input class="input" type="search" autocomplete="off" aria-label="Find an exercise" placeholder="Find an exercise" value="{{ pickerQuery }}" sc-camel-on-change="{{ setPickerQuery }}" style="width:100%;box-sizing:border-box;min-height:44px;font-family:var(--font-body)">' +
+        '<div class="gn-scroll" role="group" aria-label="Exercise" style="display:flex;flex-wrap:wrap;gap:8px;max-height:134px;overflow-y:auto;margin:10px -4px 0;padding:4px">'
+    );
+    replaceSessionsAnchor(
+      '{{ x.name }}</button>\n            </sc-for>\n          </div>',
+      '{{ x.name }}</button>\n            </sc-for>\n          </div>' +
+        '<p role="status" style="margin:6px 0 0;font-size:13px;color:var(--color-neutral-700)">{{ pickerEmpty }}</p></div>'
+    );
+    replaceSessionsAnchor('white-space:nowrap;border:1px solid {{ x.border }}', 'max-width:100%;min-height:44px;border:1px solid {{ x.border }}');
+    replaceSessionsAnchor(
+      'pickExercise = (name) => () =>',
+      'setPickerQuery = (e) => this.setState({ pickerQuery: e.target.value });\n  pickExercise = (name) => () =>'
+    );
+    replaceSessionsAnchor(
+      'const exercisePicker = Object.keys(HISTORY).map((name) => ({',
+      'const pickerQuery = this.state.pickerQuery || "";\n    const exercisePicker = Object.keys(HISTORY).filter((name) => norm(name).includes(norm(pickerQuery))).map((name) => ({'
+    );
+    replaceSessionsAnchor(
+      'exercisePicker, exercises, rename,',
+      'exercisePicker, pickerQuery, setPickerQuery: this.setPickerQuery,\n      pickerEmpty: exercisePicker.length ? "" : `No exercise matches “${pickerQuery.trim()}”.`,\n      exercises, rename,'
+    );
+    replaceSessionsAnchor(
+      'note: !spec.bodyweight && s.single ?',
+      `label: \`\${s.dateLabel} \${s.time}: \${s.set}\` +
+          (spec.bodyweight ? "" : s.single ? ", single, weight as logged" : \`, e1RM \${s.figure} kg\${s.reps > 12 ? ", high-rep estimate, less certain" : ""}\`) +
+          ", " + (d === null ? "first session charted" : d === 0 ? "no change from the session before"
+            : \`\${d > 0 ? "up" : "down"} \${Math.abs(d)} \${spec.bodyweight ? (Math.abs(d) === 1 ? "rep" : "reps") : "kg"} from the session before\`),
+        open: (e) => {
+          if (e && e.preventDefault) e.preventDefault();
+          const p = DATA.find((x) => \`\${x.date.join("-")}-\${x.time}\` === s.key);
+          if (p) this.setState({ screen: "detail", pageId: p.id });
+        },
+        note: !spec.bodyweight && s.single ?`
+    );
+    replaceSessionsAnchor(
+      '<div style="display:grid;grid-template-columns:62px 1fr auto auto;gap:12px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--color-divider);font-variant-numeric:tabular-nums">',
+      '<a href="#" sc-camel-on-click="{{ r.open }}" aria-label="{{ r.label }}" style="display:grid;grid-template-columns:62px 1fr auto auto;gap:12px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--color-divider);font-variant-numeric:tabular-nums;color:var(--color-text);text-decoration:none">'
+    );
+    replaceSessionsAnchor(
+      '{{ r.change }}</div>\n              </div>',
+      '{{ r.change }}</div>\n              </a>'
+    );
+    replaceSessionsAnchor(
+      '"Estimated one-rep max (e1RM) uses your best working set each session to show a strength trend. Compare the same exercise and equipment, with similar technique, rep ranges and effort. Leaving more reps in reserve can lower the estimate without a loss of strength. Estimates become less reliable at higher reps, especially above roughly 12; small changes may not reflect strength gains. A single shows the weight lifted, which may not be your maximum."',
+      '"Estimated one-rep max (e1RM) from your best working set each session: a strength trend, not a test."'
+    );
+    replaceSessionsAnchor(
+      ' <sc-if value="{{ !isBodyweight }}"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/" style="text-decoration:underline">Research on repetitions and maximum strength</a>.</sc-if></p>',
+      '</p><sc-if value="{{ !isBodyweight }}"><details style="margin:0 22px;font-size:12px;line-height:1.6;color:var(--color-neutral-700)">' +
+        '<summary style="padding:11px 0;line-height:22px;color:var(--color-accent-700);cursor:pointer;font-size:13px">How to read this estimate</summary>' +
+        '<ul style="margin:0;padding-left:1.2em">' +
+        '<li>Compare the same exercise and equipment, with similar technique, rep ranges and effort.</li>' +
+        '<li>Leaving more reps in reserve can lower the estimate without a loss of strength.</li>' +
+        '<li>Estimates become less reliable at higher reps, especially above roughly 12; small changes may not reflect strength gains.</li>' +
+        '<li>A single shows the weight lifted, which may not be your maximum.</li></ul>' +
+        '<p style="margin:8px 0 0"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/" style="text-decoration:underline">Research on repetitions and maximum strength</a></p></details></sc-if>'
+    );
+
     // Footer by mode, and the finish confirmation naming the sets it skips.
     replaceSessionsAnchor(
       'Finish this session now? The current time will be saved.',

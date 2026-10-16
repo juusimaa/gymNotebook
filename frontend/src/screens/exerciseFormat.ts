@@ -27,3 +27,20 @@ export function describeLastSet(exercise: ExerciseResponse): string {
 export function normalizeExerciseName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ')
 }
+
+// Progress filters the exercise list it already holds, matching a name the way
+// GET /exercises?search= does on the server (NormalizedName.Contains), so
+// "taka" finds "Takakyykky" here just as it does in the Exercises index.
+export function filterExercisesByName<T extends { name: string }>(
+  exercises: T[],
+  query: string,
+): T[] {
+  const wanted = normalizeExerciseName(query)
+  if (wanted === '') {
+    return exercises
+  }
+
+  return exercises.filter((exercise) =>
+    normalizeExerciseName(exercise.name).includes(wanted),
+  )
+}

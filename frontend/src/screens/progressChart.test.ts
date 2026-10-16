@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExerciseHistoryPointResponse } from '../api/exercises'
 import {
   buildProgressChart,
+  describeProgressSession,
   formatProgressChange,
   formatProgressDate,
   formatProgressSet,
@@ -136,5 +137,65 @@ describe('progress formatting', () => {
 
   it('measures a bodyweight change in reps as they are', () => {
     expect(progressDisplayChange(8, 11, true)).toBe(3)
+  })
+})
+
+describe('describeProgressSession', () => {
+  it('names each figure of a loaded row and its gain', () => {
+    expect(
+      describeProgressSession(
+        point(7, '2026-10-04', 116.7, 100, 5),
+        2,
+        false,
+        '07.15',
+      ),
+    ).toBe(
+      '04 Oct 07.15: 100 kg × 5, e1RM 117 kg, up 2 kg from the session before',
+    )
+  })
+
+  it('says a single is its own weight rather than repeating it', () => {
+    expect(
+      describeProgressSession(
+        point(7, '2026-10-04', 120, 120, 1),
+        -3,
+        false,
+        '07.15',
+      ),
+    ).toBe(
+      '04 Oct 07.15: 120 kg × 1, single, weight as logged, down 3 kg from the session before',
+    )
+  })
+
+  it('flags a high-rep estimate and the first session', () => {
+    expect(
+      describeProgressSession(
+        point(7, '2026-10-04', 80, 50, 15),
+        null,
+        false,
+        '18.40',
+      ),
+    ).toBe(
+      '04 Oct 18.40: 50 kg × 15, e1RM 80 kg, high-rep estimate, less certain, first session charted',
+    )
+  })
+
+  it('counts a bodyweight row in reps without a separate figure', () => {
+    expect(
+      describeProgressSession(
+        point(7, '2026-10-04', 9, null, 9),
+        1,
+        true,
+        '07.15',
+      ),
+    ).toBe('04 Oct 07.15: 9 reps, up 1 rep from the session before')
+    expect(
+      describeProgressSession(
+        point(8, '2026-10-05', 9, null, 9),
+        0,
+        true,
+        '07.15',
+      ),
+    ).toBe('05 Oct 07.15: 9 reps, no change from the session before')
   })
 })
