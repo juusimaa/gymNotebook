@@ -2377,6 +2377,60 @@ document.addEventListener('DOMContentLoaded', async function() {
 `
     );
 
+    // Design critique 2026-10-16, third pass, matching the React app. The
+    // block's Remove swaps each row's Warm-up for a ×, never its Done, and
+    // turns itself off after one removal (the React editor also turns it off
+    // on a tap or focus outside the block). One block at a time. On
+    // Sessions, a page in progress makes its own Continue logging the
+    // primary button, and Start a new page steps down to secondary.
+    replaceSessionsAnchor(
+      '<button sc-camel-on-click="{{ s.toggle }}" aria-pressed="{{ s.pressed }}" aria-label="{{ s.warmupLabel }}" style="{{ s.tagStyle }}">Warm-up</button>',
+      '<sc-if value="{{ s.showWarmup }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ s.toggle }}" aria-pressed="{{ s.pressed }}" aria-label="{{ s.warmupLabel }}" style="{{ s.tagStyle }}">Warm-up</button></sc-if>'
+    );
+    replaceSessionsAnchor(
+      'style="justify-self:end;width:44px;min-height:44px;padding:0;border:0;background:none;cursor:pointer;color:var(--color-neutral-700);font-size:22px">×</button>',
+      'style="{{ s.removeStyle }}">×</button>'
+    );
+    replaceSessionsAnchor(
+      '      showDoneButton: hasDone && !removing,\n',
+      `      showDoneButton: hasDone,
+      showWarmup: !removing,
+      removeStyle: "min-height:44px;padding:0;cursor:pointer;color:var(--color-neutral-700);font-size:22px;" +
+        (removing
+          ? "justify-self:stretch;background:none;border:1px solid var(--color-divider);border-radius:var(--radius-md)"
+          : "justify-self:end;width:44px;border:0;background:none"),
+`
+    );
+    replaceSessionsAnchor(
+      'this.setState((s) => ({ removingSets: { ...(s.removingSets || {}), [bi]: !(s.removingSets || {})[bi] } }));',
+      'this.setState((s) => ({ removingSets: (s.removingSets || {})[bi] ? {} : { [bi]: true } }));'
+    );
+    replaceSessionsAnchor(
+      'removed: { bi, si, set, text: "Removed set "',
+      'removingSets: {},\n        removed: { bi, si, set, text: "Removed set "'
+    );
+    replaceSessionsAnchor(
+      'continueLog: this.openPage(w, "progress"),',
+      'continueLog: this.openPage(w, "progress"),\n        continueClass: "btn " + (DATA.find((x) => !x.end) === w ? "btn-primary" : "btn-secondary"),'
+    );
+    replaceSessionsAnchor(
+      '<button class="btn btn-secondary" sc-camel-on-click="{{ w.continueLog }}"',
+      '<button class="{{ w.continueClass }}" sc-camel-on-click="{{ w.continueLog }}"'
+    );
+    replaceSessionsAnchor(
+      '<button class="btn btn-primary" sc-camel-on-click="{{ startBlank }}" style="flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Start a new page</button>',
+      '<button class="{{ startBlankClass }}" sc-camel-on-click="{{ startBlank }}" style="{{ startBlankStyle }}">Start a new page</button>'
+    );
+    replaceSessionsAnchor(
+      'startBlank: this.startBlank, continueCurrent:',
+      `startBlank: this.startBlank,
+      startBlankClass: DATA.some((x) => !x.end) ? "btn btn-secondary" : "btn btn-primary",
+      startBlankStyle: DATA.some((x) => !x.end)
+        ? "flex:1;min-height:48px;font-size:15px"
+        : "flex:1.35;min-height:48px;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em",
+      continueCurrent:`
+    );
+
     // Footer by mode, and the finish confirmation naming the sets it skips.
     replaceSessionsAnchor(
       'Finish this session now? The current time will be saved.',

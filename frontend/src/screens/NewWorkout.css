@@ -279,8 +279,8 @@
 }
 
 /* The block's "Remove": a switch drawn like the Warm-up tag, so it reads as
-   a state of the block rather than an action; pressed, each row's Done gives
-   way to a × and "+ Add set" to "Remove exercise". */
+   a state of the block rather than an action; pressed, each row's Warm-up
+   gives way to a × and "+ Add set" to "Remove exercise". */
 .new-workout-remove-sets {
   min-height: var(--hit-target);
   padding: 0 var(--space-2);
@@ -435,11 +435,21 @@
   cursor: not-allowed;
 }
 
+/* With a Done column the × fills Warm-up's track while the block's Remove
+   is on: the same hairline tag in the same place, so the row keeps its
+   shape and Done stays alone under the thumb. */
+.has-done .new-workout-remove-set {
+  justify-self: stretch;
+  width: auto;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
 /* Set status (specs/006, docs/ui/README.md → Editor modes). A page that is
    in progress or finished ends each row with a Done column: number, weight,
    reps, Warm-up, Done, so Done sits under the thumb. The row has no × of its
-   own: it takes Done's place only while the block's Remove is on, so
-   the control tapped after every set never sits beside a destructive one. */
+   own: it takes Warm-up's place only while the block's Remove is on, so
+   the control tapped after every set never turns into a destructive one. */
 .has-done .new-workout-set,
 .has-done .new-workout-set-columns {
   grid-template-columns: 20px minmax(0, 1fr) minmax(0, 0.75fr) 72px 44px;
