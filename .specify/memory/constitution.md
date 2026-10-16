@@ -92,6 +92,13 @@ closed on the routes that email an unproven address. Do not disable these contro
 for local testing. Login failures MUST NOT distinguish an unknown user from a wrong
 password.
 
+Demo accounts (`specs/007-demo-mode`) are the one exception to email confirmation.
+They are created only while demo mode is explicitly enabled, behind the same
+fail-closed human check, a per-IP rate limit and a cap on live demo accounts. They
+expire 24 hours after creation and are then deleted. They cannot be used for
+password sign-in, password change or reset, export or account deletion, and every
+ownership rule above applies to them unchanged.
+
 Never log secrets, tokens, or connection strings, commit real secrets, or expose
 exception details in API responses. Keep local secrets in the established
 gitignored environment file or .NET user-secrets, and production secrets in
@@ -116,6 +123,8 @@ collection is allowed for that purpose only.
 Amended in 3.1.0 (owner, 2026-10-11): production secrets move from Container Apps
 `secretref` to a root-owned server env file, as Container Apps goes away
 (`specs/005-upcloud-migration`).
+Amended in 3.2.0 (owner, 2026-10-16): temporary demo accounts are exempt from email
+confirmation under the limits above (`specs/007-demo-mode`).
 
 ### VI. Keep Behavior and Its Documentation Aligned
 
@@ -270,4 +279,4 @@ and patch for non-semantic clarification. Version 1.0.0 was the initial draft;
 ratification records the owner's adoption of this constitution, not an
 application release.
 
-**Version**: 3.1.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-10-11
+**Version**: 3.2.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-10-16
