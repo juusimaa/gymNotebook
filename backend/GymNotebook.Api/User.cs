@@ -71,4 +71,10 @@ public class User
     // deletion's outcome is unknown (research R6 Q2c). While set, login answers a correct
     // password with 403 account_suspended and any token for the account is rejected.
     public DateTimeOffset? SignInSuspendedAt { get; set; }
+
+    // Null for a registered account. Set: a demo account (specs/007 research R1), valid
+    // until this instant (creation + Demo:LifetimeHours) and never extended — a reset keeps
+    // it. One column answers both "is this a demo" and "until when", so the two can't
+    // disagree. Expired demos are refused at once and deleted by DemoCleanupWorker.
+    public DateTimeOffset? DemoExpiresAt { get; set; }
 }

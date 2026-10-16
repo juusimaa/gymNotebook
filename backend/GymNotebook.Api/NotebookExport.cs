@@ -65,15 +65,23 @@ public sealed class NotebookExport(AppDbContext db, LifecycleOptions options, Ti
         // as in change-password. A password change in between shows up under the guard below
         // as a token-version mismatch. AsNoTracking: OnTokenValidated's FindAsync already
         // tracks this User, loaded before any lock.
-        var hash = await db.Users.AsNoTracking()
+        var account = await db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => u.PasswordHash)
+            .Select(u => new { u.PasswordHash, u.DemoExpiresAt })
             .SingleOrDefaultAsync(ct);
-        if (hash is null)
+        if (account is null)
         {
             return Results.Unauthorized();
         }
-        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, hash))
+
+        // A demo's notebook is generated sample data with no password to confirm
+        // (specs/007 research R7): refused before the password check, with a code the UI
+        // can explain.
+        if (account.DemoExpiresAt is not null)
+        {
+            return Results.Json(new ErrorResponse("demo_account"), statusCode: StatusCodes.Status403Forbidden);
+        }
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, account.PasswordHash))
         {
             return Results.BadRequest(new ErrorResponse("password_verification_failed"));
         }

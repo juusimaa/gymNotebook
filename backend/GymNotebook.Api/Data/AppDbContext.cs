@@ -65,6 +65,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.ToTable(t => t.HasCheckConstraint(
                 "ck_users_optional_details_consent_pair",
                 "(optional_details_consent_version IS NULL) = (optional_details_consented_at IS NULL)"));
+
+            // Demo accounts only (specs/007 data-model.md): serves the cleanup scan
+            // (<= now()) and the live-demo cap count (> now()) without indexing every
+            // registered account, whose value is always null.
+            entity.HasIndex(u => u.DemoExpiresAt)
+                .HasDatabaseName("ix_users_demo_expires_at")
+                .HasFilter("demo_expires_at IS NOT NULL");
         });
 
         modelBuilder.Entity<Workout>(entity =>

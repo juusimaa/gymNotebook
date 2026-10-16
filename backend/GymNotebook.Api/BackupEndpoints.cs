@@ -28,11 +28,12 @@ public static class BackupEndpoints
            .WithName("ExportNotebook")
            .WithTags("Backup")
            .WithSummary("Downloads a copy of the caller's notebook")
-           .WithDescription("Verifies the current password, then streams the whole notebook as one JSON file (format version 2: set status and templates) read from a single database snapshot, with an embedded field guide. The stream is cut, never completed, if the account is deleted, the password changed or the token expires during the download. Both formats return JSON; format selects whether completion records the last full-backup time (json, the default) or leaves it unchanged (csv, for browser conversion).")
+           .WithDescription("Verifies the current password, then streams the whole notebook as one JSON file (format version 2: set status and templates) read from a single database snapshot, with an embedded field guide. The stream is cut, never completed, if the account is deleted, the password changed or the token expires during the download. Both formats return JSON; format selects whether completion records the last full-backup time (json, the default) or leaves it unchanged (csv, for browser conversion). 403 demo_account for a demo account.")
            .Accepts<ExportRequest>("application/json")
            .Produces(StatusCodes.Status200OK, contentType: "application/json")
            .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
            .Produces(StatusCodes.Status401Unauthorized)
+           .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
            .Produces(StatusCodes.Status415UnsupportedMediaType)
            .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests)
            .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);

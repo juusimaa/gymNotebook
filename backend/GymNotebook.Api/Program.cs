@@ -61,6 +61,12 @@ var dummyPasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()
 // only when it's true.
 var privacyLifecycleEnabled = builder.Configuration["PRIVACY_LIFECYCLE_ENABLED"] == "true";
 
+// Production switch for demo mode (specs/007 research R3): visitors starting 24-hour demo
+// accounts with a sample notebook. Same exact-"true" rule as the privacy switch, so a
+// missing or misspelled value leaves it off. The demo routes (DemoEndpoints.cs) are mapped
+// only when it's true; the cleanup worker runs either way (see AddHostedService below).
+var demoModeEnabled = builder.Configuration["DEMO_MODE_ENABLED"] == "true";
+
 // Whether to take the client address from X-Forwarded-For (see UseForwardedHeaders below).
 // Only right when a trusted proxy is the sole way in — Caddy on the production server,
 // where deploy/compose.prod.yml sets it. Locally nothing sits in front of the API, so trusting the header
@@ -104,6 +110,11 @@ var sensitiveWindowSeconds = builder.Configuration.GetValue("SensitiveRateLimit:
 var restorePermitLimit = builder.Configuration.GetValue("RestoreRateLimit:PermitLimit", 5);
 var restoreWindowSeconds = builder.Configuration.GetValue("RestoreRateLimit:WindowSeconds", 600);
 
+// Demo starts per client IP (specs/007 research R3): each start creates an account, so far
+// stricter than "auth" — 3 an hour. Same override pattern; tests raise it.
+var demoPermitLimit = builder.Configuration.GetValue("DemoRateLimit:PermitLimit", 3);
+var demoWindowSeconds = builder.Configuration.GetValue("DemoRateLimit:WindowSeconds", 3600);
+
 // Lock and write timeouts for account-lifecycle coordination (see AccountLifecycle.cs).
 // The class's defaults are what production runs with; tests shorten them. Validated at
 // boot because a wrong ordering (write timeout ≥ exclusive wait) fails only under load.
@@ -113,6 +124,9 @@ builder.Services.AddSingleton(lifecycleOptions);
 var restoreOptions = builder.Configuration.GetSection("Restore").Get<RestoreOptions>() ?? new RestoreOptions();
 restoreOptions.Validate();
 builder.Services.AddSingleton(restoreOptions);
+var demoOptions = builder.Configuration.GetSection("Demo").Get<DemoOptions>() ?? new DemoOptions();
+demoOptions.Validate();
+builder.Services.AddSingleton(demoOptions);
 
 // The versioned privacy notices embedded from docs/privacy/notices/ (PrivacyNoticeCatalog).
 // Loaded even while the feature flag is off, so a broken or missing notice file fails
@@ -146,6 +160,10 @@ builder.Services.AddSingleton<EmailTemplates>();
 // then hands each message to the IEmailSender registered below.
 builder.Services.AddSingleton<EmailOutbox>();
 builder.Services.AddHostedService<EmailOutboxWorker>();
+
+// Registered whatever DEMO_MODE_ENABLED says: switching the flag off stops new demos, but
+// the ones already started must still be deleted when they expire (specs/007 research R8).
+builder.Services.AddHostedService<DemoCleanupWorker>();
 
 // The caps are keyed with Jwt:Secret (see EmailCaps.HashRecipient), so they need a factory
 // to receive it; everything else comes from the container as usual.
@@ -294,6 +312,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (user.EmailVerifiedAt is null)
                 {
                     context.Fail("Email address is not confirmed.");
+                    return;
+                }
+
+                // An expired demo account (specs/007 research R2) is treated like a revoked
+                // token, at no extra query. The clock is resolved like the context above;
+                // the lifecycle guard repeats the check under the lock.
+                var clock = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>();
+                if (user.DemoExpiresAt is { } demoExpiresAt && demoExpiresAt <= clock.GetUtcNow())
+                {
+                    context.Fail("Demo account has expired.");
                 }
             },
             OnChallenge = async context =>
@@ -337,6 +365,7 @@ builder.Services.AddRateLimiter(options =>
     // resend budget or the other way round.
     options.AddPolicy("email-request", httpContext => PerClientIp(httpContext, emailRequestPermitLimit, emailRequestWindowSeconds));
     options.AddPolicy("email-link", httpContext => PerClientIp(httpContext, emailLinkPermitLimit, emailLinkWindowSeconds));
+    options.AddPolicy("demo", httpContext => PerClientIp(httpContext, demoPermitLimit, demoWindowSeconds));
     options.AddPolicy("restore", httpContext => RateLimitPartition.GetFixedWindowLimiter(
         partitionKey: httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "",
         factory: _ => new FixedWindowRateLimiterOptions
@@ -672,7 +701,10 @@ auth.MapPost("/login", async (LoginRequest request, AppDbContext db, TimeProvide
     // is still checked for the same reason.
     var passwordMatches = BCrypt.Net.BCrypt.Verify(request.Password, user?.PasswordHash ?? dummyPasswordHash)
         && AccountInput.IsValidPassword(request.Password);
-    if (user is null || !passwordMatches)
+    // A demo account (specs/007 research R7) has a password nobody knows, so it can't
+    // match anyway; refused here too as a second line of defence, with the same bare 401
+    // as a wrong password (FR-012).
+    if (user is null || !passwordMatches || user.DemoExpiresAt is not null)
     {
         return Results.Unauthorized();
     }
@@ -961,7 +993,7 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
     // so a miss here is a bug, not a 404. Same reasoning as ParseUserId.
     var me = await db.Users
         .Where(u => u.Id == userId)
-        .Select(u => new MeResponse(u.Id, u.DisplayName, u.Email))
+        .Select(u => new MeResponse(u.Id, u.DisplayName, u.Email, u.DemoExpiresAt))
         .SingleAsync(ct);
 
     return Results.Ok(me);
@@ -970,7 +1002,7 @@ auth.MapGet("/me", async (ClaimsPrincipal user, AppDbContext db, CancellationTok
    .RequireAccountLifecycle()
    .WithName("GetCurrentUser")
    .WithSummary("Returns the authenticated user's id, display name and email address")
-   .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked. The display name and email address are what the frontend shows on the cover page.")
+   .WithDescription("Proves a bearer token is valid and its token_version hasn't been revoked. The display name and email address are what the frontend shows on the cover page. demoExpiresAt is null for a registered account, and when the demo ends for a demo account.")
    .Produces<MeResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status401Unauthorized);
 
@@ -994,6 +1026,13 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
     // AsNoTracking: OnTokenValidated's FindAsync already tracks this User, and a tracked
     // query would hand back that instance — loaded before any lock, so possibly stale.
     var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct);
+
+    // A demo account has no password to change (specs/007 research R7). Before BCrypt,
+    // with a code the UI can explain; only the account's own session gets this far.
+    if (user?.DemoExpiresAt is not null)
+    {
+        return Results.Json(new ErrorResponse("demo_account"), statusCode: StatusCodes.Status403Forbidden);
+    }
 
     // Same 401 as login for a wrong current password. The `user is null` branch covers an
     // account deleted since OnTokenValidated looked.
@@ -1025,10 +1064,11 @@ auth.MapPost("/change-password", async (ChangePasswordRequest request, ClaimsPri
    .RequireAuthorization()
    .WithName("ChangePassword")
    .WithSummary("Changes the authenticated user's password")
-   .WithDescription("Updates the authenticated user's password after verifying the current password. Returns 503 temporarily_unavailable if the account is busy with another lifecycle operation.")
+   .WithDescription("Updates the authenticated user's password after verifying the current password. 403 demo_account for a demo account. Returns 503 temporarily_unavailable if the account is busy with another lifecycle operation.")
    .Produces<AuthResponse>(StatusCodes.Status200OK)
    .Produces(StatusCodes.Status400BadRequest)
    .Produces(StatusCodes.Status401Unauthorized)
+   .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
    .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
 // Every /exercises and /workouts route runs under the account-lifecycle filter (shared
@@ -2095,6 +2135,12 @@ app.MapBackupEndpoints(restoreOptions, privacyLifecycleEnabled);
 if (privacyLifecycleEnabled)
 {
     app.MapPrivacyEndpoints();
+}
+
+// specs/007: demo mode. Not mapped at all while its flag is off, so the routes 404.
+if (demoModeEnabled)
+{
+    app.MapDemoEndpoints(jwtSecret, jwtExpiryMinutes, privacyLifecycleEnabled);
 }
 
 app.Run();
