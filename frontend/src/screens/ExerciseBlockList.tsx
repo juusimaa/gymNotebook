@@ -105,10 +105,12 @@ export function ExerciseBlockList({
   done,
 }: ExerciseBlockListProps) {
   const { removal } = blocks
-  // Blocks whose "Remove sets" switch is on. With a Done column, a row has no
-  // × of its own: the switch swaps each row's Done for a ×, so the control
-  // tapped after every set never sits beside a destructive one. Screen state
-  // only; it isn't part of the draft.
+  // Blocks whose "Remove" switch is on. With a Done column, a row has no ×
+  // of its own and the block's "Remove exercise" is hidden: the switch swaps
+  // each row's Done for a × and "+ Add set" for "Remove exercise", so neither
+  // the control tapped after every set nor the heading sits one tap from a
+  // destructive action (design critique 2026-10-16, second pass). Screen
+  // state only; it isn't part of the draft.
   const [removingSetsIn, setRemovingSetsIn] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
@@ -118,6 +120,22 @@ export function ExerciseBlockList({
       if (!next.delete(exerciseClientId)) next.add(exerciseClientId)
       return next
     })
+  // Its id is where Undo puts focus back once the block returns
+  // (useExerciseBlocks).
+  const removeExerciseButton = (
+    exercise: WorkoutExerciseDraft,
+    className: string,
+  ) => (
+    <button
+      id={`remove-block-${exercise.clientId}`}
+      className={`${className} new-workout-remove-exercise`}
+      type="button"
+      aria-label={`Remove exercise ${exercise.exerciseName}`}
+      onClick={() => blocks.removeExercise(exercise)}
+    >
+      Remove exercise
+    </button>
+  )
   const undo = (className: string) =>
     removal === null ? null : (
       <UndoLine
@@ -159,27 +177,23 @@ export function ExerciseBlockList({
                   )}
                 </div>
                 <div className="new-workout-exercise-actions">
-                  {/* One name, pressed or not, like Warm-up. Named for the
-                    exercise, since every block has one. */}
-                  {done !== undefined && (
+                  {/* With a Done column: one switch, pressed or not, like
+                    Warm-up, named for the exercise since every block has
+                    one. A template has no Done column, so its rows keep
+                    their × and its heading keeps Remove exercise. */}
+                  {done !== undefined ? (
                     <button
                       className="new-workout-remove-sets"
                       type="button"
                       aria-pressed={isRemovingSets}
-                      aria-label={`Remove ${exercise.exerciseName} sets`}
+                      aria-label={`Remove from ${exercise.exerciseName}`}
                       onClick={() => toggleRemovingSets(exercise.clientId)}
                     >
-                      Remove sets
+                      Remove
                     </button>
+                  ) : (
+                    removeExerciseButton(exercise, 'btn btn-ghost')
                   )}
-                  <button
-                    id={`remove-block-${exercise.clientId}`}
-                    className="btn btn-ghost new-workout-remove-exercise"
-                    type="button"
-                    onClick={() => blocks.removeExercise(exercise)}
-                  >
-                    Remove
-                  </button>
                 </div>
               </div>
 
@@ -311,6 +325,7 @@ export function ExerciseBlockList({
                           className="new-workout-set-kind"
                           type="button"
                           aria-pressed={set.isWarmup}
+                          aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, warm-up`}
                           onClick={() =>
                             blocks.changeSet(exercise.clientId, set.clientId, {
                               isWarmup: !set.isWarmup,
@@ -334,11 +349,12 @@ export function ExerciseBlockList({
 
                         {/* Done (specs/006): last, under the thumb, and
                           alone at the row's end: the × appears in its
-                          place only while "Remove sets" is on. A round
+                          place only while the block's Remove is on. A round
                           switch where Warm-up is a rectangular tag, and
                           not by colour alone: a filled disc with a check
                           when done, a hollow circle reading "Done" when
-                          not. One name, pressed or not, like Warm-up.
+                          not. One name, pressed or not, like Warm-up,
+                          and like it naming the exercise and set.
                           Released, a set goes back to planned, or to
                           skipped on a finished page (toggleSetDone).
                           Marking one done saves at once
@@ -349,7 +365,7 @@ export function ExerciseBlockList({
                             className={`new-workout-set-done${isNext ? ' is-next' : ''}${set.status === 'skipped' ? ' is-skipped' : ''}`}
                             type="button"
                             aria-pressed={set.status === 'done'}
-                            aria-label="Done"
+                            aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, done`}
                             aria-describedby={
                               note === null ? undefined : `${set.clientId}-note`
                             }
@@ -392,13 +408,22 @@ export function ExerciseBlockList({
                   undo('new-workout-undo-set')}
               </div>
 
-              <button
-                className="btn btn-ghost new-workout-add-set"
-                type="button"
-                onClick={() => blocks.addSet(exercise)}
-              >
-                + Add set
-              </button>
+              {/* While Remove is on, the block's next action is removing it,
+                not adding to it. */}
+              {isRemovingSets ? (
+                removeExerciseButton(
+                  exercise,
+                  'btn btn-secondary new-workout-remove-block',
+                )
+              ) : (
+                <button
+                  className="btn btn-ghost new-workout-add-set"
+                  type="button"
+                  onClick={() => blocks.addSet(exercise)}
+                >
+                  + Add set
+                </button>
+              )}
             </article>
           </Fragment>
         )
