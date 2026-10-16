@@ -69,11 +69,19 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
         // User, loaded before any lock.
         var account = await db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new { u.PasswordHash, u.PrivacyAccountId })
+            .Select(u => new { u.PasswordHash, u.PrivacyAccountId, u.DemoExpiresAt })
             .SingleOrDefaultAsync(ct);
         if (account is null)
         {
             return Results.Unauthorized();
+        }
+
+        // A demo account has no password anyone knows, and goes away by itself when it
+        // expires (specs/007 research R7). Refused before the password check with a code
+        // the UI can explain; only the account's own session can get this far.
+        if (account.DemoExpiresAt is not null)
+        {
+            return Results.Json(new ErrorResponse("demo_account"), statusCode: StatusCodes.Status403Forbidden);
         }
         if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, account.PasswordHash))
         {
@@ -91,6 +99,97 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
             return AccountLifecycle.ToResult(outcome, http);
         }
 
+        var (result, boundary) = await DeleteUnderLockAsync(transaction, userId, account.PrivacyAccountId);
+        switch (result)
+        {
+            case DeletionResult.RolledBack:
+                return AccountLifecycle.TemporarilyUnavailable(http);
+            case DeletionResult.OutcomeUnknown:
+                // The response claims neither success nor rollback (contracts/api.md).
+                return Results.Json(new ErrorResponse("deletion_outcome_unknown"), statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        // The terminal response is authorized by the completed deletion itself, not by
+        // re-checking an account that no longer exists (research R4); it carries nothing
+        // personal, only dates.
+        return Results.Ok(new DeletionResponse(
+            "deleted",
+            boundary,
+            boundary.AddDays(BackupRetentionDays),
+            boundary.AddDays(DeletionEvidenceDays),
+            LogRetentionNotice));
+    }
+
+    // Deletes one expired demo account for DemoCleanupWorker (specs/007 research R8): the
+    // same exclusive lock, statements and evidence lines as a user-requested deletion, so
+    // an in-flight request finishes before its account disappears, and restore
+    // reconciliation treats a demo row like any other deleted account. False when there
+    // was nothing to delete — the row is gone, isn't a demo, hasn't expired, or changed
+    // while the lock was awaited — or when the lock wait timed out or the deletion didn't
+    // commit; the next run tries again.
+    public async Task<bool> DeleteExpiredDemoAsync(int userId, CancellationToken ct)
+    {
+        var account = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.TokenVersion, u.PrivacyAccountId, u.DemoExpiresAt })
+            .SingleOrDefaultAsync(ct);
+        if (account is null || !IsExpiredDemo(account.DemoExpiresAt))
+        {
+            return false;
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var outcome = await AccountLifecycle.AcquireExclusiveAsync(db, userId, account.TokenVersion, options.ExclusiveLockTimeoutMs, ct);
+        if (outcome != GuardOutcome.Ok)
+        {
+            return false;
+        }
+
+        // Re-checked under the lock: the first read was before it, and only an expired
+        // demo may ever be deleted without its owner asking.
+        var expiresAt = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => u.DemoExpiresAt)
+            .SingleAsync(ct);
+        if (!IsExpiredDemo(expiresAt))
+        {
+            return false;
+        }
+
+        var (result, _) = await DeleteUnderLockAsync(transaction, userId, account.PrivacyAccountId);
+        return result == DeletionResult.Committed;
+    }
+
+    // Every notebook row of the account, as set-based deletes rather than loading entities
+    // (the reference notebook has 100,000 sets). Children first (data-model.md →
+    // Transactions): workouts cascade to their blocks and sets in the database; templates
+    // likewise to theirs; exercises only after both, because page and template blocks
+    // reference them with ON DELETE RESTRICT (specs/006). Shared with the demo reset
+    // (specs/007 research R6), which keeps the User row. CancellationToken.None: once
+    // started inside the caller's transaction, the outcome mustn't depend on the client.
+    internal static async Task DeleteNotebookAsync(AppDbContext db, int userId)
+    {
+        await db.Workouts.Where(w => w.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
+        await db.Templates.Where(t => t.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
+        await db.Exercises.Where(e => e.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
+    }
+
+    private bool IsExpiredDemo(DateTimeOffset? demoExpiresAt) =>
+        demoExpiresAt is { } expires && expires <= clock.GetUtcNow();
+
+    private enum DeletionResult
+    {
+        Committed,
+        RolledBack,
+        OutcomeUnknown,
+    }
+
+    // The deletion itself, once the exclusive lock is held in `transaction`: the boundary,
+    // the intent line, the deletes, the commit and the line that records how it ended.
+    // Shared by the user-requested deletion and the demo cleanup.
+    private async Task<(DeletionResult Result, DateTimeOffset Boundary)> DeleteUnderLockAsync(
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, int userId, Guid privacyAccountId)
+    {
         // From here on, CancellationToken.None: once the deletion has started, whether it
         // commits must not depend on the client happening to close the page (contracts/ui.md:
         // closing the page doesn't cancel a confirmed deletion). The statement timeout
@@ -100,7 +199,7 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
         // just before the intent line (data-model.md). It precedes the commit, so every
         // deadline counted from it is conservative.
         var boundary = clock.GetUtcNow();
-        LogEvidence("deletion.intent", account.PrivacyAccountId, boundary);
+        LogEvidence("deletion.intent", privacyAccountId, boundary);
 
         try
         {
@@ -110,17 +209,9 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
             var statementTimeout = options.DeletionStatementTimeoutMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await db.Database.ExecuteSqlAsync($"SELECT set_config('statement_timeout', {statementTimeout}, true)", CancellationToken.None);
 
-            // Children first (data-model.md → Transactions): workouts cascade to their blocks
-            // and sets in the database; exercises can only go after, because blocks reference
-            // them with ON DELETE RESTRICT; the User row last. The notice acknowledgement lives
-            // on the User row, so it goes with it. Set-based deletes, not loading entities:
-            // the reference notebook has 100,000 sets.
-            await db.Workouts.Where(w => w.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
-            // Templates before exercises for the same reason as workouts: template blocks
-            // reference exercises with ON DELETE RESTRICT (specs/006). Blocks and sets
-            // cascade from the template.
-            await db.Templates.Where(t => t.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
-            await db.Exercises.Where(e => e.UserId == userId).ExecuteDeleteAsync(CancellationToken.None);
+            // The notebook first, the User row last. The notice acknowledgement lives on the
+            // User row, so it goes with it.
+            await DeleteNotebookAsync(db, userId);
             await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(CancellationToken.None);
         }
         catch (Exception ex) when (AccountLifecycle.IsDatabaseFailure(ex))
@@ -134,8 +225,8 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
             // rolled_back line for a deletion that never happened.
             await transaction.DisposeAsync();
             logger.LogWarning(ex, "Account deletion failed before commit and was rolled back.");
-            LogEvidence("deletion.rolled_back", account.PrivacyAccountId, boundary);
-            return AccountLifecycle.TemporarilyUnavailable(http);
+            LogEvidence("deletion.rolled_back", privacyAccountId, boundary);
+            return (DeletionResult.RolledBack, boundary);
         }
 
         try
@@ -146,30 +237,20 @@ public sealed class AccountDeletion(AppDbContext db, LifecycleOptions options, T
         {
             // The server answered the COMMIT with an error, so it definitely rolled back.
             logger.LogWarning(ex, "Account deletion commit was refused by the database and rolled back.");
-            LogEvidence("deletion.rolled_back", account.PrivacyAccountId, boundary);
-            return AccountLifecycle.TemporarilyUnavailable(http);
+            LogEvidence("deletion.rolled_back", privacyAccountId, boundary);
+            return (DeletionResult.RolledBack, boundary);
         }
         catch (DbException ex)
         {
             // Anything else — the connection failed during the COMMIT — can't tell whether
             // it applied. Neither committed nor rolled_back is logged: an intent line alone
-            // is what tells the restore procedure the outcome is unknown. The response
-            // claims neither success nor rollback (contracts/api.md).
+            // is what tells the restore procedure the outcome is unknown.
             logger.LogError(ex, "Account deletion commit outcome is unknown.");
-            return Results.Json(new ErrorResponse("deletion_outcome_unknown"), statusCode: StatusCodes.Status503ServiceUnavailable);
+            return (DeletionResult.OutcomeUnknown, boundary);
         }
 
-        LogEvidence("deletion.committed", account.PrivacyAccountId, boundary);
-
-        // The terminal response is authorized by the completed deletion itself, not by
-        // re-checking an account that no longer exists (research R4); it carries nothing
-        // personal, only dates.
-        return Results.Ok(new DeletionResponse(
-            "deleted",
-            boundary,
-            boundary.AddDays(BackupRetentionDays),
-            boundary.AddDays(DeletionEvidenceDays),
-            LogRetentionNotice));
+        LogEvidence("deletion.committed", privacyAccountId, boundary);
+        return (DeletionResult.Committed, boundary);
     }
 
     // Only the event, the UUID and the boundary: no integer user id, username, token or

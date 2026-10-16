@@ -232,11 +232,12 @@ public static class PrivacyEndpoints
            .WithName("DeleteAccount")
            .WithTags("Privacy")
            .WithSummary("Permanently deletes the caller's account")
-           .WithDescription("Verifies the current password and requires confirmDeletion: true, then removes the account, its exercises, workouts and sets in one transaction and signs out every session. Returns only dates, never a token. 503 temporarily_unavailable means nothing was deleted; 503 deletion_outcome_unknown means the outcome could not be confirmed.")
+           .WithDescription("Verifies the current password and requires confirmDeletion: true, then removes the account, its exercises, workouts and sets in one transaction and signs out every session. Returns only dates, never a token. 503 temporarily_unavailable means nothing was deleted; 503 deletion_outcome_unknown means the outcome could not be confirmed. 403 demo_account for a demo account, which deletes itself when it expires.")
            .Accepts<DeleteAccountRequest>("application/json")
            .Produces<DeletionResponse>(StatusCodes.Status200OK)
            .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
            .Produces(StatusCodes.Status401Unauthorized)
+           .Produces<ErrorResponse>(StatusCodes.Status403Forbidden)
            .Produces(StatusCodes.Status415UnsupportedMediaType)
            .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests)
            .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);

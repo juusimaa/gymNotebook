@@ -114,8 +114,8 @@ public static class AccountLifecycle
 
     // Shared access for an ordinary request, or for a delivery guard. Shared access is
     // what a signed-in session uses, so it also requires a confirmed address (specs/002
-    // plan D5): an unconfirmed account reads as Revoked, the same bare 401 as a revoked
-    // token. The bearer handler already refuses such tokens; this re-check, under the
+    // plan D5) and an unexpired demo (specs/007): either failing reads as Revoked, the
+    // same bare 401 as a revoked token. The bearer handler already refuses such tokens; this re-check, under the
     // lock, is the belt to that pair of braces.
     public static Task<GuardOutcome> AcquireSharedAsync(AppDbContext db, int userId, int tokenVersion, int lockTimeoutMs, CancellationToken ct) =>
         AcquireAsync(db, "pg_advisory_xact_lock_shared", userId, tokenVersion, lockTimeoutMs, requireConfirmedEmail: true, ct);
@@ -170,9 +170,12 @@ public static class AccountLifecycle
         lockCommand.Parameters.AddWithValue("id", userId);
         batch.BatchCommands.Add(lockCommand);
 
-        // An unconfirmed account simply finds no row, which reads as Revoked below.
+        // An unconfirmed account simply finds no row, which reads as Revoked below; so does
+        // an expired demo account (specs/007 research R2), which is how renewal and every
+        // guarded route refuse it at once, before the cleanup worker deletes it. The
+        // database clock decides here, as in the other lock-time checks.
         var checkCommand = new NpgsqlBatchCommand(requireConfirmedEmail
-            ? "SELECT token_version FROM users WHERE id = @id AND email_verified_at IS NOT NULL"
+            ? "SELECT token_version FROM users WHERE id = @id AND email_verified_at IS NOT NULL AND (demo_expires_at IS NULL OR demo_expires_at > now())"
             : "SELECT token_version FROM users WHERE id = @id");
         checkCommand.Parameters.AddWithValue("id", userId);
         batch.BatchCommands.Add(checkCommand);

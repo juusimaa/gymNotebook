@@ -35,6 +35,7 @@ services:
       Jwt__RenewalCapHours: "${Jwt__RenewalCapHours:-12}"
       CORS_ORIGINS: "${CORS_ORIGINS}"
       PRIVACY_LIFECYCLE_ENABLED: "${PRIVACY_LIFECYCLE_ENABLED:-false}"
+      DEMO_MODE_ENABLED: "${DEMO_MODE_ENABLED:-false}"
       Email__Backend: "${Email__Backend:-console}"
       RESEND_API_KEY: "${RESEND_API_KEY:-}"
       EMAIL_FROM: "${EMAIL_FROM:-}"

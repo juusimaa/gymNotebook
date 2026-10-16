@@ -311,6 +311,23 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
 
         await db.Database.ExecuteSqlRawAsync("SET LOCAL statement_timeout = 120000", ct);
 
+        return Results.Ok(await ImportAsync(file, userId, privacyLifecycleEnabled, ct));
+    }
+
+    // The part of a restore that writes rows: everything after the HTTP checks and the
+    // restore lock. Shared with demo mode (specs/007 research R5), which seeds a notebook
+    // by importing a generated RestoreFile, so a demo gets the same rules as a backup —
+    // set status per page state, unique template names, and the optional-details consent
+    // decision. `file` must already have passed Validate. Runs in the caller's transaction
+    // (the lifecycle filter's for a restore, the demo handler's own for a demo), so a
+    // failure part-way leaves nothing behind.
+    public async Task<RestoreResponse> ImportAsync(RestoreFile file, int userId, bool privacyLifecycleEnabled, CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("ImportAsync must run inside the caller's transaction.");
+        }
+
         // Pages dedupe by their start, as in version 1. A prepared page (a version 2 file
         // from before research R15) has none and is no page any more: it becomes a template
         // below, so restoring a file twice duplicates plans as templates, never history.
@@ -476,9 +493,9 @@ public sealed class NotebookRestore(AppDbContext db, RestoreOptions options)
         db.Templates.AddRange(convertedTemplates);
         await db.SaveChangesAsync(ct);
 
-        return Results.Ok(new RestoreResponse(workouts.Count, addedSets.Count, skipped,
+        return new RestoreResponse(workouts.Count, addedSets.Count, skipped,
             created.Select(e => e.Name).ToArray(), classificationKept.ToArray(), dropped,
-            addedTemplates.Count + convertedTemplates.Count, file.Templates!.Count - addedTemplates.Count));
+            addedTemplates.Count + convertedTemplates.Count, file.Templates!.Count - addedTemplates.Count);
     }
 
     private static IResult Invalid(string reason) =>

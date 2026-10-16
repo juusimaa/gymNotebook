@@ -24,9 +24,11 @@ public sealed class Turnstile(HttpClient http, TurnstileOptions options, ILogger
 {
     // The widget's `action` on each form (frontend/src/screens/Login.tsx). A token
     // remembers which form it was solved on, so one solved on the reset form can't open
-    // signup, and the other way round.
+    // signup, and the other way round. "demo" is the Try the demo button (specs/007): it
+    // emails no one, but it creates an account, so it gets the same bot check.
     public const string SignupAction = "signup";
     public const string PasswordResetAction = "password_reset";
+    public const string DemoAction = "demo";
 
     // Cloudflare's documented maximum. Anything longer can't be a real token, so it's
     // refused without spending a call on it.

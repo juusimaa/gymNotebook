@@ -51,6 +51,7 @@ public sealed class StubSiteverifyHandler(ConcurrentQueue<IReadOnlyDictionary<st
     // A token solved on the given form at our hostname.
     public const string PassSignup = "pass-signup";
     public const string PassReset = "pass-reset";
+    public const string PassDemo = "pass-demo";
     // Cloudflare says no: expired, already used, or never issued.
     public const string Rejected = "rejected";
     // Valid, but solved on another site that uses the same site key.
@@ -72,6 +73,7 @@ public sealed class StubSiteverifyHandler(ConcurrentQueue<IReadOnlyDictionary<st
         {
             PassSignup => Answer(new { success = true, hostname = TurnstileGymNotebookFactory.Hostname, action = Turnstile.SignupAction }),
             PassReset => Answer(new { success = true, hostname = TurnstileGymNotebookFactory.Hostname, action = Turnstile.PasswordResetAction }),
+            PassDemo => Answer(new { success = true, hostname = TurnstileGymNotebookFactory.Hostname, action = Turnstile.DemoAction }),
             OtherHostname => Answer(new { success = true, hostname = "elsewhere.example", action = Turnstile.SignupAction }),
             TestKey => Answer(new
             {

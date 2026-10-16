@@ -274,6 +274,10 @@ namespace GymNotebook.Api.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<DateTimeOffset?>("DemoExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("demo_expires_at");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("text")
@@ -324,6 +328,10 @@ namespace GymNotebook.Api.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_users");
+
+                    b.HasIndex("DemoExpiresAt")
+                        .HasDatabaseName("ix_users_demo_expires_at")
+                        .HasFilter("demo_expires_at IS NOT NULL");
 
                     b.HasIndex("Email")
                         .IsUnique()

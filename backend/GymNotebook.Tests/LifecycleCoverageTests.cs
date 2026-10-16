@@ -10,7 +10,7 @@ namespace GymNotebook.Tests;
 // would silently race account deletion. So instead of trusting each route to remember,
 // this enumerates every mapped endpoint and fails on any authorized one that lacks the
 // filter's marker metadata (added together with the filter by RequireAccountLifecycle()).
-public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : IClassFixture<PrivacyEnabledGymNotebookFactory>
+public class LifecycleCoverageTests(DemoPrivacyEnabledGymNotebookFactory factory) : IClassFixture<DemoPrivacyEnabledGymNotebookFactory>
 {
     // Endpoints that take their own guard instead of the shared filter, each with the
     // reason. The lock tests (ChangePassword*, LifecycleCoordinationTests and the US3/US4
@@ -21,13 +21,14 @@ public class LifecycleCoverageTests(PrivacyEnabledGymNotebookFactory factory) : 
         ["POST /account/export"] = "Own snapshot guards: a short initialization guard, then a delivery guard per chunk outside the REPEATABLE READ snapshot (research R3/R4).",
         ["POST /auth/change-password"] = "Takes exclusive access in its own transaction; wrapping it in the shared filter would need a shared-to-exclusive upgrade, which deadlocks two upgraders (analysis I1).",
         ["POST /account/delete"] = "Takes exclusive access in its own transaction, and owns its commit for the deletion log lines (analysis I1, research R6).",
+        ["POST /account/demo/reset"] = "Takes exclusive access in its own transaction, so no request of the account sees the notebook half-replaced (specs/007 research R6).",
     };
 
     [Fact]
     public void AuthorizedEndpoints_WithoutLifecycleFilter_OnlyAllowListed()
     {
-        // Arrange: the privacy-enabled host, so feature routes mapped behind the flag are
-        // enumerated too.
+        // Arrange: the privacy- and demo-enabled host, so feature routes mapped behind
+        // either flag are enumerated too.
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>();
 
         // Act
