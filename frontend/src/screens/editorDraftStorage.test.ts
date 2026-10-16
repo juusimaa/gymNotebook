@@ -5,7 +5,6 @@ import {
   countDraftSets,
   describeDiscard,
   describeDraftSavedAt,
-  describeTearOut,
   draftFingerprint,
   editorDraftKey,
   holdEditorDraftsForSignIn,
@@ -553,20 +552,5 @@ describe('describeDraftSavedAt', () => {
     expect(
       describeDraftSavedAt(savedAt.toISOString(), new Date(2026, 9, 6, 8)),
     ).toBe('4 October 2026, 09.42')
-  })
-})
-
-describe('describeTearOut', () => {
-  it('names the sets that go with the page', () => {
-    expect(describeTearOut(2)).toBe(
-      'Tear out this page? Its 2 sets go with it.',
-    )
-    expect(describeTearOut(1)).toBe(
-      'Tear out this page? Its 1 set goes with it.',
-    )
-  })
-
-  it('asks plainly when there are no sets', () => {
-    expect(describeTearOut(0)).toBe('Tear out this page?')
   })
 })

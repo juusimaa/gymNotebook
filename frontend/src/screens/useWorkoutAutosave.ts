@@ -186,8 +186,8 @@ export function useWorkoutAutosave({
       : null
     if (savedFingerprint !== null) setBaseline(savedFingerprint)
 
-    // Update the stored copy immediately with the new revision. Keep page
-    // may navigate before the effect in the editor gets another render.
+    // Update the stored copy immediately with the new revision. Leaving a
+    // saved new page may navigate before the effect in the editor gets another render.
     const latest = latestDraft.current
     const route = currentDraftRoute()
     if (isNewPage) removeEditorDraft({ kind: 'new' })

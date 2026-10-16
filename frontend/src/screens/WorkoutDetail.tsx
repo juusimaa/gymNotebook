@@ -35,7 +35,7 @@ export default function WorkoutDetail() {
   // "Changes saved" from the editor that sent us here.
   const notice = useRouteNotice()
   // Opening the confirm puts focus on its safe answer, Keep; Keep hands it
-  // back to Delete. Without this, focus stayed on a button that had moved
+  // back to Tear out. Without this, focus stayed on a button that had moved
   // out of the reading order, and a screen reader heard nothing new.
   const deleteButtonRef = useRef<HTMLButtonElement>(null)
   const keepButtonRef = useRef<HTMLButtonElement>(null)
@@ -50,7 +50,7 @@ export default function WorkoutDetail() {
   // transition question, which the notebook gate stops before this screen.
   const detailsAllowed = useOptionalDetailsAllowed().status === 'allowed'
   // Save as template's band (specs/006). Closing it hands focus back to the
-  // header button that opened it, as Keep does for Delete.
+  // header button that opened it, as Keep does for Tear out.
   const [savingAsTemplate, setSavingAsTemplate] = useState(false)
   const saveAsTemplateButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -105,9 +105,7 @@ export default function WorkoutDetail() {
       await deleteWorkout(parsedWorkoutId)
       void navigate('/workouts', { state: routeNotice('Page torn out.') })
     } catch {
-      setDeleteMessage(
-        'This session page could not be deleted. Please try again.',
-      )
+      setDeleteMessage('This page could not be torn out. Please try again.')
       setIsDeleting(false)
     }
   }
@@ -189,7 +187,7 @@ export default function WorkoutDetail() {
               setConfirmingDelete(true)
             }}
           >
-            Delete
+            Tear out
           </button>
         </nav>
       </header>
@@ -219,7 +217,7 @@ export default function WorkoutDetail() {
               disabled={isDeleting}
               onClick={() => void removeWorkout()}
             >
-              {isDeleting ? 'Deleting…' : 'Delete page'}
+              {isDeleting ? 'Tearing out…' : 'Tear out page'}
             </button>
           </div>
         </section>

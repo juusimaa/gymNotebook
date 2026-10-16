@@ -115,6 +115,34 @@ a {
   color: var(--color-neutral-700);
 }
 
+/* The notebook nav (NotebookNav.tsx): its own row under a screen's title,
+   the same sections in the same order on every screen. The header around it
+   wraps, so the row always takes the full width. The section in view is ink,
+   not a link. */
+.notebook-nav {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  margin-bottom: calc(-1 * var(--space-2));
+  font-size: 13px;
+}
+
+/* Words aligned to the row's left edge; each box keeps its 44px minimum. */
+.notebook-nav .header-link {
+  justify-content: flex-start;
+}
+
+.notebook-nav-current {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* The way out of the notebook, set apart from its sections. */
+.notebook-nav-cover {
+  margin-left: auto;
+}
+
 /* Hairline rule instead of a box. */
 .hr {
   height: 1px;
@@ -200,7 +228,9 @@ a {
 }
 .btn-ghost {
   color: var(--color-accent-700);
-  padding-inline: var(--space-1);
+  /* 8px each side, so the hover tint never presses against the words of a
+     ghost button that reads as a text link ("Forgot your password?"). */
+  padding-inline: var(--space-2);
 }
 .btn-ghost:hover {
   background: color-mix(in srgb, var(--color-accent) 10%, transparent);

@@ -17,6 +17,7 @@ import {
   formatWorkoutTimeRange,
 } from './workoutFormat'
 import './Sessions.css'
+import { NotebookNav } from './NotebookNav'
 
 const PAGE_SIZE = 20
 
@@ -225,17 +226,7 @@ export default function Sessions() {
           <h1>Sessions</h1>
         </div>
 
-        <nav className="sessions-nav" aria-label="Notebook">
-          <Link className="header-link" to="/progress">
-            Progress
-          </Link>
-          <Link className="header-link" to="/exercises">
-            Exercises
-          </Link>
-          <Link className="header-link" to="/">
-            Cover
-          </Link>
-        </nav>
+        <NotebookNav current="sessions" />
       </header>
       {notice !== null && (
         <p className="form-message is-status route-notice" role="status">

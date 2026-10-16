@@ -5,6 +5,7 @@ import { describeLastSet } from './exerciseFormat'
 import { useRouteNotice } from './routeNotice'
 import { formatCount } from './workoutFormat'
 import './ExerciseManagement.css'
+import { NotebookNav } from './NotebookNav'
 
 export default function Exercises() {
   // "Renamed to …" or "Merged into …" from the edit screen.
@@ -44,14 +45,7 @@ export default function Exercises() {
           <p className="kicker">Index</p>
           <h1>Exercises</h1>
         </div>
-        <nav aria-label="Exercise navigation">
-          <Link className="header-link" to="/workouts">
-            Sessions
-          </Link>
-          <Link className="header-link" to="/progress">
-            Progress
-          </Link>
-        </nav>
+        <NotebookNav current="exercises" />
       </header>
       {notice !== null && (
         <p className="form-message is-status route-notice" role="status">

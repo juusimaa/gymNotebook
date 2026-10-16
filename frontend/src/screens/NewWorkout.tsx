@@ -16,7 +16,6 @@ import {
 } from '../api/exercises'
 import {
   createWorkout,
-  deleteWorkout,
   getWorkout,
   PAGE_CHANGED,
   replaceWorkoutExercises,
@@ -54,7 +53,6 @@ import {
   countDraftSets,
   describeDiscard,
   describeDraftSavedAt,
-  describeTearOut,
   draftFingerprint,
   loadEditorDraft,
   removeEditorDraft,
@@ -215,7 +213,7 @@ function WorkoutEditor() {
     !isEditing && restoredDraft !== null ? restoredDraft.exercises : [],
   )
   const [savingAction, setSavingAction] = useState<
-    'save' | 'finish' | 'tear-out' | 'keep' | null
+    'save' | 'finish' | 'keep' | null
   >(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(isEditing)
@@ -328,8 +326,6 @@ function WorkoutEditor() {
   })
   // After a conflict reload: what existed only in this tab (D10).
   const [unsavedHere, setUnsavedHere] = useState<string[] | null>(null)
-  const [confirmingTearOut, setConfirmingTearOut] = useState(false)
-  const keepPageRef = useRef<HTMLButtonElement>(null)
   // False once the editor has gone: a save finishing after that leaves the
   // screen alone.
   const isMounted = useRef(true)
@@ -959,27 +955,25 @@ function WorkoutEditor() {
     }
   }
 
-  // Cancel on a new page that has already saved itself asks whether to tear
-  // it out (Story 4): the page is on the server, so leaving can't quietly
-  // drop it any more, and Cancel mustn't be able to lose a real session.
-  // Not after a conflict: tearing out would take the other device's sets too.
-  const keepsPageOnCancel =
+  // A new page that has already saved itself is in the notebook, so its
+  // header link reads "← Sessions" and leaving keeps it: there is nothing to
+  // cancel, and a lifter glancing back at last week mid-session shouldn't
+  // meet a destructive question (design critique 2026-10-16). Tearing a page
+  // out is done on its session page, deliberately. Not after a conflict:
+  // then the ordinary Cancel and its discard question apply.
+  const keepsPageOnLeave =
     !isEditing && savedWorkoutId !== null && pageProblem === null
 
-  useEffect(() => {
-    if (confirmingTearOut) keepPageRef.current?.focus()
-  }, [confirmingTearOut])
-
-  // Keep: whatever is still waiting is saved first, then on to Sessions,
-  // where the page is in progress. If that save fails the lifter stays, with
-  // the date line saying so, rather than leaving sets behind unknowingly.
+  // Leaving a saved new page: whatever is still waiting is saved first, then
+  // on to Sessions, where the page is in progress. If that save fails the
+  // lifter stays, with the footer saying so, rather than leaving sets behind
+  // unknowingly.
   async function keepPage() {
     setSavingAction('keep')
     const flushed = await scheduler.flush()
     if (!isMounted.current) return
     setSavingAction(null)
     if (!flushed) {
-      setConfirmingTearOut(false)
       if (pageProblemRef.current === null) {
         setSaveMessage(
           'The latest sets could not be saved yet. They are kept here; try again in a moment.',
@@ -988,32 +982,8 @@ function WorkoutEditor() {
       return
     }
     void navigate('/workouts', {
-      state: routeNotice('Page kept. It stays open for more sets.'),
+      state: routeNotice('Page saved. It stays open for more sets.'),
     })
-  }
-
-  async function tearOutPage() {
-    const workoutId = savedWorkoutIdRef.current
-    if (workoutId === null) return
-    setSavingAction('tear-out')
-    setSaveMessage(null)
-    await scheduler.stop()
-    try {
-      await deleteWorkout(workoutId)
-    } catch (error: unknown) {
-      // Already gone (deleted on another device) is what was asked for.
-      if (!(error instanceof ApiError && error.status === 404)) {
-        setSavingAction(null)
-        setSaveMessage('The page could not be torn out. Please try again.')
-        scheduler.resume()
-        scheduler.edit()
-        return
-      }
-    }
-    isDraftClosed.current = true
-    removeEditorDraft({ kind: 'edit', workoutId })
-    removeEditorDraft({ kind: 'new' })
-    void navigate('/workouts', { state: routeNotice('Page torn out.') })
   }
 
   // Reload page, after a conflict (D10): the server's page replaces the
@@ -1144,11 +1114,12 @@ function WorkoutEditor() {
               if (draftRoute !== null) removeEditorDraft(draftRoute)
               return
             }
-            // A new page already on the server asks whether to tear it out.
-            if (keepsPageOnCancel) {
+            // A new page already on the server is kept: save what waits,
+            // then go.
+            if (keepsPageOnLeave) {
               event.preventDefault()
               setConfirmingFinish(false)
-              setConfirmingTearOut(true)
+              void keepPage()
               return
             }
             // An unchanged draft leaves silently; a changed one asks first.
@@ -1158,7 +1129,7 @@ function WorkoutEditor() {
             }
           }}
         >
-          ← Cancel
+          {keepsPageOnLeave ? '← Sessions' : '← Cancel'}
         </Link>
         <h1>{isEditing ? 'Edit page' : 'New page'}</h1>
         <span className="new-workout-header-spacer" aria-hidden="true"></span>
@@ -1502,30 +1473,7 @@ function WorkoutEditor() {
             {/* The confirmation takes the place of the action buttons rather
                 than stacking above them, so there is only one question and
                 one pair of buttons on screen. */}
-            {confirmingTearOut ? (
-              <div className="finish-confirmation" role="alert">
-                <p>{describeTearOut(countDraftSets(exercises))}</p>
-                <div>
-                  <button
-                    ref={keepPageRef}
-                    className="btn btn-ghost"
-                    type="button"
-                    onClick={() => void keepPage()}
-                  >
-                    Keep page
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => void tearOutPage()}
-                  >
-                    {savingAction === 'tear-out'
-                      ? 'Tearing out…'
-                      : 'Tear out page'}
-                  </button>
-                </div>
-              </div>
-            ) : confirmingFinish ? (
+            {confirmingFinish ? (
               <div className="finish-confirmation" role="alert">
                 {finishAsksTime ? (
                   <>
