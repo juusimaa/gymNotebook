@@ -1,4 +1,10 @@
-import { Fragment, useState, type FocusEvent, type MouseEvent } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useState,
+  type FocusEvent,
+  type MouseEvent,
+} from 'react'
 import type { WorkoutExerciseDraft, WorkoutSetDraft } from './newWorkoutDraft'
 import { formatLastSet } from './exerciseFormat'
 import {
@@ -105,21 +111,51 @@ export function ExerciseBlockList({
   done,
 }: ExerciseBlockListProps) {
   const { removal } = blocks
-  // Blocks whose "Remove" switch is on. With a Done column, a row has no ×
-  // of its own and the block's "Remove exercise" is hidden: the switch swaps
-  // each row's Done for a × and "+ Add set" for "Remove exercise", so neither
-  // the control tapped after every set nor the heading sits one tap from a
-  // destructive action (design critique 2026-10-16, second pass). Screen
-  // state only; it isn't part of the draft.
-  const [removingSetsIn, setRemovingSetsIn] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  )
+  // The block whose "Remove" switch is on, if any. With a Done column, a row
+  // has no × of its own and the block's "Remove exercise" is hidden: the
+  // switch swaps each row's Warm-up for a × and "+ Add set" for "Remove
+  // exercise", so neither the control tapped after every set nor the
+  // heading sits one tap from a destructive action. Screen state only; it
+  // isn't part of the draft.
+  //
+  // Design critique 2026-10-16, third pass: the × used to take Done's
+  // place, and the switch stayed on until pressed again, so the next tap
+  // where Done always is removed a set. Now Done never moves, and the
+  // switch turns itself off after one removal, or once the lifter touches
+  // or focuses anything outside the block. One block at a time.
+  const [removingSetsFor, setRemovingSetsFor] = useState<string | null>(null)
   const toggleRemovingSets = (exerciseClientId: string) =>
-    setRemovingSetsIn((current) => {
-      const next = new Set(current)
-      if (!next.delete(exerciseClientId)) next.add(exerciseClientId)
-      return next
-    })
+    setRemovingSetsFor((current) =>
+      current === exerciseClientId ? null : exerciseClientId,
+    )
+
+  // "Outside the block" is any pointer press or focus whose target sits in
+  // another block, or in no block at all. Both, because iOS Safari doesn't
+  // focus a tapped button, so focus alone would miss most taps on a phone.
+  useEffect(() => {
+    if (removingSetsFor === null) return
+    const leaveIfOutside = (event: Event) => {
+      const block =
+        event.target instanceof Element
+          ? event.target.closest('.new-workout-exercise')
+          : null
+      if (block?.getAttribute('data-client-id') !== removingSetsFor) {
+        setRemovingSetsFor(null)
+      }
+    }
+    document.addEventListener('pointerdown', leaveIfOutside)
+    document.addEventListener('focusin', leaveIfOutside)
+    return () => {
+      document.removeEventListener('pointerdown', leaveIfOutside)
+      document.removeEventListener('focusin', leaveIfOutside)
+    }
+  }, [removingSetsFor])
+
+  const removingExercise =
+    removingSetsFor === null
+      ? undefined
+      : exercises.find((exercise) => exercise.clientId === removingSetsFor)
+
   // Its id is where Undo puts focus back once the block returns
   // (useExerciseBlocks).
   const removeExerciseButton = (
@@ -131,7 +167,10 @@ export function ExerciseBlockList({
       className={`${className} new-workout-remove-exercise`}
       type="button"
       aria-label={`Remove exercise ${exercise.exerciseName}`}
-      onClick={() => blocks.removeExercise(exercise)}
+      onClick={() => {
+        setRemovingSetsFor(null)
+        blocks.removeExercise(exercise)
+      }}
     >
       Remove exercise
     </button>
@@ -147,18 +186,30 @@ export function ExerciseBlockList({
 
   return (
     <>
+      {/* The switch changes what every row offers, which its pressed state
+        alone doesn't say. Polite: it follows the tap, never interrupts. */}
+      {done !== undefined && (
+        <p className="visually-hidden" role="status">
+          {removingExercise === undefined
+            ? ''
+            : `Removing from ${removingExercise.exerciseName}: each set's Warm-up is now a remove button.`}
+        </p>
+      )}
       {exercises.map((exercise, exerciseIndex) => {
         // Without a Done column (a template) the × keeps its own track at
         // the row's end, as before.
         const isRemovingSets =
-          done !== undefined && removingSetsIn.has(exercise.clientId)
+          done !== undefined && removingSetsFor === exercise.clientId
         const showsRemoveSet = done === undefined || isRemovingSets
         return (
           <Fragment key={exercise.clientId}>
             {removal?.kind === 'exercise' &&
               removal.index === exerciseIndex &&
               undo('new-workout-undo-block')}
-            <article className="new-workout-exercise">
+            <article
+              className="new-workout-exercise"
+              data-client-id={exercise.clientId}
+            >
               <div className="new-workout-exercise-heading">
                 <div>
                   <h3>{exercise.exerciseName}</h3>
@@ -320,36 +371,47 @@ export function ExerciseBlockList({
                         {/* A switch with one name: "Warm-up", pressed or
                           not. A label that flipped between "Working"
                           and "Warm-up" would make a screen reader
-                          announce the opposite of its state. */}
-                        <button
-                          className="new-workout-set-kind"
-                          type="button"
-                          aria-pressed={set.isWarmup}
-                          aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, warm-up`}
-                          onClick={() =>
-                            blocks.changeSet(exercise.clientId, set.clientId, {
-                              isWarmup: !set.isWarmup,
-                            })
-                          }
-                        >
-                          Warm-up
-                        </button>
+                          announce the opposite of its state. While the
+                          block's Remove is on, the × takes its track. */}
+                        {!isRemovingSets && (
+                          <button
+                            className="new-workout-set-kind"
+                            type="button"
+                            aria-pressed={set.isWarmup}
+                            aria-label={`${exercise.exerciseName}, set ${setIndex + 1}, warm-up`}
+                            onClick={() =>
+                              blocks.changeSet(
+                                exercise.clientId,
+                                set.clientId,
+                                { isWarmup: !set.isWarmup },
+                              )
+                            }
+                          >
+                            Warm-up
+                          </button>
+                        )}
 
+                        {/* One removal ends the mode: Undo takes focus,
+                          and a second removal is a deliberate second
+                          press of the switch. */}
                         {showsRemoveSet && (
                           <button
                             className="new-workout-remove-set"
                             type="button"
                             aria-label={`Remove ${exercise.exerciseName} set ${setIndex + 1}`}
                             disabled={exercise.sets.length === 1}
-                            onClick={() => blocks.removeSet(exercise, set)}
+                            onClick={() => {
+                              setRemovingSetsFor(null)
+                              blocks.removeSet(exercise, set)
+                            }}
                           >
                             ×
                           </button>
                         )}
 
                         {/* Done (specs/006): last, under the thumb, and
-                          alone at the row's end: the × appears in its
-                          place only while the block's Remove is on. A round
+                          always there: the × appears in Warm-up's
+                          place, never in Done's. A round
                           switch where Warm-up is a rectangular tag, and
                           not by colour alone: a filled disc with a check
                           when done, a hollow circle reading "Done" when
@@ -360,7 +422,7 @@ export function ExerciseBlockList({
                           Marking one done saves at once
                           (useWorkoutAutosave). Not on a template:
                           nothing in it can be done. */}
-                        {done !== undefined && !isRemovingSets && (
+                        {done !== undefined && (
                           <button
                             className={`new-workout-set-done${isNext ? ' is-next' : ''}${set.status === 'skipped' ? ' is-skipped' : ''}`}
                             type="button"

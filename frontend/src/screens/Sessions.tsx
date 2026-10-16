@@ -218,6 +218,14 @@ export default function Sessions() {
     return <main className="page">Opening pages…</main>
   }
 
+  // The newest page still in progress, if any. Its Continue logging is the
+  // screen's primary action, and Start a new page steps down to secondary:
+  // back at the rack, the loudest button must not split one session over
+  // two pages (design critique 2026-10-16, third pass). The list is newest
+  // first, so this is the page the lifter most likely left.
+  const openPageId =
+    workouts.find((workout) => workout.endedAt === null)?.id ?? null
+
   return (
     <main className="page sessions">
       <header className="sessions-header">
@@ -312,7 +320,7 @@ export default function Sessions() {
               <div className="session-entry" key={workout.id}>
                 {row}
                 <Link
-                  className="btn btn-secondary session-continue"
+                  className={`btn ${workout.id === openPageId ? 'btn-primary' : 'btn-secondary'} session-continue`}
                   to={`/workouts/${workout.id}/edit`}
                   aria-label={`Continue logging ${workout.title ?? 'untitled session'}, started ${startedAt}`}
                 >
@@ -416,7 +424,10 @@ export default function Sessions() {
         >
           From template
         </button>
-        <Link className="btn btn-primary" to="/workouts/new">
+        <Link
+          className={`btn ${openPageId === null ? 'btn-primary' : 'btn-secondary'}`}
+          to="/workouts/new"
+        >
           Start a new page
         </Link>
       </footer>
