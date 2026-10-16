@@ -52,6 +52,17 @@ and its honesty:
 - Exercises are per-user free text, added by being typed into autocomplete;
   there is no "create exercise" action. Typos are fixed by rename, and renaming
   onto an existing name merges the two.
+- **Predefined sessions** (templates): a session written ahead with a name,
+  started from the cover in three taps and ticked off set by set at the gym.
+  Sets carry a status (`planned`, `done`, `skipped`); a set that was not lifted
+  stays on the page but counts toward no best or e1RM. See
+  [specs/006-predefined-sessions/](specs/006-predefined-sessions/).
+- **Backup & restore** (`/backup`): the lifter keeps their own complete copy of
+  the notebook and can restore it. See
+  [specs/004-backup-restore/](specs/004-backup-restore/).
+- **Durable logging:** an open page saves itself shortly after each edit, so a
+  logged set reaches the server even if the connection drops or the phone
+  reloads. See [specs/003-durable-logging/](specs/003-durable-logging/).
 - Privacy and account lifecycle (notice gate, export, account deletion,
   consent for optional workout details) is a live feature behind
   `PRIVACY_LIFECYCLE_ENABLED`; see
@@ -60,7 +71,8 @@ and its honesty:
 ## Capabilities and Constraints
 
 - Screens: login, cover, sessions list, session page, new page, progress,
-  exercise index, edit exercise, plus the privacy and account screens. The spec
+  exercise index, edit exercise, predefined sessions, backup & restore, plus
+  the privacy and account screens. The spec
   is [docs/ui/README.md](docs/ui/README.md), and its "Rules the UI must not
   break" list is binding.
 - Phone-first single column (390 × 844 reference). Desktop is the same column,
@@ -105,7 +117,8 @@ and its honesty:
    UI never shows an estimate where a measurement exists.
 3. **Fast at the rack.** Logging a set comes first: one hand, large targets,
    few steps.
-4. **Nothing is lost by accident.** Destructive actions name their
+4. **Nothing is lost by accident.** A set logged at the rack is kept, even
+   through a dropped connection or a reload. Destructive actions name their
    consequences. Exercises with history are renamed or merged, never deleted.
 5. **Calm, not gamified.** No streaks, badges or social layer. The log is a
    record, not a motivation engine.
