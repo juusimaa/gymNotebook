@@ -1898,7 +1898,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   openSaveTpl = (e) => {
     if (e) e.preventDefault();
     const w = DATA.find((x) => x.id === this.state.pageId) || DATA[0];
-    this.setState({ saveTplOpen: true, saveTplName: w.title, saveTplError: "", saveTplDone: "" });
+    this.setState({ saveTplOpen: true, saveTplName: w.title || "", saveTplError: "", saveTplDone: "" });
   };
   setSaveTplName = (e) => this.setState({ saveTplName: e.target.value, saveTplError: "" });
   closeSaveTpl = (e) => { if (e) e.preventDefault(); this.setState({ saveTplOpen: false, saveTplDone: "", saveTplError: "" }); };
@@ -2552,6 +2552,38 @@ document.addEventListener('DOMContentLoaded', async function() {
     </sc-if>
 
     <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">`
+    );
+
+    // Untitled pages (distill, 2026-10-16), matching the React app: a page
+    // without a title is headlined by its exercises, and its Sessions row
+    // drops the summary line that would only repeat them. Pull B (3 Sep)
+    // loses its title to show it.
+    replaceSessionsAnchor(
+      'title: "Pull B", bw: 78.6',
+      'title: null, bw: 78.6'
+    );
+    // One line, cut with an ellipsis, as the app's row heading is.
+    replaceSessionsAnchor(
+      '<div style="font-family:var(--font-heading);font-size:19px;color:var(--color-text)">{{ w.title }}</div>',
+      '<div style="min-width:0;font-family:var(--font-heading);font-size:19px;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.title }}</div>'
+    );
+    // The later title key wins over the row's own "title: w.title".
+    replaceSessionsAnchor(
+      '        summary: w.blocks.map((b) => b.name).join(" · "),\n',
+      `        summary: w.title ? w.blocks.map((b) => b.name).join(" · ") : "",
+        title: pageHeadline(w),
+`
+    );
+    replaceSessionsAnchor(
+      '      title: w.title,\n      clock:',
+      '      title: pageHeadline(w),\n      clock:'
+    );
+    replaceSessionsAnchor(
+      'const DATA = [\n',
+      `const pageHeadline = (w) => w.title ||
+  [...new Set(w.blocks.map((b) => b.name))].join(" · ") || "No exercises logged";
+const DATA = [
+`
     );
 
     const resourceScript = '<script>window.__resources = ' +

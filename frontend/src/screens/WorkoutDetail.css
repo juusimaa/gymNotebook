@@ -92,6 +92,13 @@
   font-size: 34px;
 }
 
+/* An untitled page's headline sets each exercise as one piece: it moves to
+   the next line whole, and wraps inside only if it is wider than the line. */
+.workout-detail-headline-name {
+  display: inline-block;
+  max-width: 100%;
+}
+
 .workout-detail-meta {
   margin: 0;
   color: var(--color-neutral-700);

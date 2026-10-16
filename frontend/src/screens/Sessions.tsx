@@ -11,6 +11,7 @@ import { createStartTimes } from './newWorkoutDraft'
 import { useRouteNotice } from './routeNotice'
 import {
   formatCount,
+  formatPageHeadline,
   formatSetCounts,
   formatWorkoutDate,
   formatWorkoutTime,
@@ -264,6 +265,14 @@ export default function Sessions() {
                 ? `from ${startedAt}`
                 : formatWorkoutTimeRange(workout.startedAt, workout.endedAt)
 
+            // An untitled page is headlined by its exercises, so the summary
+            // line under it would only repeat the heading; it is left out.
+            const headline = formatPageHeadline(
+              workout.title,
+              workout.exerciseNames,
+            )
+            const hasTitle =
+              workout.title !== null && workout.title.trim() !== ''
             const exerciseSummary =
               workout.exerciseNames.length === 0
                 ? 'No exercises logged'
@@ -284,7 +293,7 @@ export default function Sessions() {
 
                 <div className="session-content">
                   <div className="session-heading">
-                    <h3>{workout.title ?? 'Untitled session'}</h3>
+                    <h2>{headline}</h2>
                     {inProgress ? (
                       <span className="session-time session-in-progress">
                         in progress
@@ -294,7 +303,9 @@ export default function Sessions() {
                     )}
                   </div>
 
-                  <p className="session-exercises">{exerciseSummary}</p>
+                  {hasTitle && (
+                    <p className="session-exercises">{exerciseSummary}</p>
+                  )}
 
                   <p className="session-meta num">
                     {formatCount(workout.exerciseCount, 'exercise')} ·{' '}
@@ -322,7 +333,7 @@ export default function Sessions() {
                 <Link
                   className={`btn ${workout.id === openPageId ? 'btn-primary' : 'btn-secondary'} session-continue`}
                   to={`/workouts/${workout.id}/edit`}
-                  aria-label={`Continue logging ${workout.title ?? 'untitled session'}, started ${startedAt}`}
+                  aria-label={`Continue logging ${headline}, started ${startedAt}`}
                 >
                   Continue logging
                 </Link>

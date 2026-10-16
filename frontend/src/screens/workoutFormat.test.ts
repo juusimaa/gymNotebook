@@ -3,6 +3,7 @@ import {
   formatBestSet,
   formatCount,
   formatInstantDate,
+  formatPageHeadline,
   formatWorkoutDate,
   formatWorkoutLongDate,
   formatSetCounts,
@@ -88,6 +89,32 @@ describe('formatInstantDate', () => {
   it('writes the day in English whatever the browser locale', () => {
     // Midday UTC, so the day is the same in any time zone the test runs in.
     expect(formatInstantDate('2026-10-04T12:00:00Z')).toBe('4 October 2026')
+  })
+})
+
+describe('formatPageHeadline', () => {
+  it('formatPageHeadline_WithTitle_ReturnsTitle', () => {
+    expect(formatPageHeadline('Push A', ['Bench Press'])).toBe('Push A')
+  })
+
+  it('formatPageHeadline_Untitled_JoinsExercisesInOrder', () => {
+    expect(formatPageHeadline(null, ['Bench Press', 'Pull-up'])).toBe(
+      'Bench Press · Pull-up',
+    )
+  })
+
+  it('formatPageHeadline_RepeatedExercise_NamesItOnce', () => {
+    expect(
+      formatPageHeadline(null, ['Bench Press', 'Pull-up', 'Bench Press']),
+    ).toBe('Bench Press · Pull-up')
+  })
+
+  it('formatPageHeadline_BlankTitle_FallsBackToExercises', () => {
+    expect(formatPageHeadline('  ', ['Deadlift'])).toBe('Deadlift')
+  })
+
+  it('formatPageHeadline_UntitledWithoutExercises_SaysSo', () => {
+    expect(formatPageHeadline(null, [])).toBe('No exercises logged')
   })
 })
 
