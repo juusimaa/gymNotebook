@@ -427,7 +427,7 @@
   border: 2px solid var(--color-text);
 }
 
-/* The set the lifter is up to: a heavier stroke, and "next" under the row. */
+/* The set the lifter is up to: a heavier accent stroke. */
 .new-workout-set-done.is-next {
   border: 2px solid var(--color-accent-700);
 }
@@ -449,16 +449,11 @@
   border-style: dashed;
 }
 
-/* "next" or "skipped" under the row, aligned with the weight field. */
+/* "skipped" under the row, aligned with the weight field. */
 .new-workout-set-note {
   margin: 2px 0 0 26px;
   color: var(--color-neutral-700);
   font-size: 12px;
-}
-
-.new-workout-set-note.is-next {
-  color: var(--color-accent-700);
-  font-weight: 600;
 }
 
 /* The block's next action, and the editor's most-tapped control: a full-width
