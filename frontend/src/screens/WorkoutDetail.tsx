@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ApiError } from '../api/client'
 import {
@@ -10,7 +10,9 @@ import {
 import { saveWorkoutAsTemplate } from '../api/templates'
 import {
   formatBestSet,
+  formatPageHeadline,
   formatSetLoad,
+  headlineExerciseNames,
   formatWorkoutLongDate,
   formatWorkoutTime,
   formatWorkoutTimeRange,
@@ -149,6 +151,13 @@ export default function WorkoutDetail() {
   const meta = detailsAllowed
     ? `${timeRange} · ${bodyweight} · ${location}`
     : timeRange
+  // The title is an optional detail; without it the page is headlined by its
+  // exercises, which need no consent (formatPageHeadline).
+  const shownTitle = detailsAllowed ? workout.title : null
+  const hasTitle = shownTitle !== null && shownTitle.trim() !== ''
+  const headlineNames = headlineExerciseNames(
+    workout.exercises.map((exercise) => exercise.exerciseName),
+  )
 
   return (
     <main className="page workout-detail">
@@ -255,7 +264,20 @@ export default function WorkoutDetail() {
             {formatWorkoutLongDate(workout.date)}
           </p>
           <h1>
-            {(detailsAllowed ? workout.title : null) ?? 'Untitled session'}
+            {hasTitle || headlineNames.length === 0
+              ? formatPageHeadline(shownTitle, headlineNames)
+              : // Untitled: the exercises, each name kept whole on its line
+                // so "Pull-up" never breaks at its hyphen, and the "·" stays
+                // at a line's end rather than starting the next.
+                headlineNames.map((name, index) => (
+                  <Fragment key={name}>
+                    {index > 0 && ' '}
+                    <span className="workout-detail-headline-name">
+                      {name}
+                      {index < headlineNames.length - 1 && ' ·'}
+                    </span>
+                  </Fragment>
+                ))}
           </h1>
           <p className="workout-detail-meta num">{meta}</p>
         </section>

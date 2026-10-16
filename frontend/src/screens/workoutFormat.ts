@@ -120,6 +120,28 @@ export function formatInstantDate(instant: string): string {
   )
 }
 
+// A page's headline: its title, or for an untitled page the exercises it
+// holds ("Bench Press · Pull-up"), each once, in page order. What was lifted
+// tells pages apart better than "Untitled session" did, and exercise names
+// aren't optional details, so it reads the same without consent.
+export function formatPageHeadline(
+  title: string | null,
+  exerciseNames: readonly string[],
+): string {
+  if (title !== null && title.trim() !== '') return title
+  if (exerciseNames.length === 0) return 'No exercises logged'
+  return headlineExerciseNames(exerciseNames).join(' · ')
+}
+
+// The names an untitled page's headline lists: each once, in page order. A
+// screen that sets the names one by one (to keep "Pull-up" from breaking at
+// its hyphen) uses this, so it lists the same names formatPageHeadline does.
+export function headlineExerciseNames(
+  exerciseNames: readonly string[],
+): string[] {
+  return [...new Set(exerciseNames)]
+}
+
 export function formatCount(count: number, singular: string): string {
   return `${count} ${count === 1 ? singular : `${singular}s`}`
 }
