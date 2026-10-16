@@ -955,16 +955,27 @@ function WorkoutEditor() {
     }
   }
 
-  // A new page that has already saved itself is in the notebook, so its
-  // header link reads "← Sessions" and leaving keeps it: there is nothing to
-  // cancel, and a lifter glancing back at last week mid-session shouldn't
-  // meet a destructive question (design critique 2026-10-16). Tearing a page
-  // out is done on its session page, deliberately. Not after a conflict:
-  // then the ordinary Cancel and its discard question apply.
+  // The editor splits on whether the page is open or finished, not on
+  // whether it is new (design critique 2026-10-16). An open page already on
+  // the server — a new page after its first save, a resumed page, one
+  // started from a template — is in the notebook, so its header link reads
+  // "← Sessions" and leaving keeps it: there is nothing to cancel, and a
+  // lifter glancing back at last week mid-session shouldn't meet a
+  // destructive question. Tearing a page out is done on its session page,
+  // deliberately. Not after a conflict: then the ordinary Cancel and its
+  // discard question apply. A finished page keeps Cancel and Save changes.
   const keepsPageOnLeave =
-    !isEditing && savedWorkoutId !== null && pageProblem === null
+    isInProgress && savedWorkoutId !== null && pageProblem === null
+  // The title names the page's state: "New page" until it reaches the
+  // server (the moment the link turns into "← Sessions" too), then
+  // "In progress" until it is finished; a finished page reads "Edit page".
+  const editorTitle = !isInProgress
+    ? 'Edit page'
+    : savedWorkoutId === null
+      ? 'New page'
+      : 'In progress'
 
-  // Leaving a saved new page: whatever is still waiting is saved first, then
+  // Leaving an open page: whatever is still waiting is saved first, then
   // on to Sessions, where the page is in progress. If that save fails the
   // lifter stays, with the footer saying so, rather than leaving sets behind
   // unknowingly.
@@ -1114,7 +1125,7 @@ function WorkoutEditor() {
               if (draftRoute !== null) removeEditorDraft(draftRoute)
               return
             }
-            // A new page already on the server is kept: save what waits,
+            // An open page already on the server is kept: save what waits,
             // then go.
             if (keepsPageOnLeave) {
               event.preventDefault()
@@ -1131,7 +1142,7 @@ function WorkoutEditor() {
         >
           {keepsPageOnLeave ? '← Sessions' : '← Cancel'}
         </Link>
-        <h1>{isEditing ? 'Edit page' : 'New page'}</h1>
+        <h1>{editorTitle}</h1>
         <span className="new-workout-header-spacer" aria-hidden="true"></span>
       </header>
 
