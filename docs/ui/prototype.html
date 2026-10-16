@@ -2326,6 +2326,23 @@ document.addEventListener('DOMContentLoaded', async function() {
   firstNotDone = () => {`
     );
 
+    // Second pass, the cover: the account's chores under a hairline and one
+    // quiet "Account" heading, two to a row, Sign out last, so "Open the
+    // notebook" stands alone as the cover's decision.
+    replaceSessionsAnchor(
+      `<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--color-neutral-700);overflow-wrap:anywhere">Signed in as ann@example.com</div>\n        <div style="text-align:center;margin-top:14px;font-size:13px"><a href="#" sc-camel-on-click="{{ goPrivacy }}">Privacy &amp; account</a></div>\n        ` + coverSignOut + coverBackupLink,
+      `<section aria-labelledby="proto-cover-account" style="margin-top:28px;padding-top:18px;border-top:1px solid var(--color-divider);text-align:center">
+          <h2 id="proto-cover-account" style="margin:0;font-family:var(--font-body);font-size:13px;font-weight:400;letter-spacing:.2em;text-transform:uppercase;color:var(--color-neutral-700)">Account</h2>
+          <div style="margin-top:9px;font-size:13px;color:var(--color-neutral-700);overflow-wrap:anywhere">Signed in as ann@example.com</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;column-gap:18px;margin-top:9px;font-size:13px">
+            <a href="#" sc-camel-on-click="{{ goCover }}" style="min-height:44px;display:flex;align-items:center;justify-content:center">Change password</a>
+            <a href="#" sc-camel-on-click="{{ openBackup }}" style="min-height:44px;display:flex;align-items:center;justify-content:center">Backup &amp; restore</a>
+            <a href="#" sc-camel-on-click="{{ goPrivacy }}" style="min-height:44px;display:flex;align-items:center;justify-content:center">Privacy &amp; account</a>
+            <a href="#" sc-camel-on-click="{{ goLogin }}" style="min-height:44px;display:flex;align-items:center;justify-content:center">Sign out</a>
+          </div>
+        </section>`
+    );
+
     // Design critique 2026-10-16, part 2, matching the React app. One
     // notebook nav on Sessions, Progress, Exercises and Templates; the session
     // page says "Tear out"; a page in progress (always saved in this preview)
@@ -2343,7 +2360,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       'sc-camel-on-click="{{ askDelete }}" style="color:var(--color-neutral-700)">Delete</a>',
       'sc-camel-on-click="{{ askDelete }}" style="color:var(--color-neutral-700)">Tear out</a>'
     );
-    replaceSessionsAnchor('>Delete page</button>', '>Tear out page</button>');
+    // The confirm button keeps the plain "Delete page" (second pass the same day).
     replaceSessionsAnchor(
       'sc-camel-on-click="{{ askDiscard }}" style="font-size:13px">← Cancel</a>',
       'sc-camel-on-click="{{ leaveEditor }}" style="font-size:13px">{{ leaveLabel }}</a>'

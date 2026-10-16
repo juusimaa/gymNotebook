@@ -217,7 +217,10 @@ export default function WorkoutDetail() {
               disabled={isDeleting}
               onClick={() => void removeWorkout()}
             >
-              {isDeleting ? 'Tearing out…' : 'Tear out page'}
+              {/* The question keeps the notebook's word; the button that
+                destroys says plainly what it does (design critique
+                2026-10-16, second pass). */}
+              {isDeleting ? 'Deleting…' : 'Delete page'}
             </button>
           </div>
         </section>

@@ -84,7 +84,9 @@ and its honesty:
   closed book, not a dashboard.
 - Copy explains consequences plainly: destructive actions name what they
   destroy, and absent optional fields read as prose ("bodyweight not logged")
-  rather than empty slots.
+  rather than empty slots. The question may use the notebook's word ("Tear
+  out this page?"), but the button that destroys uses the plain verb
+  ("Delete page").
 - An established visual direction already exists in docs/ui and the
   [prototype](docs/ui/prototype.html). It is recorded there, not here.
 
