@@ -1961,7 +1961,10 @@ document.addEventListener('DOMContentLoaded', async function() {
       isProgMode: isProg, isFinMode: isFin, isTpl, showDone,
       cols: showDone ? "18px 1fr 1fr 62px 44px 44px" : "26px 1fr 1fr 80px 48px",
       gap: showDone ? "6px" : "8px",
-      editorTitle: isTpl ? (s.tplId ? "Template" : "New template") : isFin ? "Edit page" : "New page",
+      // The title names the page's state (design critique 2026-10-16): a page
+      // in progress is always saved in this preview, so it reads "In progress"
+      // where the app shows "New page" only until the first save.
+      editorTitle: isTpl ? (s.tplId ? "Template" : "New template") : isFin ? "Edit page" : "In progress",
       datelineText: isFin ? "9 Sep 07.10–08.05" : "Today 07.15",
       datelineDisplay: isTpl ? "none" : "flex",
       draftTitle: s.draftTitle, setDraftTitle: this.setDraftTitle,
