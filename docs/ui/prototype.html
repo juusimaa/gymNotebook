@@ -2586,6 +2586,160 @@ const DATA = [
 `
     );
 
+    // Demo mode (specs/007, PR 2). Sign-in offers "Try the demo", a fourth
+    // login mode with the bot check; the cover of a demo shows when it ends,
+    // swaps Change password for Reset demo data and Sign out for Leave demo,
+    // and asks before either. Simulated: starting a demo just opens the
+    // cover, and a reset changes no sample data. Same anchor discipline as the
+    // patches above; runs last, so it anchors on their output.
+    const replaceDemoAnchor = (anchor, replacement) => {
+      if (!template.includes(anchor)) throw new Error('Demo prototype anchor missing: ' + anchor.slice(0, 90));
+      template = template.replace(anchor, replacement);
+    };
+    replaceDemoAnchor(
+      '    loginMode: "signIn",\n',
+      '    loginMode: "signIn",\n    demo: false,\n    demoStep: "idle",\n    demoError: "",\n    demoNotice: "",\n'
+    );
+    replaceDemoAnchor(
+      '  setLoginMode = (loginMode) => (e) => {',
+      `  openDemo = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "login", loginMode: "demo", demoError: "" });
+  };
+  // A new demo meets the notice and the optional-details question like any
+  // new account, so it starts with neither answered.
+  startDemo = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "cover", loginMode: "signIn", demo: true, demoStep: "idle", demoError: "", demoNotice: "", noticeSeen: false, detailsConsent: false });
+  };
+  previewDemoError = (demoError) => (e) => {
+    if (e) e.preventDefault();
+    this.setState({ demoError });
+  };
+  setDemoStep = (demoStep) => (e) => {
+    if (e) e.preventDefault();
+    this.setState({ demoStep, demoNotice: "" });
+  };
+  confirmDemoReset = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ demoStep: "idle", demoNotice: "Demo data reset. The notebook is new again." });
+  };
+  leaveDemo = (e) => {
+    if (e) e.preventDefault();
+    this.setState({ screen: "login", loginMode: "signIn", demo: false, demoStep: "idle", demoNotice: "" });
+  };
+  setLoginMode = (loginMode) => (e) => {`
+    );
+    replaceDemoAnchor(
+      '      isLoginResetSent: this.state.loginMode === "resetSent",',
+      `      isLoginResetSent: this.state.loginMode === "resetSent",
+      // Overrides the earlier key: the demo mode has no email form either.
+      isLoginForm: !["inbox", "resetSent", "demo"].includes(this.state.loginMode),
+      isLoginDemo: this.state.loginMode === "demo",
+      demoError: this.state.demoError,
+      hasDemoError: !!this.state.demoError,
+      isDemo: this.state.demo,
+      notDemo: !this.state.demo,
+      isDemoIdle: this.state.demo && this.state.demoStep === "idle",
+      isDemoReset: this.state.demo && this.state.demoStep === "reset",
+      isDemoLeave: this.state.demo && this.state.demoStep === "leave",
+      demoNotice: this.state.demoNotice,
+      hasDemoNotice: !!this.state.demoNotice,
+      demoDetailsHint: !this.state.detailsConsent,
+      openDemo: this.openDemo,
+      startDemo: this.startDemo,
+      previewDemoCaptcha: this.previewDemoError("The check didn't pass. Try again."),
+      previewDemoFull: this.previewDemoError("Too many demos are running right now. Try again in a few minutes."),
+      previewDemoRate: this.previewDemoError("Too many demos started from this network. Try again later."),
+      askDemoReset: this.setDemoStep("reset"),
+      askLeaveDemo: this.setDemoStep("leave"),
+      cancelDemoStep: this.setDemoStep("idle"),
+      confirmDemoReset: this.confirmDemoReset,
+      leaveDemo: this.leaveDemo,`
+    );
+    replaceDemoAnchor(
+      'owner: this.props.owner ?? "J. Uusimaa",',
+      'owner: this.state.demo ? "Demo Lifter" : (this.props.owner ?? "J. Uusimaa"),'
+    );
+    // Sign in: the demo sits under the account switch, below a hairline, so
+    // it reads as a way in for visitors rather than a third account action.
+    replaceDemoAnchor(
+      `<div ${loginSwitch}>New here? <a href="#" sc-camel-on-click="{{ setLoginCreate }}">Create an account</a></div></sc-if>`,
+      `<div ${loginSwitch}>New here? <a href="#" sc-camel-on-click="{{ setLoginCreate }}">Create an account</a></div>
+        <div style="margin-top:22px;padding-top:20px;border-top:1px solid var(--color-divider)">
+          <button class="btn btn-secondary" sc-camel-on-click="{{ openDemo }}" style="min-height:48px;width:100%;font-size:15px">Try the demo</button>
+          <p style="margin:10px 0 0;text-align:center;font-size:13px;line-height:1.55;color:var(--color-neutral-700)">A sample notebook with twelve weeks of training. No email needed.</p>
+        </div></sc-if>`
+    );
+    replaceDemoAnchor(
+      `<div ${loginSwitch}><a href="#" sc-camel-on-click="{{ openResetPassword }}">Open the link from the email (preview)</a></div>
+          <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Back to sign in</a></div>
+        </sc-if>`,
+      `<div ${loginSwitch}><a href="#" sc-camel-on-click="{{ openResetPassword }}">Open the link from the email (preview)</a></div>
+          <div ${loginSwitch}><a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Back to sign in</a></div>
+        </sc-if>
+        <sc-if value="{{ isLoginDemo }}" hint-placeholder-val="{{ false }}">
+          <h2 style="font-family:var(--font-heading);font-weight:400;font-size:28px;margin:0 0 12px">Try the demo</h2>
+          <p style="margin:0 0 12px;font-size:15px;line-height:1.6">You get a notebook of your own with about twelve weeks of sample training: sessions, templates and progress charts. Change anything you like.</p>
+          <p style="margin:0 0 18px;font-size:13px;line-height:1.6;color:var(--color-neutral-700)">No email or password. The demo ends 24 hours after you start it and is then deleted with everything in it.</p>
+          <div aria-label="Cloudflare Turnstile (stand-in)" style="min-height:65px;box-sizing:border-box;border:1px solid var(--color-divider);border-radius:var(--radius-sm);background:var(--color-surface);display:flex;align-items:center;gap:10px;padding:0 14px;font-size:14px;color:var(--color-text)"><span style="color:var(--color-accent)">&#10003;</span> Success! <span style="margin-left:auto;font-size:11px;color:var(--color-neutral-600)">Cloudflare Turnstile</span></div>
+          <sc-if value="{{ hasDemoError }}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin:14px 0 0;font-size:14px;line-height:1.5;color:var(--color-error)">{{ demoError }}</p></sc-if>
+          <button class="btn btn-primary" sc-camel-on-click="{{ startDemo }}" style="margin-top:22px;min-height:48px;width:100%;font-family:var(--font-heading);font-size:17px;letter-spacing:.04em">Start the demo</button>
+          <div ${loginSwitch}>Have an account? <a href="#" sc-camel-on-click="{{ setLoginSignIn }}">Sign in</a></div>
+          <p style="margin:18px 0 0;font-size:12px;line-height:1.55;color:var(--color-neutral-600)">Preview the errors: <a href="#" sc-camel-on-click="{{ previewDemoCaptcha }}">check failed</a> · <a href="#" sc-camel-on-click="{{ previewDemoFull }}">demos full</a> · <a href="#" sc-camel-on-click="{{ previewDemoRate }}">too many starts</a>. While it runs, the button reads "Setting up your demo…".</p>
+        </sc-if>`
+    );
+    // Cover: the demo's end under the volume line, in the gold hairline the
+    // cover already uses, so it reads as part of the cover, not an alert.
+    replaceDemoAnchor(
+      'VOLUME {{ volume }} · {{ year }}</div>',
+      `VOLUME {{ volume }} · {{ year }}</div>
+          <sc-if value="{{ isDemo }}" hint-placeholder-val="{{ false }}"><div style="margin-top:16px;padding:5px 14px;border:1px solid var(--color-accent);border-radius:999px;font-size:13px;color:var(--color-accent-700);font-variant-numeric:tabular-nums">Demo · ends tomorrow at 18.30</div></sc-if>`
+    );
+    // The demo's internal address ("demo:…") is never shown.
+    replaceDemoAnchor(
+      '<div style="margin-top:9px;font-size:13px;color:var(--color-neutral-700);overflow-wrap:anywhere">Signed in as ann@example.com</div>',
+      `<sc-if value="{{ notDemo }}" hint-placeholder-val="{{ true }}"><div style="margin-top:9px;font-size:13px;color:var(--color-neutral-700);overflow-wrap:anywhere">Signed in as ann@example.com</div></sc-if>
+          <sc-if value="{{ isDemo }}" hint-placeholder-val="{{ false }}"><div style="margin-top:9px;font-size:13px;color:var(--color-neutral-700)">A demo notebook, deleted when the demo ends</div></sc-if>
+          <sc-if value="{{ hasDemoNotice }}" hint-placeholder-val="{{ false }}"><div role="status" style="margin-top:9px;font-size:13px;color:var(--color-text)">{{ demoNotice }}</div></sc-if>`
+    );
+    const coverLink = 'style="min-height:44px;display:flex;align-items:center;justify-content:center"';
+    replaceDemoAnchor(
+      '<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:18px;margin-top:9px;font-size:13px">',
+      '<sc-if value="{{ notDemo }}" hint-placeholder-val="{{ true }}"><div style="display:grid;grid-template-columns:1fr 1fr;column-gap:18px;margin-top:9px;font-size:13px">'
+    );
+    const demoConfirm = 'style="margin-top:12px;padding:14px 16px;border:1px solid var(--color-divider);border-radius:var(--radius-md);text-align:left"';
+    const demoConfirmActions = 'style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px"';
+    replaceDemoAnchor(
+      '>Sign out</a>\n          </div>\n        </section>',
+      `>Sign out</a>
+          </div></sc-if>
+          <sc-if value="{{ isDemoIdle }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:1fr 1fr;column-gap:18px;margin-top:9px;font-size:13px">
+            <a href="#" sc-camel-on-click="{{ askDemoReset }}" ${coverLink}>Reset demo data</a>
+            <a href="#" sc-camel-on-click="{{ openBackup }}" ${coverLink}>Backup &amp; restore</a>
+            <a href="#" sc-camel-on-click="{{ goPrivacy }}" ${coverLink}>Privacy &amp; account</a>
+            <a href="#" sc-camel-on-click="{{ askLeaveDemo }}" ${coverLink}>Leave demo</a>
+          </div></sc-if>
+          <sc-if value="{{ isDemoReset }}" hint-placeholder-val="{{ false }}"><div ${demoConfirm}>
+            <h3 style="margin:0;font-family:var(--font-heading);font-size:20px;font-weight:400">Reset demo data?</h3>
+            <p style="margin:8px 0 0;font-size:13px;line-height:1.6">Every session, template and exercise in this demo is replaced with a new sample notebook. What you changed or added is lost. The demo still ends tomorrow at 18.30.</p>
+            <sc-if value="{{ demoDetailsHint }}" hint-placeholder-val="{{ true }}"><p style="margin:8px 0 0;font-size:13px;line-height:1.6;color:var(--color-neutral-700)">Sample titles, gyms, notes and bodyweight are added only after you allow optional details in Privacy &amp; account. Allow them first, then reset.</p></sc-if>
+            <div ${demoConfirmActions}>
+              <button class="btn btn-secondary" sc-camel-on-click="{{ confirmDemoReset }}" style="min-height:44px">Reset demo data</button>
+              <button class="btn btn-ghost" sc-camel-on-click="{{ cancelDemoStep }}" style="min-height:44px">Cancel</button>
+            </div>
+          </div></sc-if>
+          <sc-if value="{{ isDemoLeave }}" hint-placeholder-val="{{ false }}"><div ${demoConfirm}>
+            <h3 style="margin:0;font-family:var(--font-heading);font-size:20px;font-weight:400">Leave the demo?</h3>
+            <p style="margin:8px 0 0;font-size:13px;line-height:1.6">You can't come back to this demo; it has no password. It is deleted when it ends. Trying the demo again starts a new one.</p>
+            <div ${demoConfirmActions}>
+              <button class="btn btn-secondary" sc-camel-on-click="{{ leaveDemo }}" style="min-height:44px">Leave demo</button>
+              <button class="btn btn-ghost" sc-camel-on-click="{{ cancelDemoStep }}" style="min-height:44px">Stay</button>
+            </div>
+          </div></sc-if>
+        </section>`
+    );
+
     const resourceScript = '<script>window.__resources = ' +
       JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
       ';</' + 'script>';

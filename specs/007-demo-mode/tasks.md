@@ -218,7 +218,7 @@ Paths: backend `backend/GymNotebook.Api/`, tests `backend/GymNotebook.Tests/`, f
 
 ## Phase 8: Screens (PR 2, after PR 1 merges)
 
-- [ ] T070 Mock the demo UI in `docs/ui/README.md` and `docs/ui/prototype.html` for owner approval:
+- [x] T070 Mock the demo UI in `docs/ui/README.md` and `docs/ui/prototype.html` for owner approval:
   - Login: a **Try the demo** button with Turnstile;
   - Cover: a demo badge showing the expiry time, **Reset demo data** (confirm dialog, with the hint that a reset loads sample notes after optional details are allowed) and **Leave demo**;
   - the refusal copy for `demo_account`.
