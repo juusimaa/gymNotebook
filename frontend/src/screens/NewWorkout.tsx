@@ -70,7 +70,12 @@ import {
   useWorkoutAutosave,
   withExerciseIds,
 } from './useWorkoutAutosave'
-import { focusInput, setFieldId, useExerciseBlocks } from './useExerciseBlocks'
+import {
+  focusInput,
+  setFieldId,
+  setRowId,
+  useExerciseBlocks,
+} from './useExerciseBlocks'
 import { useOptionalDetailsAllowed } from './useOptionalDetailsAllowed'
 import { useVisualViewportHeight } from './useVisualViewportHeight'
 import './NewWorkout.css'
@@ -1074,6 +1079,27 @@ function WorkoutEditor() {
   // a finished page has none, its not-done sets are skipped. Finishing keeps
   // whatever is still planned as skipped, and the question says how many.
   const nextSet = isInProgress ? findNextSet(exercises) : null
+  const nextSetClientId = nextSet?.setClientId ?? null
+
+  // Marking the set the lifter is up to done brings the one after it into
+  // view when it has scrolled under the footer, so the next tap needs no
+  // scrolling with a chalky thumb. Only after that tap: ticking off an
+  // earlier set, or loading the page, leaves the scroll alone. Focus stays on
+  // the toggle; only the view moves.
+  const revealsNextSet = useRef(false)
+  useEffect(() => {
+    if (!revealsNextSet.current) return
+    revealsNextSet.current = false
+    if (nextSetClientId === null) return
+    const reducesMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches
+    document.getElementById(setRowId(nextSetClientId))?.scrollIntoView({
+      block: 'nearest',
+      behavior: reducesMotion ? 'auto' : 'smooth',
+    })
+  }, [nextSetClientId])
+
   const notDoneCount = countNotDone(exercises)
   const finishSkips =
     notDoneCount === 0
@@ -1229,29 +1255,6 @@ function WorkoutEditor() {
                       : 'add details'}
                 </span>
               </button>
-              {/* The save state (contracts/ui.md). Outside the button, so the
-                  button's name stays the date; a polite live region that is
-                  always there, so a change in it is announced. A conflict or
-                  a deleted page needs action and is announced at once. */}
-              {pageProblem === null ? (
-                <p
-                  className={`new-workout-save-state${saveState?.isError === true ? ' is-error' : ''}`}
-                  role="status"
-                >
-                  {saveState?.text}
-                </p>
-              ) : (
-                <p className="new-workout-save-state is-error" role="alert">
-                  {pageProblem === 'conflict'
-                    ? 'This page changed on another device.'
-                    : 'This page no longer exists.'}
-                  {pageProblem === 'conflict' && (
-                    <button type="button" onClick={() => void reloadPage()}>
-                      Reload page
-                    </button>
-                  )}
-                </p>
-              )}
               {isHeadingOpen && (
                 <div className="form-stack" id="page-heading-fields">
                   <div className="new-workout-field-pair">
@@ -1440,14 +1443,18 @@ function WorkoutEditor() {
                   invalidProps({ kind: 'set', setClientId, field })
                 }
                 done={{
-                  nextSetClientId: nextSet?.setClientId ?? null,
+                  nextSetClientId,
                   note: setNote,
                   // Released, a set goes back to planned, or to skipped on a
                   // finished page (toggleSetDone).
-                  onToggle: (exercise, set) =>
+                  onToggle: (exercise, set) => {
+                    if (set.clientId === nextSetClientId) {
+                      revealsNextSet.current = true
+                    }
                     blocks.changeSet(exercise.clientId, set.clientId, {
                       status: toggleSetDone(set.status, !isInProgress),
-                    }),
+                    })
+                  },
                 }}
               />
 
@@ -1461,6 +1468,32 @@ function WorkoutEditor() {
           </div>
 
           <footer className="new-workout-actions">
+            {/* The save state (contracts/ui.md), in the sticky footer so it
+                stays in sight while the lifter logs blocks further down the
+                page; under the dateline it scrolled away exactly when a
+                failed save mattered. A polite live region that is always
+                there, so a change in it is announced, and above any
+                confirmation, so a question never hides it. A conflict or a
+                deleted page needs action and is announced at once. */}
+            {pageProblem === null ? (
+              <p
+                className={`new-workout-save-state${saveState?.isError === true ? ' is-error' : ''}`}
+                role="status"
+              >
+                {saveState?.text}
+              </p>
+            ) : (
+              <p className="new-workout-save-state is-error" role="alert">
+                {pageProblem === 'conflict'
+                  ? 'This page changed on another device.'
+                  : 'This page no longer exists.'}
+                {pageProblem === 'conflict' && (
+                  <button type="button" onClick={() => void reloadPage()}>
+                    Reload page
+                  </button>
+                )}
+              </p>
+            )}
             {saveMessage !== null && (
               <p id={SAVE_MESSAGE_ID} className="form-message" role="alert">
                 {saveMessage}

@@ -51,6 +51,12 @@ export function setFieldId(
   return `set-${setClientId}-${field}`
 }
 
+// A set row's id, so the editor can bring the set the lifter is up to into
+// view after a Done tap.
+export function setRowId(setClientId: string): string {
+  return `set-${setClientId}-row`
+}
+
 // Moves focus to an input by id. `select` highlights its value, so typing
 // replaces a copied figure instead of appending to it.
 export function focusInput(id: string, select = false) {
