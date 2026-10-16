@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import {
   getExerciseHistory,
   searchExercises,
   type ExerciseHistoryResponse,
   type ExerciseResponse,
 } from '../api/exercises'
+import { filterExercisesByName } from './exerciseFormat'
 import {
   buildProgressChart,
+  describeProgressSession,
   formatProgressChange,
   formatProgressDate,
   formatProgressFigure,
@@ -20,9 +22,8 @@ import { NotebookNav } from './NotebookNav'
 
 export default function Progress() {
   const [exercises, setExercises] = useState<ExerciseResponse[] | null>(null)
-  const [selectedExerciseId, setSelectedExerciseId] = useState<number | null>(
-    null,
-  )
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [query, setQuery] = useState('')
   const [history, setHistory] = useState<ExerciseHistoryResponse | null>(null)
   const [exerciseMessage, setExerciseMessage] = useState<string | null>(null)
   const [historyMessage, setHistoryMessage] = useState<string | null>(null)
@@ -39,7 +40,6 @@ export default function Progress() {
         const response = await searchExercises('')
         if (!cancelled) {
           setExercises(response)
-          setSelectedExerciseId((current) => current ?? response[0]?.id ?? null)
         }
       } catch {
         if (!cancelled) {
@@ -55,6 +55,18 @@ export default function Progress() {
       cancelled = true
     }
   }, [exerciseLoadAttempt])
+
+  // The selection lives in the address (/progress?exercise=12), so Back from a
+  // session opened in the history returns to the same exercise. An id that
+  // isn't one of the caller's exercises (deleted, merged, mistyped) falls back
+  // to the first one, as no id does.
+  const requestedId = Number(searchParams.get('exercise'))
+  const selectedExerciseId =
+    exercises === null
+      ? null
+      : (exercises.find((exercise) => exercise.id === requestedId)?.id ??
+        exercises[0]?.id ??
+        null)
 
   useEffect(() => {
     if (selectedExerciseId === null) {
@@ -101,7 +113,9 @@ export default function Progress() {
     if (id !== selectedExerciseId) {
       setHistory(null)
       setHistoryMessage(null)
-      setSelectedExerciseId(id)
+      // Replace, not push: tapping through exercises shouldn't fill Back with
+      // every one of them.
+      setSearchParams({ exercise: String(id) }, { replace: true })
     }
   }
 
@@ -152,23 +166,13 @@ export default function Progress() {
           </section>
         ) : (
           <>
-            <ExercisePicker>
-              {exercises.map((exercise) => (
-                <button
-                  className={
-                    exercise.id === selectedExerciseId
-                      ? 'is-selected'
-                      : undefined
-                  }
-                  type="button"
-                  aria-pressed={exercise.id === selectedExerciseId}
-                  onClick={() => selectExercise(exercise.id)}
-                  key={exercise.id}
-                >
-                  {exercise.name}
-                </button>
-              ))}
-            </ExercisePicker>
+            <ExercisePicker
+              exercises={exercises}
+              selectedId={selectedExerciseId}
+              query={query}
+              onQueryChange={setQuery}
+              onSelect={selectExercise}
+            />
 
             {historyMessage !== null ? (
               <section className="progress-inline-state">
@@ -195,55 +199,71 @@ export default function Progress() {
   )
 }
 
-// The chip row scrolls sideways, and at 390px a long name ("Ylätalja
-// vastaotteella") runs past the edge with nothing to say the row goes on. Each
-// edge fades while there is more to scroll that way, and stops fading once the
-// row reaches it, so the last chip never stays faded. The edge state is read
-// from the element on scroll and resize rather than computed from the chips.
-function ExercisePicker({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [more, setMore] = useState({ start: false, end: false })
+// A search field over the exercise chips. The chips wrap rather than scroll
+// sideways (design critique 2026-10-16: a sideways row hid most of a long
+// list), and the field filters the list Progress already holds, so finding one
+// exercise among forty is typing a few letters rather than scrolling for it.
+// The selected exercise stays selected while the filter hides its chip: the
+// chart below still belongs to it.
+function ExercisePicker({
+  exercises,
+  selectedId,
+  query,
+  onQueryChange,
+  onSelect,
+}: {
+  exercises: ExerciseResponse[]
+  selectedId: number | null
+  query: string
+  onQueryChange: (query: string) => void
+  onSelect: (id: number) => void
+}) {
+  const selectedRef = useRef<HTMLButtonElement>(null)
+  const matches = filterExercisesByName(exercises, query)
 
+  // The chip list is capped in height (Progress.css), so an exercise chosen
+  // further down, or arrived at through ?exercise=, may start out of sight.
+  // "nearest" leaves it alone when it is already visible.
   useEffect(() => {
-    const element = ref.current
-    if (element === null) {
-      return
-    }
-
-    function update() {
-      if (element === null) {
-        return
-      }
-      const { scrollLeft, scrollWidth, clientWidth } = element
-      // A pixel of slack: scroll positions are fractional on zoomed screens.
-      setMore({
-        start: scrollLeft > 1,
-        end: scrollLeft + clientWidth < scrollWidth - 1,
-      })
-    }
-
-    update()
-    element.addEventListener('scroll', update, { passive: true })
-    const observer = new ResizeObserver(update)
-    observer.observe(element)
-    return () => {
-      element.removeEventListener('scroll', update)
-      observer.disconnect()
-    }
-  }, [])
-
-  const className = [
-    'progress-picker',
-    more.start && 'has-more-start',
-    more.end && 'has-more-end',
-  ]
-    .filter(Boolean)
-    .join(' ')
+    selectedRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [selectedId])
 
   return (
-    // role="group": an aria-label on a plain div isn't announced.
-    <div className={className} role="group" aria-label="Exercise" ref={ref}>
-      {children}
+    <div className="progress-picker">
+      <input
+        className="input"
+        type="search"
+        autoComplete="off"
+        aria-label="Find an exercise"
+        placeholder="Find an exercise"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+      />
+      {matches.length > 0 && (
+        // role="group": an aria-label on a plain div isn't announced.
+        <div
+          className="progress-picker-chips"
+          role="group"
+          aria-label="Exercise"
+        >
+          {matches.map((exercise) => (
+            <button
+              className={exercise.id === selectedId ? 'is-selected' : undefined}
+              type="button"
+              aria-pressed={exercise.id === selectedId}
+              onClick={() => onSelect(exercise.id)}
+              ref={exercise.id === selectedId ? selectedRef : undefined}
+              key={exercise.id}
+            >
+              {exercise.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Always in the page, so the screen reader hears it when it fills. */}
+      <p className="progress-picker-status" role="status">
+        {matches.length === 0 && `No exercise matches “${query.trim()}”.`}
+      </p>
     </div>
   )
 }
@@ -391,53 +411,92 @@ function ProgressHistory({ history }: { history: ExerciseHistoryResponse }) {
 
       <div className="hr progress-divider" aria-hidden="true"></div>
 
-      <section className="progress-sessions" aria-label="Session history">
-        {newestFirst.map(({ point, change }) => (
-          <div className="progress-session-row num" key={point.workoutId}>
-            <div className="progress-session-date">
-              <span>{formatProgressDate(point.date)}</span>
-              <span>{formatWorkoutTime(point.startedAt)}</span>
-            </div>
-            <div className="progress-session-set">
-              {formatProgressSet(point, isBodyweight)}
-              {point.reps === 1 && !isBodyweight && (
-                <span>single — weight as logged</span>
-              )}
-              {point.reps > 12 && !isBodyweight && (
-                <span>High-rep estimate · less certain</span>
-              )}
-            </div>
-            <div className="progress-session-figure">
-              {formatProgressFigure(point.value, isBodyweight)}
-            </div>
-            <div
-              className={`progress-session-change${change !== null && change > 0 ? ' is-gain' : ''}`}
-            >
-              {formatProgressChange(change)}
-            </div>
-          </div>
-        ))}
-      </section>
+      {/* Each row opens the session it came from. Its aria-label reads the
+          row as a sentence (describeProgressSession); the columns alone are
+          bare figures to a screen reader. */}
+      <ul className="progress-sessions" aria-label="Session history">
+        {newestFirst.map(({ point, change }) => {
+          const time = formatWorkoutTime(point.startedAt)
+          return (
+            <li key={point.workoutId}>
+              <Link
+                className="progress-session-row num"
+                to={`/workouts/${point.workoutId}`}
+                aria-label={describeProgressSession(
+                  point,
+                  change,
+                  isBodyweight,
+                  time,
+                )}
+              >
+                <div className="progress-session-date">
+                  <span>{formatProgressDate(point.date)}</span>
+                  <span>{time}</span>
+                </div>
+                <div className="progress-session-set">
+                  {formatProgressSet(point, isBodyweight)}
+                  {point.reps === 1 && !isBodyweight && (
+                    <span>single — weight as logged</span>
+                  )}
+                  {point.reps > 12 && !isBodyweight && (
+                    <span>High-rep estimate · less certain</span>
+                  )}
+                </div>
+                <div className="progress-session-figure">
+                  {formatProgressFigure(point.value, isBodyweight)}
+                </div>
+                <div
+                  className={`progress-session-change${change !== null && change > 0 ? ' is-gain' : ''}`}
+                >
+                  {formatProgressChange(change)}
+                </div>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
 
-      <p className="progress-caveat">
-        {isBodyweight ? (
-          'Bodyweight exercise — the y-axis is reps. Belt-loaded sets are not charted here.'
-        ) : (
-          <>
-            Estimated one-rep max (e1RM) uses your best working set each session
-            to show a strength trend. Compare the same exercise and equipment,
-            with similar technique, rep ranges and effort. Leaving more reps in
-            reserve can lower the estimate without a loss of strength. Estimates
-            become less reliable at higher reps, especially above roughly 12;
-            small changes may not reflect strength gains. A single shows the
-            weight lifted, which may not be your maximum.{' '}
-            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/">
-              Research on repetitions and maximum strength
-            </a>
-            .
-          </>
-        )}
-      </p>
+      {isBodyweight ? (
+        <p className="progress-caveat">
+          Bodyweight exercise — the y-axis is reps. Belt-loaded sets are not
+          charted here.
+        </p>
+      ) : (
+        // One sentence in view and the rest folded (design critique
+        // 2026-10-16: six sentences in one paragraph went unread). The
+        // guidance itself is unchanged; PLAN.md's e1RM rules require it.
+        <div className="progress-guidance">
+          <p className="progress-caveat">
+            Estimated one-rep max (e1RM) from your best working set each
+            session: a strength trend, not a test.
+          </p>
+          <details className="progress-details">
+            <summary>How to read this estimate</summary>
+            <ul>
+              <li>
+                Compare the same exercise and equipment, with similar technique,
+                rep ranges and effort.
+              </li>
+              <li>
+                Leaving more reps in reserve can lower the estimate without a
+                loss of strength.
+              </li>
+              <li>
+                Estimates become less reliable at higher reps, especially above
+                roughly 12; small changes may not reflect strength gains.
+              </li>
+              <li>
+                A single shows the weight lifted, which may not be your maximum.
+              </li>
+            </ul>
+            <p>
+              <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10933212/">
+                Research on repetitions and maximum strength
+              </a>
+            </p>
+          </details>
+        </div>
+      )}
     </>
   )
 }
