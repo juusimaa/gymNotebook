@@ -74,31 +74,39 @@ export default function Cover() {
       <Link to="/workouts" className="btn btn-primary btn-block">
         Open the notebook
       </Link>
-      <p className="cover-account">
-        Signed in as <span className="cover-account-email">{user.email}</span>
-      </p>
-      <div className="cover-actions">
-        <Link to="/change-password" className="btn btn-ghost">
-          Change password
-        </Link>
-        <button type="button" className="btn btn-ghost" onClick={signOut}>
-          Sign out
-        </button>
-      </div>
-      {/* Always shown: backup isn't part of the privacy feature (specs/004
-          D2). The last-backup date stays on its own screen (plan Q5). */}
-      <p className="cover-line">
-        <Link to="/backup" className="btn btn-ghost">
-          Backup &amp; restore
-        </Link>
-      </p>
-      {showPrivacy && (
-        <p className="cover-line">
-          <Link to="/account/privacy" className="btn btn-ghost">
-            Privacy &amp; account
-          </Link>
+      {/* The account's chores, apart from the notebook under a hairline and
+        one quiet heading, so "Open the notebook" stands alone as the
+        cover's decision (design critique 2026-10-16, second pass). Sign out
+        comes last. Backup is always shown: it isn't part of the privacy
+        feature (specs/004 D2), and the last-backup date stays on its own
+        screen (plan Q5). */}
+      <section
+        className="cover-account-group"
+        aria-labelledby="cover-account-heading"
+      >
+        <h2 id="cover-account-heading" className="cover-account-heading">
+          Account
+        </h2>
+        <p className="cover-account">
+          Signed in as <span className="cover-account-email">{user.email}</span>
         </p>
-      )}
+        <div className="cover-actions">
+          <Link to="/change-password" className="btn btn-ghost">
+            Change password
+          </Link>
+          <Link to="/backup" className="btn btn-ghost">
+            Backup &amp; restore
+          </Link>
+          {showPrivacy && (
+            <Link to="/account/privacy" className="btn btn-ghost">
+              Privacy &amp; account
+            </Link>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
+      </section>
       <p className="cover-support">
         Enjoying the notebook?{' '}
         <a
