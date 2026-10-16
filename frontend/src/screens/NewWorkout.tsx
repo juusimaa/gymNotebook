@@ -1079,14 +1079,12 @@ function WorkoutEditor() {
     notDoneCount === 0
       ? null
       : `${formatCount(notDoneCount, 'planned set')} will be kept as skipped.`
-  // The word under a not-done row, so its state never rests on the control's
-  // look alone: "next" on the set the lifter is up to, "skipped" on a
-  // finished page. Other planned sets need none; their dashed fields and
-  // hollow toggle already say "not yet".
-  const setNote = (set: WorkoutSetDraft): string | null => {
-    if (set.status === 'skipped') return 'skipped'
-    return nextSet?.setClientId === set.clientId ? 'next' : null
-  }
+  // The word under a skipped row on a finished page, so its state never rests
+  // on the control's look alone. Planned sets need none: their dashed fields
+  // and hollow toggle already say "not yet", and the set the lifter is up to
+  // is marked by its toggle's accent ring.
+  const setNote = (set: WorkoutSetDraft): string | null =>
+    set.status === 'skipped' ? 'skipped' : null
 
   if (isLoading) {
     return <main className="page workout-editor-state">Opening page…</main>

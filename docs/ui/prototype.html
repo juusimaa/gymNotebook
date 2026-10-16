@@ -1871,14 +1871,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     const mode = this.state.editorMode;
     const done = s.done !== false;
     const next = mode === "progress" && !done && this.firstNotDone() === bi + "-" + si;
-    const note = done || mode === "template" ? "" : next ? "next" : mode === "finished" ? "skipped" : "";
+    const note = !done && mode === "finished" ? "skipped" : "";
     const base = "width:44px;height:44px;padding:0;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:11px;";
     return {
       isDone: done, isNotDone: !done, donePressed: String(done), hasNote: !!note, note,
       doneStyle: base + (done
         ? "background:var(--color-text);color:var(--color-bg);border:2px solid var(--color-text)"
         : "background:none;color:var(--color-text);border:" + (next ? "2px solid var(--color-accent-700)" : mode === "finished" ? "1px dashed var(--color-neutral-700)" : "1px solid var(--color-neutral-700)")),
-      noteStyle: "margin:3px 0 0 24px;font-size:12px;" + (next ? "color:var(--color-accent-700);font-weight:600" : "color:var(--color-neutral-700)"),
+      noteStyle: "margin:3px 0 0 24px;font-size:12px;color:var(--color-neutral-700)",
       inputExtra: !done ? "border:1px dashed var(--color-neutral-600)" : "",
       toggleDone: this.toggleDone(bi, si)
     };

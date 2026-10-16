@@ -335,7 +335,7 @@ export function ExerciseBlockList({
                     {note !== null && (
                       <p
                         id={`${set.clientId}-note`}
-                        className={`new-workout-set-note${isNext ? ' is-next' : ''}`}
+                        className="new-workout-set-note"
                       >
                         {note}
                       </p>
