@@ -1883,7 +1883,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const done = s.done !== false;
     const next = mode === "progress" && !done && this.firstNotDone() === bi + "-" + si;
     const note = !done && mode === "finished" ? "skipped" : "";
-    const base = "width:44px;height:44px;padding:0;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:11px;";
+    const base = "width:44px;height:44px;padding:0;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:13px;";
     return {
       isDone: done, isNotDone: !done, donePressed: String(done), hasNote: !!note, note,
       doneStyle: base + (done
@@ -2289,6 +2289,41 @@ document.addEventListener('DOMContentLoaded', async function() {
     replaceSessionsAnchor(
       `cols: showDone ? "18px 1fr 1fr 62px 44px 44px" : "26px 1fr 1fr 80px 48px",`,
       `cols: showDone ? "20px 1fr 0.75fr 72px 44px" : "26px 1fr 1fr 80px 48px",`
+    );
+
+    // Design critique 2026-10-16, second pass, matching the React editor.
+    // The block's switch reads "Remove" ("Remove from Bench Press"); while
+    // it is on, rows show their × and "Remove exercise" takes "Add set"'s
+    // place, so the whole-block removal is never one tap from the normal
+    // state. Done's word is 13px; Done and Warm-up are named with the
+    // exercise and set.
+    replaceSessionsAnchor('style="{{ b.removingStyle }}">Remove sets</button>', 'style="{{ b.removingStyle }}">Remove</button>');
+    replaceSessionsAnchor('removingLabel: "Remove " + b.name + " sets",', 'removingLabel: "Remove from " + b.name,\n      notRemoving: !this.isRemovingSets(bi),\n      isRemoving: this.isRemovingSets(bi),\n      removeBlock: this.removeBlock(bi),');
+    replaceSessionsAnchor('aria-label="Done" style="{{ s.doneStyle }}"', 'aria-label="{{ s.doneLabel }}" style="{{ s.doneStyle }}"');
+    replaceSessionsAnchor('<button sc-camel-on-click="{{ s.toggle }}" aria-pressed="{{ s.pressed }}"', '<button sc-camel-on-click="{{ s.toggle }}" aria-pressed="{{ s.pressed }}" aria-label="{{ s.warmupLabel }}"');
+    replaceSessionsAnchor(
+      '      showDoneButton: hasDone && !removing,\n',
+      `      showDoneButton: hasDone && !removing,
+      doneLabel: this.state.draft[bi].name + ", set " + (si + 1) + ", done",
+      warmupLabel: this.state.draft[bi].name + ", set " + (si + 1) + ", warm-up",
+`
+    );
+    {
+      const addSet = '<button class="btn btn-ghost" sc-camel-on-click="{{ b.addSet }}" style="margin-top:12px;min-height:48px;width:100%;justify-content:flex-start;padding-inline:14px;border:1px dashed var(--color-neutral-400);border-radius:var(--radius-md);font-size:15px">Add set</button>';
+      replaceSessionsAnchor(addSet,
+        '<sc-if value="{{ b.notRemoving }}" hint-placeholder-val="{{ true }}">' + addSet + '</sc-if>' +
+        '<sc-if value="{{ b.isRemoving }}" hint-placeholder-val="{{ false }}"><button class="btn btn-secondary" sc-camel-on-click="{{ b.removeBlock }}" style="margin-top:12px;min-height:48px;width:100%;justify-content:flex-start;padding-inline:14px;font-size:15px">Remove exercise</button></sc-if>');
+    }
+    replaceSessionsAnchor(
+      '  firstNotDone = () => {',
+      `  removeBlock = (bi) => (e) => {
+    if (e) e.preventDefault();
+    this.setState((s) => ({
+      draft: s.draft.filter((b, i) => i !== bi),
+      removingSets: {}
+    }));
+  };
+  firstNotDone = () => {`
     );
 
     // Design critique 2026-10-16, part 2, matching the React app. One
