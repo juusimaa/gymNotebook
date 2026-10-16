@@ -78,3 +78,21 @@
 .login-turnstile {
   min-height: 65px;
 }
+
+/* "Try the demo" under the sign-in form (specs/007): below a hairline, apart
+   from the account switch above it. */
+.login-demo {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+.login-demo p {
+  margin: var(--space-2) 0 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* The demo mode's bot check and button, after its two paragraphs. */
+.login-demo-form {
+  margin-top: var(--space-4);
+}

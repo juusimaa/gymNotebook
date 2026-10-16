@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { TURNSTILE_SITE_KEY } from './turnstileSiteKey'
 
 // Cloudflare Turnstile, the bot check on "Create account" and "Forgot your
-// password?": the two forms that make the API email an address nobody has
+// password?", the two forms that make the API email an address nobody has
 // proven yet (backend Turnstile.cs, specs/002 contracts/ui.md → Turnstile
-// widget). The widget runs Cloudflare's challenge in an iframe and hands back a
-// token; the form sends it, and the API asks Cloudflare whether it's good.
+// widget), and on "Start the demo", which creates an account (specs/007).
+// The widget runs Cloudflare's challenge in an iframe and hands back a token;
+// the form sends it, and the API asks Cloudflare whether it's good.
 //
 // Switched on by a site key (turnstileSiteKey.ts). Without one this renders
 // nothing and loads nothing, so local development never contacts Cloudflare.
@@ -23,7 +24,7 @@ const FLEXIBLE_MIN_WIDTH = 300
 
 // One script load for the page, however many times a form mounts the widget.
 // Loaded on first use rather than from index.html, so Cloudflare sees only the
-// visitors who open one of these two forms (docs/privacy/suppliers.md).
+// visitors who open one of these forms (docs/privacy/suppliers.md).
 let scriptLoad: Promise<TurnstileApi> | null = null
 
 function loadScript(): Promise<TurnstileApi> {
@@ -49,7 +50,7 @@ function loadScript(): Promise<TurnstileApi> {
 
 interface TurnstileProps {
   // Names the form; the API refuses a token solved for the other one.
-  action: 'signup' | 'password_reset'
+  action: 'signup' | 'password_reset' | 'demo'
   // Gets the token once the check passes, and null when it expires or fails,
   // so the form can hold its submit until there is one.
   onToken: (token: string | null) => void

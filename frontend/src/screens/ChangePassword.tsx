@@ -3,10 +3,13 @@ import { Link, useNavigate } from 'react-router'
 import { changePassword } from '../api/auth'
 import { describeAuthError } from '../api/authErrors'
 import { ApiError } from '../api/client'
+import { DEMO_ACCOUNT_REFUSAL, isDemoAccountRefusal } from '../api/demo'
 import { setToken } from '../auth/token'
 import './Privacy.css'
 
 function describeError(err: unknown): string {
+  // A demo has no password; the cover doesn't offer this screen to one.
+  if (isDemoAccountRefusal(err)) return DEMO_ACCOUNT_REFUSAL
   if (err instanceof ApiError) {
     if (err.status === 401) return 'Current password is wrong'
     if (err.status === 400) return 'Both passwords are required'

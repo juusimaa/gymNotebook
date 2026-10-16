@@ -71,7 +71,7 @@ export function formatWorkoutTime(
 
 // The local calendar day of an instant, as numbers. Intl rather than
 // getDate() so tests can pin the time zone the way formatWorkoutTime's do.
-function localDayParts(
+export function localDayParts(
   timestamp: string,
   timeZone?: string,
 ): { year: number; month: number; day: number } {

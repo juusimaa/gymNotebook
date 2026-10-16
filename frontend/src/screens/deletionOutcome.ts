@@ -1,4 +1,5 @@
 import { ApiError } from '../api/client'
+import { DEMO_ACCOUNT_REFUSAL, isDemoAccountRefusal } from '../api/demo'
 
 // What a failed POST /account/delete means for the user (specs/001
 // contracts/ui.md → Deletion transitions). The distinction that matters is
@@ -18,6 +19,14 @@ export type DeletionFailure =
   | { kind: 'unknown'; heading: string; message: string; signedOut: boolean }
 
 export function describeDeletionFailure(err: unknown): DeletionFailure {
+  // A demo account (specs/007): refused before anything was checked, and
+  // Privacy & account doesn't link here for one.
+  if (isDemoAccountRefusal(err)) {
+    return {
+      kind: 'retry',
+      message: `${DEMO_ACCOUNT_REFUSAL} Nothing was deleted.`,
+    }
+  }
   if (err instanceof ApiError) {
     switch (err.status) {
       case 400:

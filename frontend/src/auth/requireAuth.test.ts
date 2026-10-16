@@ -68,6 +68,7 @@ describe('requireAuth', () => {
       userId: 1,
       displayName: 'Jouni',
       email: 'jouni@example.test',
+      demoExpiresAt: null,
     }
     vi.mocked(me).mockResolvedValue(user)
 

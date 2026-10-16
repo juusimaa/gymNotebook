@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useRouteLoaderData } from 'react-router'
+import type { MeResponse } from '../api/auth'
 import {
   backupFileName,
   exportNotebook,
@@ -9,6 +10,7 @@ import {
   type RestoreResult,
 } from '../api/backup'
 import { ApiError } from '../api/client'
+import { DEMO_ACCOUNT_REFUSAL, isDemoAccountRefusal } from '../api/demo'
 import { revokePendingDownloads, saveBlob } from '../api/download'
 import { getAccountPrivacy } from '../api/privacy'
 import { clearToken } from '../auth/token'
@@ -63,6 +65,10 @@ function describeBackupError(err: unknown): string | null {
   if (err instanceof DOMException && err.name === 'AbortError') {
     return null
   }
+  // Make a backup is hidden for a demo; this covers a tab opened before.
+  if (isDemoAccountRefusal(err)) {
+    return DEMO_ACCOUNT_REFUSAL
+  }
   if (err instanceof ApiError) {
     if (err.status === 400) {
       return err.code === 'password_verification_failed'
@@ -91,6 +97,11 @@ function isSessionGone(err: unknown): boolean {
 
 export default function Backup() {
   const navigate = useNavigate()
+  // Same loader data as the cover's (see the cast's note there). A demo
+  // can't take a backup (specs/007 FR-012), so it gets a sentence instead of
+  // the form and the last-backup line; restore works as for anyone.
+  const user = useRouteLoaderData('auth') as MeResponse
+  const isDemo = user.demoExpiresAt !== null
   const [format, setFormat] = useState<BackupFormat>('json')
   const [password, setPassword] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
@@ -258,10 +269,10 @@ export default function Backup() {
       <h1 className="privacy-heading" ref={headingRef} tabIndex={-1}>
         Backup &amp; restore
       </h1>
-      {lastBackup.status === 'loading' && (
+      {!isDemo && lastBackup.status === 'loading' && (
         <p className="backup-last muted">Checking your last backup…</p>
       )}
-      {lastBackup.status === 'loaded' && (
+      {!isDemo && lastBackup.status === 'loaded' && (
         <p
           // A new key replays the underline when the date moves again.
           key={lastBackup.at ?? 'none'}
@@ -278,119 +289,129 @@ export default function Backup() {
         </p>
       )}
 
-      <section className="privacy-block" aria-labelledby="backup-make">
-        <h2 id="backup-make">Make a backup</h2>
-        <form
-          className="form-stack"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void submit()
-          }}
-        >
-          <fieldset className="backup-format" disabled={busy}>
-            <legend>Format</legend>
-            <label className="backup-option">
-              <input
-                type="radio"
-                name="backup-format"
-                value="json"
-                checked={format === 'json'}
-                onChange={() => chooseFormat('json')}
-              />
-              <span className="backup-option-title">
-                Full backup <small>JSON</small>
-              </span>
-              <span className="backup-option-note">
-                Everything in your notebook. This is the file you can restore
-                from.
-              </span>
-            </label>
-            <label className="backup-option">
-              <input
-                type="radio"
-                name="backup-format"
-                value="csv"
-                checked={format === 'csv'}
-                onChange={() => chooseFormat('csv')}
-              />
-              <span className="backup-option-title">
-                Spreadsheet <small>CSV</small>
-              </span>
-              <span className="backup-option-note">
-                One row per set, for Excel or Numbers. It can&apos;t be
-                restored.
-              </span>
-            </label>
-          </fieldset>
-
-          <label className="field">
-            <span className="label">Current password</span>
-            <input
-              ref={passwordRef}
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              aria-invalid={passwordInvalid || undefined}
-              disabled={busy}
-              required
-            />
-          </label>
-          <p className="muted backup-note">
-            The file contains personal information. Keep it somewhere private.
+      {isDemo ? (
+        <section className="privacy-block" aria-labelledby="backup-make">
+          <h2 id="backup-make">Make a backup</h2>
+          <p>
+            Backups aren&apos;t available in a demo. The demo is deleted when it
+            ends.
           </p>
-
-          {message !== null && (
-            <p className="form-message" role="alert">
-              {message}
-            </p>
-          )}
-
-          {/* One live region for progress and completion, announced politely. */}
-          <div className="backup-status" role="status" aria-live="polite">
-            {phase === 'verifying' && (
-              <p className="backup-line">Checking your password…</p>
-            )}
-            {phase === 'receiving' && (
-              <>
-                <p className="backup-line">Preparing your {what}…</p>
-                {/* No value: the size isn't known until the file is complete. */}
-                <progress
-                  className="backup-progress"
-                  aria-label="Backup progress"
+        </section>
+      ) : (
+        <section className="privacy-block" aria-labelledby="backup-make">
+          <h2 id="backup-make">Make a backup</h2>
+          <form
+            className="form-stack"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void submit()
+            }}
+          >
+            <fieldset className="backup-format" disabled={busy}>
+              <legend>Format</legend>
+              <label className="backup-option">
+                <input
+                  type="radio"
+                  name="backup-format"
+                  value="json"
+                  checked={format === 'json'}
+                  onChange={() => chooseFormat('json')}
                 />
-              </>
-            )}
-            {phase === 'complete' && saved !== null && (
-              <p className="backup-line backup-done">
-                Saved as <span className="num">{saved.name}</span>.{' '}
-                {saved.format === 'json'
-                  ? 'Your notebook has not changed.'
-                  : "A spreadsheet can't be restored; keep a full backup too."}
+                <span className="backup-option-title">
+                  Full backup <small>JSON</small>
+                </span>
+                <span className="backup-option-note">
+                  Everything in your notebook. This is the file you can restore
+                  from.
+                </span>
+              </label>
+              <label className="backup-option">
+                <input
+                  type="radio"
+                  name="backup-format"
+                  value="csv"
+                  checked={format === 'csv'}
+                  onChange={() => chooseFormat('csv')}
+                />
+                <span className="backup-option-title">
+                  Spreadsheet <small>CSV</small>
+                </span>
+                <span className="backup-option-note">
+                  One row per set, for Excel or Numbers. It can&apos;t be
+                  restored.
+                </span>
+              </label>
+            </fieldset>
+
+            <label className="field">
+              <span className="label">Current password</span>
+              <input
+                ref={passwordRef}
+                className="input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                aria-invalid={passwordInvalid || undefined}
+                disabled={busy}
+                required
+              />
+            </label>
+            <p className="muted backup-note">
+              The file contains personal information. Keep it somewhere private.
+            </p>
+
+            {message !== null && (
+              <p className="form-message" role="alert">
+                {message}
               </p>
             )}
-          </div>
 
-          {busy ? (
-            <button
-              className="btn btn-secondary btn-block"
-              type="button"
-              onClick={cancel}
-            >
-              Cancel
-            </button>
-          ) : (
-            <button className="btn btn-primary btn-block" type="submit">
-              {phase === 'complete'
-                ? 'Download again'
-                : format === 'json'
-                  ? 'Download backup'
-                  : 'Download spreadsheet'}
-            </button>
-          )}
-        </form>
-      </section>
+            {/* One live region for progress and completion, announced politely. */}
+            <div className="backup-status" role="status" aria-live="polite">
+              {phase === 'verifying' && (
+                <p className="backup-line">Checking your password…</p>
+              )}
+              {phase === 'receiving' && (
+                <>
+                  <p className="backup-line">Preparing your {what}…</p>
+                  {/* No value: the size isn't known until the file is complete. */}
+                  <progress
+                    className="backup-progress"
+                    aria-label="Backup progress"
+                  />
+                </>
+              )}
+              {phase === 'complete' && saved !== null && (
+                <p className="backup-line backup-done">
+                  Saved as <span className="num">{saved.name}</span>.{' '}
+                  {saved.format === 'json'
+                    ? 'Your notebook has not changed.'
+                    : "A spreadsheet can't be restored; keep a full backup too."}
+                </p>
+              )}
+            </div>
+
+            {busy ? (
+              <button
+                className="btn btn-secondary btn-block"
+                type="button"
+                onClick={cancel}
+              >
+                Cancel
+              </button>
+            ) : (
+              <button className="btn btn-primary btn-block" type="submit">
+                {phase === 'complete'
+                  ? 'Download again'
+                  : format === 'json'
+                    ? 'Download backup'
+                    : 'Download spreadsheet'}
+              </button>
+            )}
+          </form>
+        </section>
+      )}
 
       <RestoreSection
         unmounted={unmounted}

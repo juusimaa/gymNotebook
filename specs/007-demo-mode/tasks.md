@@ -218,13 +218,13 @@ Paths: backend `backend/GymNotebook.Api/`, tests `backend/GymNotebook.Tests/`, f
 
 ## Phase 8: Screens (PR 2, after PR 1 merges)
 
-- [ ] T070 Mock the demo UI in `docs/ui/README.md` and `docs/ui/prototype.html` for owner approval:
+- [x] T070 Mock the demo UI in `docs/ui/README.md` and `docs/ui/prototype.html` for owner approval:
   - Login: a **Try the demo** button with Turnstile;
   - Cover: a demo badge showing the expiry time, **Reset demo data** (confirm dialog, with the hint that a reset loads sample notes after optional details are allowed) and **Leave demo**;
   - the refusal copy for `demo_account`.
-- [ ] T071 `frontend/src/api/demo.ts` (`startDemo`, `resetDemo`) and the `demoExpiresAt` field in `frontend/src/api/auth.ts`; Vitest for any helper.
-- [ ] T072 Screens in `frontend/src/screens/Login.tsx` and `frontend/src/screens/Cover.tsx`, with loading, error (captcha, `demo_unavailable`, 429) and success states. The Account screens show the `demo_account` refusal.
-- [ ] T073 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`; check the UI in the browser; `PLAN.md` milestone → done.
+- [x] T071 `frontend/src/api/demo.ts` (`startDemo`, `resetDemo`) and the `demoExpiresAt` field in `frontend/src/api/auth.ts`; Vitest for any helper.
+- [x] T072 Screens in `frontend/src/screens/Login.tsx` and `frontend/src/screens/Cover.tsx`, with loading, error (captcha, `demo_unavailable`, 429) and success states. The Account screens show the `demo_account` refusal.
+- [x] T073 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`; check the UI in the browser; `PLAN.md` milestone → done.
 
 ---
 
