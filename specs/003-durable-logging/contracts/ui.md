@@ -4,7 +4,7 @@ Only the session editor changes on screen. All copy is proposed and open to revi
 
 ## Save state in the date line
 
-The date line ("Today 09.34 · add details") gains the save state, as a polite live region. It never moves focus. *As built (PR 5):* the state sits on its own line directly under the dateline rather than inside it, because the dateline is a button and a live region inside it would change the button's name; the incomplete-row notice names the exercise, since "Set 3" alone could be in any block; and a heading the autosave can't send reads "Not saved: Enter a valid date and start time." in `--color-error`.
+The date line ("Today 09.34 · add details") gains the save state, as a polite live region. It never moves focus. *As built (PR 5):* the state sits on its own line directly under the dateline rather than inside it, because the dateline is a button and a live region inside it would change the button's name; the incomplete-row notice names the exercise, since "Set 3" alone could be in any block; and a heading the autosave can't send reads "Not saved: Enter a valid date and start time." in `--color-error`. *Revised (design critique 2026-10-16):* the line, and the conflict and deleted-page lines that replace it, moved to the top of the editor's sticky footer, because under the dateline they scrolled out of view while the lifter logged lower blocks. Text, styles and live-region roles are unchanged.
 
 | State | Text | Style |
 | --- | --- | --- |

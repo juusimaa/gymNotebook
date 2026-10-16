@@ -171,15 +171,16 @@
   text-underline-offset: 3px;
 }
 
-/* The save state under the dateline: "Saved 09.42", quiet as a margin
-   note; a problem in the error colour. Empty most of the time, and then it
-   takes no room, but it stays in the page so a change is announced. */
+/* The save state at the top of the sticky footer: "Saved 09.42", quiet as a
+   margin note; a problem in the error colour. Empty before the first save,
+   and then it takes no room, but it stays in the page so a change is
+   announced. */
 .new-workout-save-state {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   column-gap: var(--space-3);
-  margin: calc(-1 * var(--space-2)) 0 0;
+  margin: 0;
   color: var(--color-neutral-700);
   font-size: 13px;
   line-height: 1.5;
@@ -268,6 +269,35 @@
   margin: var(--space-1) 0 0;
   color: var(--color-neutral-700);
   font-size: 13px;
+}
+
+.new-workout-exercise-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* "Remove sets": a switch drawn like the Warm-up tag, so it reads as a state
+   of the block rather than an action; pressed, each row's Done gives way to
+   a ×. */
+.new-workout-remove-sets {
+  min-height: var(--hit-target);
+  padding: 0 var(--space-2);
+  cursor: pointer;
+  color: var(--color-neutral-700);
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.new-workout-remove-sets[aria-pressed='true'] {
+  color: var(--color-text);
+  background: var(--color-neutral-300);
+  border-color: var(--color-neutral-500);
 }
 
 .new-workout-remove-exercise {
@@ -394,12 +424,13 @@
 }
 
 /* Set status (specs/006, docs/ui/README.md → Editor modes). A page that is
-   logged, in progress or finished, adds a Done column at the row's end:
-   number, weight, reps, Warm-up, ×, Done, so Done sits under the thumb and
-   the × is never last. The Warm-up track narrows to make room. */
+   in progress or finished ends each row with a Done column: number, weight,
+   reps, Warm-up, Done, so Done sits under the thumb. The row has no × of its
+   own: it takes Done's place only while the block's "Remove sets" is on, so
+   the control tapped after every set never sits beside a destructive one. */
 .has-done .new-workout-set,
 .has-done .new-workout-set-columns {
-  grid-template-columns: 20px minmax(0, 1fr) minmax(0, 0.75fr) 66px 44px 44px;
+  grid-template-columns: 20px minmax(0, 1fr) minmax(0, 0.75fr) 72px 44px;
 }
 
 /* Round where Warm-up is a rectangular tag. Not done: a hollow circle that
@@ -427,9 +458,16 @@
   border: 2px solid var(--color-text);
 }
 
-/* The set the lifter is up to: a heavier accent stroke. */
+/* The set the lifter is up to: a heavier accent stroke on its toggle, and
+   its number in ink at a heavier weight where the others are muted, so the
+   row reads at arm's length and not by the ring's colour alone. */
 .new-workout-set-done.is-next {
   border: 2px solid var(--color-accent-700);
+}
+
+.new-workout-set.is-next .new-workout-set-number {
+  color: var(--color-text);
+  font-weight: 600;
 }
 
 /* A not-done row's fields are dashed: written in, not yet lifted. A
@@ -623,7 +661,8 @@
     color-mix(in srgb, var(--color-shadow) 7%, transparent);
 }
 
-.new-workout-actions .form-message {
+.new-workout-actions .form-message,
+.new-workout-actions .new-workout-save-state:not(:empty) {
   margin: 0 0 var(--space-2);
 }
 
@@ -692,7 +731,7 @@
 
   .has-done .new-workout-set,
   .has-done .new-workout-set-columns {
-    grid-template-columns: 18px minmax(0, 1fr) minmax(0, 0.75fr) 62px 44px 44px;
+    grid-template-columns: 18px minmax(0, 1fr) minmax(0, 0.75fr) 66px 44px;
   }
 
   .has-done .new-workout-set .input {

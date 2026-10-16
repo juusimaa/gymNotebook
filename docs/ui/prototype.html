@@ -2180,6 +2180,106 @@ document.addEventListener('DOMContentLoaded', async function() {
               </sc-for>`
     );
 
+    // Design critique 2026-10-16, matching the React editor. A row with a
+    // Done column has no × of its own: each block's "Remove sets" switch
+    // swaps the rows' Done for a ×, so the control tapped after every set
+    // never sits beside a destructive one. The set the lifter is up to has
+    // its number in ink, weight 600. The save state moves into the footer,
+    // above Finish session, so it stays in sight while logging lower blocks.
+    replaceSessionsAnchor(
+      `<button sc-camel-on-click="{{ s.remove }}" aria-label="{{ s.removeLabel }}"`,
+      `<sc-if value="{{ s.showRemove }}" hint-placeholder-val="{{ false }}"><button sc-camel-on-click="{{ s.remove }}" aria-label="{{ s.removeLabel }}"`
+    );
+    replaceSessionsAnchor(
+      `color:var(--color-neutral-700);font-size:22px">×</button>
+                  <sc-if value="{{ showDone }}" hint-placeholder-val="{{ true }}">`,
+      `color:var(--color-neutral-700);font-size:22px">×</button></sc-if>
+                  <sc-if value="{{ s.showDoneButton }}" hint-placeholder-val="{{ true }}">`
+    );
+    {
+      // The editor's set number (the session page's has no tabular-nums).
+      const setNumber = /<div style="font-size:12px;color:var\(--color-[a-z0-9-]+\);font-variant-numeric:tabular-nums">\{\{ s\.n \}\}<\/div>/;
+      if (!setNumber.test(template)) throw new Error('Sessions prototype anchor missing: editor set number');
+      template = template.replace(setNumber, '<div style="{{ s.numStyle }}">{{ s.n }}</div>');
+    }
+    {
+      // The editor block's kind label, wherever an earlier pass left its
+      // colour; the "Remove sets" switch sits beside it.
+      const blockKind = /<div style="font-size:11px;letter-spacing:\.12em;text-transform:uppercase;color:var\(--color-[a-z0-9-]+\)">\{\{ b\.kind \}\}<\/div>/;
+      const kindMatch = template.match(blockKind);
+      if (kindMatch === null) throw new Error('Sessions prototype anchor missing: editor block kind');
+      template = template.replace(blockKind, `<div style="display:flex;align-items:center;gap:10px">
+                  ${kindMatch[0]}
+                  <sc-if value="{{ showDone }}" hint-placeholder-val="{{ true }}">
+                    <button sc-camel-on-click="{{ b.toggleRemoving }}" aria-pressed="{{ b.removingPressed }}" aria-label="{{ b.removingLabel }}" style="{{ b.removingStyle }}">Remove sets</button>
+                  </sc-if>
+                </div>`);
+    }
+    replaceSessionsAnchor(
+      '      addSet: this.addSet(bi),\n',
+      '      addSet: this.addSet(bi),\n      ...this.blockRemoveValues(bi, b),\n'
+    );
+    replaceSessionsAnchor(
+      '        toggle: this.toggleWarmup(bi, si),\n        ...this.setStatusValues(bi, si, s)\n',
+      '        toggle: this.toggleWarmup(bi, si),\n        ...this.setStatusValues(bi, si, s),\n        ...this.setRemoveValues(bi, si)\n'
+    );
+    replaceSessionsAnchor(
+      '  firstNotDone = () => {',
+      `  isRemovingSets = (bi) => !!(this.state.removingSets || {})[bi];
+  blockRemoveValues = (bi, b) => {
+    const on = this.isRemovingSets(bi);
+    return {
+      removingPressed: String(on),
+      removingLabel: "Remove " + b.name + " sets",
+      removingStyle: "min-height:44px;padding:0 10px;cursor:pointer;border-radius:var(--radius-md);font-family:var(--font-body);font-size:13px;white-space:nowrap;" +
+        (on
+          ? "background:var(--color-neutral-300);border:1px solid var(--color-neutral-500);color:var(--color-text)"
+          : "background:none;border:1px solid var(--color-divider);color:var(--color-neutral-700)"),
+      toggleRemoving: (e) => {
+        if (e) e.preventDefault();
+        this.setState((s) => ({ removingSets: { ...(s.removingSets || {}), [bi]: !(s.removingSets || {})[bi] } }));
+      }
+    };
+  };
+  setRemoveValues = (bi, si) => {
+    const mode = this.state.editorMode;
+    const hasDone = mode === "progress" || mode === "finished";
+    const removing = hasDone && this.isRemovingSets(bi);
+    const next = mode === "progress" && this.firstNotDone() === bi + "-" + si;
+    return {
+      showRemove: !hasDone || removing,
+      showDoneButton: hasDone && !removing,
+      numStyle: "font-size:12px;font-variant-numeric:tabular-nums;" +
+        (next ? "color:var(--color-text);font-weight:600" : "color:var(--color-neutral-500)")
+    };
+  };
+  firstNotDone = () => {`
+    );
+    replaceSessionsAnchor(
+      '<sc-if value="{{ showSaved }}" hint-placeholder-val="{{ true }}"><p role="status" style="margin:-4px 0 0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)">Saved 07.42</p></sc-if>',
+      ''
+    );
+    replaceSessionsAnchor(
+      `background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;gap:10px">
+          <sc-if value="{{ confirmingFinish }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:22px;right:22px;bottom:82px;`,
+      `background:linear-gradient(to top, var(--color-bg) 62%, transparent);display:flex;flex-wrap:wrap;gap:10px">
+          <p role="status" style="{{ savedStyle }}">Saved 07.42</p>
+          <sc-if value="{{ confirmingFinish }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:22px;right:22px;bottom:{{ bandBottom }};`
+    );
+    replaceSessionsAnchor(
+      '      showSaved: isProg,\n',
+      `      showSaved: isProg,
+      savedStyle: isProg ? "flex-basis:100%;margin:0;font-size:13px;line-height:1.5;color:var(--color-neutral-700)" : "display:none",
+      bandBottom: isProg ? "112px" : "82px",
+`
+    );
+    replaceSessionsAnchor(
+      `cols: showDone ? "18px 1fr 1fr 62px 44px 44px" : "26px 1fr 1fr 80px 48px",`,
+      `cols: showDone ? "20px 1fr 0.75fr 72px 44px" : "26px 1fr 1fr 80px 48px",`
+    );
+
     // Footer by mode, and the finish confirmation naming the sets it skips.
     replaceSessionsAnchor(
       'Finish this session now? The current time will be saved.',
