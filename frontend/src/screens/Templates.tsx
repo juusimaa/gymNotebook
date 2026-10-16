@@ -11,6 +11,7 @@ import { useRouteNotice } from './routeNotice'
 import { describeTemplateCounts } from './templateDraft'
 import './Sessions.css'
 import './Templates.css'
+import { NotebookNav } from './NotebookNav'
 
 // /templates (specs/006 US4, docs/ui/README.md → 9. Templates): the caller's
 // templates by name. A row opens the template editor, and Start beside it
@@ -82,9 +83,7 @@ export default function Templates() {
     <main className="page sessions templates">
       <header className="sessions-header">
         <h1>Templates</h1>
-        <Link className="header-link" to="/workouts">
-          ← Sessions
-        </Link>
+        <NotebookNav current="templates" />
       </header>
       {notice !== null && (
         <p className="form-message is-status route-notice" role="status">

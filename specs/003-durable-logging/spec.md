@@ -80,7 +80,7 @@ As a lifter who started a page by mistake, I can get rid of it, and I can't lose
 
 **Acceptance Scenarios**:
 
-1. **Given** a new page that has saved itself, **When** I tap **Cancel**, **Then** an inline confirmation asks "Tear out this page? Its 2 sets go with it." with **Tear out page** and **Keep page**. Keep leaves for the session list with the page there, in progress.
+1. **Given** a new page that has saved itself, **When** I tap **Cancel**, **Then** an inline confirmation asks "Tear out this page? Its 2 sets go with it." with **Tear out page** and **Keep page**. Keep leaves for the session list with the page there, in progress. *Revised (design critique 2026-10-16):* the link reads **← Sessions** and keeps the page without asking; tearing out is done on the session page.
 2. **Given** a new page that hasn't saved anything yet, **When** I tap **Cancel**, **Then** it behaves as today (discard the local draft, with the existing confirmation when sets were typed).
 
 ### Edge Cases

@@ -16,6 +16,7 @@ import {
 } from './progressChart'
 import { formatWorkoutTime } from './workoutFormat'
 import './Progress.css'
+import { NotebookNav } from './NotebookNav'
 
 export default function Progress() {
   const [exercises, setExercises] = useState<ExerciseResponse[] | null>(null)
@@ -135,14 +136,7 @@ export default function Progress() {
           <p className="kicker">Chart</p>
           <h1>Progress</h1>
         </div>
-        <nav className="progress-nav" aria-label="Notebook">
-          <Link className="header-link" to="/workouts">
-            Sessions
-          </Link>
-          <Link className="header-link" to="/exercises">
-            Exercises
-          </Link>
-        </nav>
+        <NotebookNav current="progress" />
       </header>
 
       <div className="progress-content">

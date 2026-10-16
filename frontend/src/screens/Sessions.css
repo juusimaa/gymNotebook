@@ -10,6 +10,7 @@
 
 .sessions-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
@@ -25,14 +26,6 @@
   margin: 0;
   font-size: 27px;
   line-height: 1.1;
-}
-
-.sessions-nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px 14px;
-  font-size: 13px;
 }
 
 .sessions-list {
@@ -296,9 +289,5 @@
   .sessions-header {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .sessions-nav {
-    justify-content: flex-start;
   }
 }

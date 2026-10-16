@@ -26,6 +26,7 @@ The date line ("Today 09.34 · add details") gains the save state, as a polite l
 
 - **Nothing saved yet:** unchanged.
 - **Already saved itself:** an inline confirmation replaces the footer: "Tear out this page? Its 2 sets go with it." with **Tear out page** (secondary) and **Keep page** (ghost, focused). Keep goes to Sessions with the arrival line "Page kept. It stays open for more sets." Tear out deletes it and goes to Sessions with "Page torn out."
+- *Revised (design critique 2026-10-16):* once the page has saved itself the header link reads **← Sessions** and leaves without asking: it saves anything waiting, then goes to Sessions with "Page saved. It stays open for more sets." Tearing a page out is done on its session page (**Tear out**). A page started by mistake can still be got rid of, deliberately, and Cancel can still never lose a real session.
 
 ## After the first save
 

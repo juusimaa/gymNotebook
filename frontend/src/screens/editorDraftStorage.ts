@@ -265,15 +265,6 @@ export function describeDiscard(options: {
     : question
 }
 
-// Cancel on a new page that has already saved itself (specs/003 Story 4):
-// leaving can no longer just drop a local copy, so it asks whether to tear
-// the page out, naming what goes with it.
-export function describeTearOut(setCount: number): string {
-  return setCount === 0
-    ? 'Tear out this page?'
-    : `Tear out this page? Its ${formatCount(setCount, 'set')} ${setCount === 1 ? 'goes' : 'go'} with it.`
-}
-
 // When the restored copy was last written: just the time on the same local
 // day, the date too otherwise, so a page left open since last week says so.
 export function describeDraftSavedAt(savedAt: string, now: Date): string {
