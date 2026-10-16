@@ -131,3 +131,52 @@
   margin-block: -14px;
   padding-inline: 4px;
 }
+
+/* A demo's end (specs/007), under the volume line: the gold hairline the
+   cover's frame and ornament already use, so it reads as part of the cover
+   rather than an alert. The label is accent-700, never plain gold. */
+.cover-demo-badge {
+  margin: var(--space-4) 0 0;
+  padding: 5px 14px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--color-accent-700);
+}
+
+/* "Demo data reset…": news, not a failure, so ink. */
+.cover-demo-notice {
+  color: var(--color-text);
+}
+
+/* Reset and Leave's inline confirmations, in place of the actions. */
+.cover-demo-confirm {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+.cover-demo-confirm h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 400;
+}
+/* Focused programmatically when the confirmation opens; not interactive. */
+.cover-demo-confirm h3:focus {
+  outline: none;
+}
+.cover-demo-confirm p {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+}
+.cover-demo-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.cover-demo-confirm-actions .btn {
+  min-height: var(--hit-target);
+}

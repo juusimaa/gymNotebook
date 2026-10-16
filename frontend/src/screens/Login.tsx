@@ -13,6 +13,7 @@ import {
   isEmailNotVerified,
 } from '../api/authErrors'
 import { ApiError } from '../api/client'
+import { startDemo } from '../api/demo'
 import { getPrivacyNotice } from '../api/privacy'
 import {
   clearInterruptedWrite,
@@ -20,6 +21,8 @@ import {
 } from '../auth/invalidation'
 import { readLoginEntry } from '../auth/loginEntry'
 import { setToken } from '../auth/token'
+import { describeDemoStartError } from './demoFormat'
+import { DEMO_MODE_ENABLED } from './demoModeEnabled'
 import './Login.css'
 import Turnstile from './Turnstile'
 import { TURNSTILE_SITE_KEY } from './turnstileSiteKey'
@@ -36,6 +39,9 @@ import { TURNSTILE_SITE_KEY } from './turnstileSiteKey'
 //           way, so the screen can't and doesn't say more.
 //   forgot  Email + the bot check → always `resetSent`, for the same reason
 //           as create: the API answers every reset request the same way.
+//   demo    No fields: what a demo is, the bot check and "Start the demo"
+//           (specs/007). Offered under the sign-in form only when demo mode
+//           is switched on (demoModeEnabled.ts).
 //
 // and two result states that replace the form:
 //
@@ -43,7 +49,7 @@ import { TURNSTILE_SITE_KEY } from './turnstileSiteKey'
 //              email and password still held in this component's state.
 //              Leaving the screen unmounts it, and the password goes with it.
 //   resetSent  "If there's an account for this address, a link is on its way."
-type Mode = 'signIn' | 'create' | 'forgot' | 'inbox' | 'resetSent'
+type Mode = 'signIn' | 'create' | 'forgot' | 'demo' | 'inbox' | 'resetSent'
 
 // Shown when a request fails in Forgot mode. describeAuthError's 400 mentions a
 // password, which this form doesn't have — but a 400 captcha is about the bot
@@ -128,15 +134,17 @@ export default function Login() {
   // the retry starts where it has to rather than on the page body.
   const passwordRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    if (mode === 'inbox' || mode === 'resetSent') {
+    if (mode === 'inbox' || mode === 'resetSent' || mode === 'demo') {
       resultHeadingRef.current?.focus()
     }
   }, [mode])
 
-  // Only the two forms that make the API email an address nobody has proven,
-  // and only when a site key switches the check on.
+  // The two forms that make the API email an address nobody has proven, and
+  // the demo, which creates an account; only when a site key switches the
+  // check on.
   const needsCaptcha =
-    TURNSTILE_SITE_KEY !== '' && (mode === 'create' || mode === 'forgot')
+    TURNSTILE_SITE_KEY !== '' &&
+    (mode === 'create' || mode === 'forgot' || mode === 'demo')
 
   // After a create or forgot attempt, whatever its outcome: the token has been
   // spent, so drop it and ask the widget for another.
@@ -211,6 +219,28 @@ export default function Login() {
       setMode('resetSent')
     } catch (err) {
       setMessage(describeResetRequestError(err))
+    } finally {
+      setSubmitting(false)
+      renewCaptcha()
+    }
+  }
+
+  // A new demo account, filled and signed in by the API in one step. The token
+  // is stored like a sign-in's, and the cover's guards take over from there:
+  // the notice gate and the optional-details question come up as for any new
+  // account (specs/007 FR-009).
+  async function beginDemo() {
+    setMessage(null)
+    setSubmitting(true)
+    try {
+      const { token } = await startDemo({
+        turnstileToken: captchaToken ?? undefined,
+      })
+      setToken(token)
+      clearInterruptedWrite()
+      void navigate('/')
+    } catch (err) {
+      setMessage(describeDemoStartError(err))
     } finally {
       setSubmitting(false)
       renewCaptcha()
@@ -329,6 +359,56 @@ export default function Login() {
               onClick={() => switchMode('signIn')}
             >
               Back to sign in
+            </button>
+          </p>
+        </section>
+      ) : mode === 'demo' ? (
+        <section className="login-inbox" aria-labelledby="demo-heading">
+          <h2 id="demo-heading" ref={resultHeadingRef} tabIndex={-1}>
+            Try the demo
+          </h2>
+          <p>
+            You get a notebook of your own with about twelve weeks of sample
+            training: sessions, templates and progress charts. Change anything
+            you like.
+          </p>
+          <p className="muted">
+            No email or password. The demo ends 24 hours after you start it and
+            is then deleted with everything in it.
+          </p>
+          <form
+            className="form-stack login-demo-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void beginDemo()
+            }}
+          >
+            {needsCaptcha && (
+              <Turnstile
+                key={captchaRound}
+                action="demo"
+                onToken={setCaptchaToken}
+              />
+            )}
+            {messageLine}
+            {/* Seeding twelve weeks takes a moment, so the button says what
+                it's doing rather than just greying out. */}
+            <button
+              className="btn btn-primary btn-block"
+              type="submit"
+              disabled={submitting || (needsCaptcha && captchaToken === null)}
+            >
+              {submitting ? 'Setting up your demo…' : 'Start the demo'}
+            </button>
+          </form>
+          <p className="muted login-switch">
+            Have an account?{' '}
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => switchMode('signIn')}
+            >
+              Sign in
             </button>
           </p>
         </section>
@@ -478,6 +558,24 @@ export default function Login() {
               </>
             )}
           </p>
+
+          {/* Below a hairline, so it reads as a way in for visitors rather
+              than a third account action (docs/ui/README.md, screen 1). */}
+          {mode === 'signIn' && DEMO_MODE_ENABLED && (
+            <div className="login-demo">
+              <button
+                className="btn btn-secondary btn-block"
+                type="button"
+                onClick={() => switchMode('demo')}
+              >
+                Try the demo
+              </button>
+              <p className="muted">
+                A sample notebook with twelve weeks of training. No email
+                needed.
+              </p>
+            </div>
+          )}
         </>
       )}
 

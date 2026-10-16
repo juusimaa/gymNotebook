@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useRouteLoaderData } from 'react-router'
+import type { MeResponse } from '../api/auth'
 import { ApiError } from '../api/client'
 import { getAccountPrivacy, type AccountPrivacyState } from '../api/privacy'
 import { clearToken } from '../auth/token'
@@ -42,6 +43,9 @@ function describeOptionalDetails(state: AccountPrivacyState): string {
 
 export default function AccountPrivacy() {
   const navigate = useNavigate()
+  // A demo can't be deleted by hand (specs/007 FR-012); it goes when it ends.
+  const user = useRouteLoaderData('auth') as MeResponse
+  const isDemo = user.demoExpiresAt !== null
   // undefined = loading, null = feature off (404), otherwise the state.
   const [state, setState] = useState<AccountPrivacyState | null | undefined>(
     undefined,
@@ -181,14 +185,22 @@ export default function AccountPrivacy() {
 
       <section className="privacy-block" aria-labelledby="privacy-delete">
         <h2 id="privacy-delete">Delete your account</h2>
-        <p>
-          Permanently remove your account and notebook, and sign out every
-          session. The next screen explains what goes and what remains for a
-          limited time before anything is deleted.
-        </p>
-        <Link to="/account/delete" className="btn btn-secondary btn-block">
-          Delete my account
-        </Link>
+        {isDemo ? (
+          <p>
+            A demo can&apos;t be deleted by hand. It is deleted when it ends.
+          </p>
+        ) : (
+          <>
+            <p>
+              Permanently remove your account and notebook, and sign out every
+              session. The next screen explains what goes and what remains for a
+              limited time before anything is deleted.
+            </p>
+            <Link to="/account/delete" className="btn btn-secondary btn-block">
+              Delete my account
+            </Link>
+          </>
+        )}
       </section>
 
       <section className="privacy-block" aria-labelledby="privacy-contact">

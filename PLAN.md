@@ -203,6 +203,7 @@ Demo mode ([specs/007](specs/007-demo-mode/research.md)) lets a visitor try the 
 - **Expiry is enforced where tokens are already checked** (R2): `OnTokenValidated` fails an expired demo's token, and the lifecycle guard's shared check adds `demo_expires_at IS NULL OR demo_expires_at > now()`. Renewal runs under that guard, so an expired demo can't renew.
 - **Starting one** (R3): the offset is validated, Turnstile runs with the `demo` action, then one transaction takes a global advisory lock (namespace "DEMO"), counts live demos against `Demo:MaxLiveAccounts` (503 `demo_unavailable` at the cap), inserts the user and imports a generated notebook (`DemoSeed`, R4) through restore's own `NotebookRestore.ImportAsync` (R5), so validation and the optional-details consent apply as for a backup. The answer is login's `{ token }`.
 - **Resetting one** (R6) takes exclusive lifecycle access in its own transaction, like deletion, deletes the notebook with deletion's own helper and imports a fresh seed. The account, its session, its privacy answers and its expiry stay.
+- **Screens** (PR 2, [docs/ui/README.md → Demo mode](docs/ui/README.md#demo-mode)): **Try the demo** under the sign-in form when the frontend's switch is on, and a demo cover keyed on `demoExpiresAt`.
 - **No password or email route** (R7): an address without `@` fails every email route's format check, so nothing can be mailed to a demo; login answers the same 401 as a wrong password; change-password, export and deletion answer 403 `demo_account` before the password check.
 - **Cleanup** (R8): `DemoCleanupWorker`, registered whatever the flag says, deletes up to 50 expired demos every `Demo:CleanupIntervalMinutes` through `AccountDeletion.DeleteExpiredDemoAsync` — the same exclusive lock, deletes and evidence log lines as a user-requested deletion, so `AccountDeletion.cs` stays the only file that removes users.
 
@@ -312,6 +313,7 @@ TURNSTILE_SECRET_KEY=
 TURNSTILE_HOSTNAMES=
 TURNSTILE_SITE_KEY=
 VITE_TURNSTILE_SITE_KEY=
+VITE_DEMO_MODE_ENABLED=false
 VITE_API_URL=http://localhost:8080
 ```
 
@@ -339,6 +341,7 @@ The variable *names* are identical everywhere — the app reads `Jwt__Secret` an
 | `TURNSTILE_SECRET_KEY` | `.env`, normally empty (check off) | server env file |
 | `TURNSTILE_HOSTNAMES` | `.env`, empty unless trying the test keys (`example.com`) | server env file, `gymnotebook.fit` |
 | `TURNSTILE_SITE_KEY` (frontend) | `.env` for the Compose frontend, `VITE_TURNSTILE_SITE_KEY` for the dev server; normally empty | server env file, read by `gym-web` and rendered into `config.js` like `API_URL` (public) |
+| `DEMO_MODE_ENABLED` (frontend) | the same `.env` line, passed to the Compose frontend; `VITE_DEMO_MODE_ENABLED` for the dev server | the same server env file line, read by `gym-web` too and rendered into `config.js`, so "Try the demo" shows exactly when the API maps the demo routes |
 | `FORWARDED_HEADERS_ENABLED` | not set (off) — deliberately absent from `.env.example` and Compose | `true` in `deploy/compose.prod.yml`, a fact about that stack rather than a secret (see Rate limiting) |
 
 The server env file is `/etc/gymnotebook/.env` (`root:gymdeploy 0640`); [deploy/README.md → Environment](deploy/README.md#environment) lists where each value comes from. Three rules that come with this:
@@ -473,10 +476,10 @@ git config core.hooksPath .githooks
     - **Screens** (#175 the done toggle and skipped sets, #177 plans, the Planned group and Start, #178 the template list and editor, and PR 8b): PR 8b adds the entry points: Save as template on the session page and on a plan (which saves the plan first, then copies it), the templates in the Plan a session chooser, All templates, and the Templates link on the Planned label line.
     - **Revised after the walkthrough** (research R15): the local-stack walkthrough (T091) showed the prepared state added nothing templates don't. PR 9 starts sessions straight from a template (`POST /templates/{id}/start`) and removes the Planned group and the editor's prepare mode; PR 10 removes prepared pages from the API and data model, turning any that exist into templates.
     - **Still open:** the owner's phone walkthrough of the revised flow after deploy (T102).
-17. **Demo mode** — in progress, through Spec Kit ([specs/007-demo-mode/](specs/007-demo-mode/)), behind the fail-closed `DEMO_MODE_ENABLED` flag. A visitor starts a 24-hour demo account with about twelve weeks of generated training, can reset it, and it deletes itself after expiry (see Auth → Demo accounts).
+17. **Demo mode** — done, through Spec Kit ([specs/007-demo-mode/](specs/007-demo-mode/)), behind the fail-closed `DEMO_MODE_ENABLED` flag. A visitor starts a 24-hour demo account with about twelve weeks of generated training, can reset it, and it deletes itself after expiry (see Auth → Demo accounts).
 
     - **PR 1, backend** (T010–T063): `users.demo_expires_at`, `POST /auth/demo`, `POST /account/demo/reset`, the expiry checks, the refusals and `DemoCleanupWorker`. Restore's import moved into `NotebookRestore.ImportAsync` and deletion's notebook deletes into `AccountDeletion.DeleteNotebookAsync`, so the demo shares both rather than copying them.
-    - **Next:** PR 2, the Try the demo button, the cover's demo badge and reset, and the `docs/ui/` mock.
+    - **PR 2, screens** (T070–T073): the approved `docs/ui/` mock, then **Try the demo** on sign-in (a fourth login mode with the `demo` Turnstile action), the demo cover (end badge, Reset demo data and Leave demo with inline confirmations, no `demo:` address), and the refusals on Backup, Privacy & account, Change password and Delete account. The sign-in screen can't probe the API without starting a demo, so the frontend has its own `DEMO_MODE_ENABLED` switch in `config.js`, set from the same env line as the API's; everything after sign-in follows `demoExpiresAt`.
 
 Containers come *second*, not first. This is the one lesson subscription-tracker wrote down explicitly about its own milestone 1: starting without Docker "avoids debugging Docker networking and SQL at the same time." That applies with more force here, since C# and EF Core are both new — a connection that won't open should have one candidate explanation, not three. Migrations are wired up in milestone 1 rather than alongside the domain model, for the other reason that project recorded: it started with `create_all()`, discovered that adding a non-null `user_id` to an existing table isn't something `create_all()` can do, and had to drop the database to move forward.
 

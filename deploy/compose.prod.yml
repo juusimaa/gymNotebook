@@ -91,13 +91,16 @@ services:
     # gym-api (research R1).
     mem_limit: 64m
     cpus: 0.25
-    # Not env_file: runtime-config.sh needs two public values and none of the
+    # Not env_file: runtime-config.sh needs three public values and none of the
     # secrets.
     environment:
       API_URL: https://api.gymnotebook.fit
       # The public half of the Turnstile key pair, interpolated from the env
       # file at `up` time. Empty leaves the widget off.
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      # Interpolated from the same env file line gym-api reads, so the
+      # "Try the demo" button and the demo routes switch on together.
+      DEMO_MODE_ENABLED: ${DEMO_MODE_ENABLED:-false}
     networks:
       - default
       - edge

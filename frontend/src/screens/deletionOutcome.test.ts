@@ -18,6 +18,13 @@ describe('describeDeletionFailure', () => {
     expect(describeDeletionFailure(err).kind).toBe('retry')
   })
 
+  it('keeps the form for a demo account and says why (specs/007)', () => {
+    expect(describeDeletionFailure(new ApiError(403, 'demo_account'))).toEqual({
+      kind: 'retry',
+      message: "This isn't available in a demo. Nothing was deleted.",
+    })
+  })
+
   it('never reads a 401 as success or rollback, and says the session ended', () => {
     const failure = describeDeletionFailure(new ApiError(401))
 

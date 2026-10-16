@@ -81,7 +81,7 @@ value from a laptop `.env`, and never paste one into a PR, issue or chat.
 | `Jwt__ExpiryMinutes` | `30` |
 | `CORS_ORIGINS` | `https://gymnotebook.fit` |
 | `PRIVACY_LIFECYCLE_ENABLED` | `false` |
-| `DEMO_MODE_ENABLED` | `false` (absent is the same: fails closed) |
+| `DEMO_MODE_ENABLED` | `false` (absent is the same: fails closed); read by `gym-api` and `gym-web` |
 | `Email__Backend` | `resend` |
 | `EMAIL_FROM` | `Gym Notebook <no-reply@mail.gymnotebook.fit>` |
 | `APP_URL` | `https://gymnotebook.fit` |

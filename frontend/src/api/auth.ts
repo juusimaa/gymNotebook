@@ -55,7 +55,11 @@ export interface VerifyEmailResponse {
 export interface MeResponse {
   userId: number
   displayName: string
+  // A demo account's is an internal "demo:…" address that is never shown.
   email: string
+  // Set only for a demo account (specs/007): when it ends, as an ISO-8601
+  // instant. Null for a registered account. Never extended, not even by a reset.
+  demoExpiresAt: string | null
 }
 
 interface ChangePasswordRequest {

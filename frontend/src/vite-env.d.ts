@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_API_URL: string
   // Optional: unset switches the Turnstile check off (screens/turnstileSiteKey.ts).
   readonly VITE_TURNSTILE_SITE_KEY?: string
+  // Optional: exactly "true" shows "Try the demo" (screens/demoModeEnabled.ts).
+  readonly VITE_DEMO_MODE_ENABLED?: string
 }
 
 // The part of Cloudflare's Turnstile script API that screens/Turnstile.tsx uses
@@ -32,6 +34,7 @@ interface TurnstileApi {
 interface Window {
   readonly __API_URL__?: string
   readonly __TURNSTILE_SITE_KEY__?: string
+  readonly __DEMO_MODE_ENABLED__?: string
   // Set by Cloudflare's script once it has loaded.
   readonly turnstile?: TurnstileApi
 }

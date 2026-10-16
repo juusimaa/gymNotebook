@@ -32,4 +32,14 @@ The demo tests live in `backend/GymNotebook.Tests/Demo*Tests.cs`; the test list 
 6. Expiry: run `UPDATE users SET demo_expires_at = now() - interval '1 minute' WHERE email LIKE 'demo:%';`. The next request returns 401. After the next cleanup run (or a restart with `Demo:CleanupIntervalMinutes=1`), the row is gone.
 7. Flag off: unset `DEMO_MODE_ENABLED` and restart. `POST /auth/demo` returns 404.
 
-The screens (PR 2) are validated in that PR's quickstart addendum.
+## Screens (PR 2)
+
+With `DEMO_MODE_ENABLED=true` in the root `.env` (or `DEMO_MODE_ENABLED=true docker compose up --build`), open `http://localhost:3000/login`:
+
+8. `config.js` carries `window.__DEMO_MODE_ENABLED__ = "true"`, and **Try the demo** shows under "New here? Create an account".
+9. **Try the demo** → **Start the demo** (with the Turnstile test keys, the widget first): the cover shows "Demo Lifter", "Demo · ends tomorrow at HH.mm" and no `demo:` address.
+10. **Open the notebook**: the notice gate, then Sessions with about twelve weeks of pages and one in progress today.
+11. **Reset demo data** → the confirmation (with the optional-details hint while details aren't allowed) → **Reset demo data**: "Demo data reset. The notebook is new again."
+12. **Backup & restore** shows "Backups aren't available in a demo"; **Privacy & account** says a demo can't be deleted by hand; `/change-password` submitted answers "This isn't available in a demo."
+13. **Leave demo** → **Leave demo** returns to sign-in.
+14. Flag off (`DEMO_MODE_ENABLED` unset, rebuild): no **Try the demo** button.
