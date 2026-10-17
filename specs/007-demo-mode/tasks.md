@@ -2,7 +2,7 @@
 
 **Input**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/api.md](contracts/api.md), [quickstart.md](quickstart.md)
 
-**Status**: Draft for owner review (Principle VII). AI implements by default; the owner names any task they will write themselves.
+**Status**: Done (2026-10-17). PR 1 (#195) and PR 2 (#196) merged; switched on in production on 2026-10-16 (#197). AI implements by default; the owner names any task they will write themselves.
 
 **Tests**: Principle IV requires them. Backend tests use xUnit + Testcontainers (real Postgres 18), follow Arrange/Act/Assert and are named `MethodName_Scenario_ExpectedResult`. Existing suites must pass **unchanged**.
 
@@ -212,7 +212,7 @@ Paths: backend `backend/GymNotebook.Api/`, tests `backend/GymNotebook.Tests/`, f
   - Milestones (milestone 17, demo mode: PR 1 done, PR 2 next).
 - [x] T061 [P] Update `README.md` → Configuration (`DEMO_MODE_ENABLED`, `Demo:*`, `DemoRateLimit:*`, how to try it locally) and `docker-compose.yml` (`DEMO_MODE_ENABLED: "${DEMO_MODE_ENABLED:-false}"`, next to the privacy flag).
 - [x] T062 Run `dotnet format backend/GymNotebook.sln --verify-no-changes` and `dotnet test backend/GymNotebook.sln`; all green, existing assertions unchanged.
-- [ ] T063 Run the quickstart's manual steps against `docker compose up --build`, then ask the owner for approval before opening PR 1.
+- [x] T063 Run the quickstart's manual steps against `docker compose up --build`, then ask the owner for approval before opening PR 1.
 
 ---
 
