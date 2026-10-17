@@ -2,7 +2,7 @@
 
 **Input**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/api.md](contracts/api.md), [contracts/ui.md](contracts/ui.md), [quickstart.md](quickstart.md)
 
-**Status**: Draft. Plan questions Q1–Q5 were resolved by the owner on 2026-10-15. AI implements by default; the owner names any task they will write themselves. Frontend tasks (T060 onward in each story) wait for the approved UI mock (T003).
+**Status**: Done (2026-10-17). The owner's phone walkthrough of the revised flow passed after deploy (T102); issue #165 closed. Plan questions Q1–Q5 were resolved by the owner on 2026-10-15. AI implements by default; the owner names any task they will write themselves. Frontend tasks (T060 onward in each story) wait for the approved UI mock (T003).
 
 **Tests**: Principle IV requires them. Backend tests use xUnit + Testcontainers (real Postgres 18), Arrange/Act/Assert, and are named `MethodName_Scenario_ExpectedResult`. Frontend helpers use Vitest. The existing suites must pass **unchanged** (SC-006); never edit an existing assertion to make it pass.
 
@@ -340,8 +340,8 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 - [x] T088 Mark the format version 2 change in `specs/001-privacy-account-lifecycle/` and `specs/004-backup-restore/` export contracts, and in `PLAN.md` → backup.
 - [x] T089 `PLAN.md` → Milestones: add milestone 15 "Predefined sessions" with the PR list and links to `specs/006-predefined-sessions/`.
   - PR 8b: milestone 15 was already "Move to UpCloud", so this is **milestone 16**, and the data model's and frontend's "milestone 15" references to specs/006 now say 16 (owner, 2026-10-15).
-- [ ] T090 Run all checks in [quickstart.md](quickstart.md) (`dotnet test`, `dotnet format --verify-no-changes`, frontend typecheck, lint, format:check and test) before each PR.
-- [ ] T091 Owner phone walkthrough (quickstart steps 1–6), covering SC-001, SC-002, SC-003, SC-007 and SC-008, on the local stack and after deploy.
+- [x] T090 Run all checks in [quickstart.md](quickstart.md) (`dotnet test`, `dotnet format --verify-no-changes`, frontend typecheck, lint, format:check and test) before each PR.
+- [x] T091 Owner phone walkthrough (quickstart steps 1–6), covering SC-001, SC-002, SC-003, SC-007 and SC-008, on the local stack and after deploy.
   - Local stack: passed (owner, 2026-10-15, on the PR 8b branch, quickstart steps 1–6 on a phone). After deploy: still open.
 
 ---
@@ -365,7 +365,7 @@ Paths: backend `backend/GymNotebook.Api/`, backend tests `backend/GymNotebook.Te
 - [x] T099 Backup: export stays version 2 and writes no prepared pages; restore turns a version 2 file's prepared pages into templates (same naming as T097); `preparedPagesAdded` leaves the restore result; field guide, CSV and Backup screen updated.
 - [x] T100 [P] Tests: remove `PreparedWorkoutTests` and the prepared cases elsewhere; add migration-conversion and restore-mapping tests. *As built:* `RemovePreparedWorkoutsMigrationTests` (`Migrate_PreparedPages_BecomeTemplates`, `Migrate_AfterwardsPageWithoutStart_IsRefused`) and, in `RestoreTests`, `Restore_V2PreparedPage_BecomesTemplate`, `Restore_V2PreparedPageTitleTaken_AddsNumber` and `Restore_PreparedTwice_AddsTwoTemplates`. The restore result's `preparedPagesAdded` is gone; converted plans count in `templatesAdded`.
 - [x] T101 Frontend: `date`/`startedAt` non-null in `api/workouts.ts`; the session page's plan reading and backup's plan counts go.
-- [ ] T102 Owner phone walkthrough of the revised flow (quickstart), on the local stack and after deploy.
+- [x] T102 Owner phone walkthrough of the revised flow (quickstart), on the local stack and after deploy.
 
 ---
 
